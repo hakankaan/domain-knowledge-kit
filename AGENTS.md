@@ -38,3 +38,41 @@ bd sync               # Sync with git
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
+## Domain Model
+
+**Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under `domain/`.
+
+### Key Conventions
+
+- YAML files use `.yml` extension
+- Item names are PascalCase (events, commands, etc.); contexts and ADR ids are kebab-case
+- ADRs live in `docs/adr/` as Markdown with YAML frontmatter
+- ADRs link to domain items via `domain_refs`; domain items link back via `adr_refs`
+- Generated docs go to `docs/domain/` — never edit by hand
+
+### Domain CLI Commands
+
+Use `npx tsx src/cli.ts` during development (or `domain-knowledge-kit` after build):
+
+```bash
+npx tsx src/cli.ts list                    # List all domain items (--context, --type filters)
+npx tsx src/cli.ts show <id>               # Display full YAML of a domain item
+npx tsx src/cli.ts search "<query>"        # FTS5 full-text search with ranking
+npx tsx src/cli.ts related <id>            # BFS graph traversal of related items
+npx tsx src/cli.ts validate                # Schema + cross-reference validation
+npx tsx src/cli.ts render                  # Validate → render docs → rebuild search index
+npx tsx src/cli.ts adr show <id>           # Display ADR frontmatter
+npx tsx src/cli.ts adr related <id>        # Bidirectional ADR ↔ domain links
+```
+
+### Quality Gates
+
+**When domain files change**, you MUST run these before committing:
+
+```bash
+npx tsx src/cli.ts validate
+npx tsx src/cli.ts render
+```
+
+Both must exit 0. The `render` command also rebuilds the search index.
+
