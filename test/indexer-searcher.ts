@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { loadDomainModel } from "../src/shared/loader.js";
 import { DomainGraph } from "../src/shared/graph.js";
 import { buildIndex } from "../src/core/indexer.js";
-import { search } from "../src/core/searcher.js";
+import { search } from "../src/features/query/searcher.js";
 
 // ── Fixture setup ─────────────────────────────────────────────────────
 

@@ -5,9 +5,9 @@
  * ranked results with optional context/type/tag filters.
  */
 import type { Command as Cmd } from "commander";
-import { search } from "../core/searcher.js";
-import { DomainGraph } from "../shared/graph.js";
-import { loadDomainModel } from "../shared/loader.js";
+import { search } from "../searcher.js";
+import { DomainGraph } from "../../../shared/graph.js";
+import { loadDomainModel } from "../../../shared/loader.js";
 
 /** Register the `search` subcommand. */
 export function registerSearch(program: Cmd): void {

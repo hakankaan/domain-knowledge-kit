@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { registerList } from "./commands/list.js";
-import { registerShow } from "./commands/show.js";
-import { registerSearch } from "./commands/search.js";
-import { registerRelated } from "./commands/related.js";
+import { registerList } from "./features/query/commands/list.js";
+import { registerShow } from "./features/query/commands/show.js";
+import { registerSearch } from "./features/query/commands/search.js";
+import { registerRelated } from "./features/query/commands/related.js";
 import { registerValidate } from "./commands/validate.js";
 import { registerRender } from "./commands/render.js";
 import { registerAdrShow } from "./commands/adr-show.js";

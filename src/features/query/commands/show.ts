@@ -5,9 +5,9 @@
  * "actor.Customer", "adr-0001") and prints its full YAML representation.
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../shared/loader.js";
-import { stringifyYaml } from "../shared/yaml.js";
-import type { DomainModel } from "../shared/types/domain.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { stringifyYaml } from "../../../shared/yaml.js";
+import type { DomainModel } from "../../../shared/types/domain.js";
 
 /**
  * Resolve an item by its composite ID and return the raw object
