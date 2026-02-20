@@ -8,7 +8,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/cli.ts",
+    "test": "tsx test/validate-schemas.ts && tsx test/loader.ts && tsx test/validator.ts && tsx test/graph.ts && tsx test/indexer-searcher.ts && tsx test/renderer.ts"
+  },
+  "engines": {
+    "node": ">=21.2.0"
   },
   "keywords": [],
   "license": "MIT",

@@ -132,7 +132,7 @@ export function search(
   const expandDepth = options.expandDepth ?? 1;
 
   if (!existsSync(dbPath)) {
-    throw new Error(`Search index not found at ${dbPath}. Run 'index' first.`);
+    throw new Error(`Search index not found at ${dbPath}. Run 'render' first.`);
   }
 
   const ftsQuery = sanitiseQuery(query);

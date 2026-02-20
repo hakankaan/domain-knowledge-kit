@@ -211,7 +211,8 @@ function validateCrossRefs(
 
   // ─ 1. Global ID uniqueness ─────────────────────────────────────────
   // Check for duplicate names within a context (e.g. an event and command
-  // with the same name).
+  // with the same name). Glossary terms share the same ID namespace
+  // (context.Name), so they must also be unique.
   for (const [ctxName, ctx] of model.contexts) {
     const seen = new Map<string, string>(); // name → first-seen kind
     const items: [string, string[]][] = [
@@ -220,6 +221,7 @@ function validateCrossRefs(
       ["aggregate", (ctx.aggregates ?? []).map((a) => a.name)],
       ["read_model", (ctx.read_models ?? []).map((r) => r.name)],
       ["policy", (ctx.policies ?? []).map((p) => p.name)],
+      ["glossary", (ctx.glossary ?? []).map((g) => g.term)],
     ];
     for (const [kind, names] of items) {
       for (const name of names) {

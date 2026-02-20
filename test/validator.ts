@@ -97,8 +97,8 @@ function testValidModel() {
       "name: ordering",
       'description: "Handles orders"',
       "glossary:",
-      "  - term: Order",
-      '    definition: "A purchase request"',
+      "  - term: OrderLifecycle",
+      '    definition: "The lifecycle of a purchase request"',
       "events:",
       "  - name: OrderPlaced",
       '    description: "Raised when order placed"',
@@ -307,6 +307,39 @@ function testDuplicateNames() {
   rmSync(root, { recursive: true, force: true });
 }
 
+// ── Test: Glossary-aggregate name collision ───────────────────────────
+
+function testGlossaryAggregateCollision() {
+  console.log("\n=== Glossary-aggregate collision ===");
+  const root = makeTempRoot("glosscoll");
+
+  writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
+  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(
+    join(root, "domain", "contexts", "ctx.yml"),
+    [
+      "name: ctx",
+      'description: "Test context"',
+      "glossary:",
+      "  - term: Order",
+      '    definition: "A purchase"',
+      "aggregates:",
+      "  - name: Order",
+      '    description: "Root"',
+    ].join("\n"),
+  );
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert(
+    "detects glossary-aggregate collision",
+    hasError(result, 'Duplicate name "Order"'),
+  );
+
+  rmSync(root, { recursive: true, force: true });
+}
+
 // ── Test: Missing context file ────────────────────────────────────────
 
 function testMissingContextFile() {
@@ -445,6 +478,7 @@ testBrokenAdrRefs();
 testBrokenDomainRefs();
 testBrokenIntraContextRefs();
 testDuplicateNames();
+testGlossaryAggregateCollision();
 testMissingContextFile();
 testBrokenFlowSteps();
 testBrokenSupersededBy();

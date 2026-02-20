@@ -32,4 +32,8 @@ const adrCmd = program
 registerAdrShow(adrCmd);
 registerAdrRelated(adrCmd);
 
-program.parse();
+program.parseAsync().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`Error: ${message}`);
+  process.exit(1);
+});
