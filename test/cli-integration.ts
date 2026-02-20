@@ -1,8 +1,8 @@
 /**
  * CLI integration tests for command wiring and error paths.
  *
- * Exercises the CLI commands (src/commands/*.ts) through their actual
- * Commander action handlers by spawning the CLI as a child process
+ * Exercises the CLI commands (src/features/{query,pipeline,adr}/commands)
+ * through their actual Commander action handlers by spawning the CLI as a child process
  * and asserting stdout/stderr/exit codes.
  *
  * Uses temporary directories with the --root flag to isolate each test.
@@ -617,6 +617,29 @@ try {
     const result = run(["list"], { root });
     assert("empty domain exits 0", result.exitCode === 0);
     assert("empty domain shows 0 items", result.stdout.includes("0 item(s)"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 11. Smoke test: all commands registered in --help output
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== smoke: all commands registered in --help ===");
+  {
+    const result = run(["--help"]);
+    assert("--help exits 0", result.exitCode === 0);
+    const helpText = result.stdout;
+    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "adr"];
+    for (const cmd of topLevelCommands) {
+      assert(`--help lists '${cmd}' command`, helpText.includes(cmd));
+    }
+
+    // Also verify the adr sub-commands
+    const adrResult = run(["adr", "--help"]);
+    assert("adr --help exits 0", adrResult.exitCode === 0);
+    const adrHelp = adrResult.stdout;
+    const adrSubCommands = ["show", "related"];
+    for (const sub of adrSubCommands) {
+      assert(`adr --help lists '${sub}' sub-command`, adrHelp.includes(sub));
+    }
   }
 
 } finally {
