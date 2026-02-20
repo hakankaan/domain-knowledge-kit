@@ -20,7 +20,14 @@ import type {
   DomainContext,
   AdrRecord,
   Actor,
+  DomainEvent,
+  Command,
+  Policy,
+  Aggregate,
+  ReadModel,
 } from "../types/domain.js";
+import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
+import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
 // under both tsc (Node16 resolution) and tsx (ESM runtime).
@@ -182,30 +189,19 @@ function validateCrossRefs(
       glossaryTerms: new Set<string>(),
     };
 
-    for (const e of ctx.events ?? []) {
-      sets.events.add(e.name);
-      domainItemIds.add(`${ctxName}.${e.name}`);
-    }
-    for (const c of ctx.commands ?? []) {
-      sets.commands.add(c.name);
-      domainItemIds.add(`${ctxName}.${c.name}`);
-    }
-    for (const a of ctx.aggregates ?? []) {
-      sets.aggregates.add(a.name);
-      domainItemIds.add(`${ctxName}.${a.name}`);
-    }
-    for (const r of ctx.read_models ?? []) {
-      sets.readModels.add(r.name);
-      domainItemIds.add(`${ctxName}.${r.name}`);
-    }
-    for (const p of ctx.policies ?? []) {
-      sets.policies.add(p.name);
-      domainItemIds.add(`${ctxName}.${p.name}`);
-    }
-    for (const g of ctx.glossary ?? []) {
-      sets.glossaryTerms.add(g.term);
-      domainItemIds.add(`${ctxName}.${g.term}`);
-    }
+    const typeToSet: Record<ItemType, Set<string>> = {
+      event: sets.events,
+      command: sets.commands,
+      aggregate: sets.aggregates,
+      read_model: sets.readModels,
+      policy: sets.policies,
+      glossary: sets.glossaryTerms,
+    };
+
+    forEachItem(ctx, (type, name) => {
+      typeToSet[type].add(name);
+      domainItemIds.add(`${ctxName}.${name}`);
+    });
 
     perContext.set(ctxName, sets);
   }
@@ -216,28 +212,17 @@ function validateCrossRefs(
   // (context.Name), so they must also be unique.
   for (const [ctxName, ctx] of model.contexts) {
     const seen = new Map<string, string>(); // name → first-seen kind
-    const items: [string, string[]][] = [
-      ["event", (ctx.events ?? []).map((e) => e.name)],
-      ["command", (ctx.commands ?? []).map((c) => c.name)],
-      ["aggregate", (ctx.aggregates ?? []).map((a) => a.name)],
-      ["read_model", (ctx.read_models ?? []).map((r) => r.name)],
-      ["policy", (ctx.policies ?? []).map((p) => p.name)],
-      ["glossary", (ctx.glossary ?? []).map((g) => g.term)],
-    ];
-    for (const [kind, names] of items) {
-      for (const name of names) {
-        const key = `${ctxName}.${name}`;
-        if (seen.has(name)) {
-          err(
-            issues,
-            `Duplicate name "${name}" in context "${ctxName}" (first seen as ${seen.get(name)}, duplicate as ${kind})`,
-            `context:${ctxName}`,
-          );
-        } else {
-          seen.set(name, kind);
-        }
+    forEachItem(ctx, (kind, name) => {
+      if (seen.has(name)) {
+        err(
+          issues,
+          `Duplicate name "${name}" in context "${ctxName}" (first seen as ${seen.get(name)}, duplicate as ${kind})`,
+          `context:${ctxName}`,
+        );
+      } else {
+        seen.set(name, kind);
       }
-    }
+    });
   }
 
   // ─ 2. Context references in index ──────────────────────────────────
@@ -266,12 +251,9 @@ function validateCrossRefs(
   }
 
   for (const [ctxName, ctx] of model.contexts) {
-    for (const e of ctx.events ?? []) checkAdrRefs(e.adr_refs, `context:${ctxName}.event:${e.name}`);
-    for (const c of ctx.commands ?? []) checkAdrRefs(c.adr_refs, `context:${ctxName}.command:${c.name}`);
-    for (const p of ctx.policies ?? []) checkAdrRefs(p.adr_refs, `context:${ctxName}.policy:${p.name}`);
-    for (const a of ctx.aggregates ?? []) checkAdrRefs(a.adr_refs, `context:${ctxName}.aggregate:${a.name}`);
-    for (const r of ctx.read_models ?? []) checkAdrRefs(r.adr_refs, `context:${ctxName}.read_model:${r.name}`);
-    for (const g of ctx.glossary ?? []) checkAdrRefs(g.adr_refs, `context:${ctxName}.glossary:${g.term}`);
+    forEachItem(ctx, (type, name, item) => {
+      checkAdrRefs(itemAdrRefs(item), `context:${ctxName}.${type}:${name}`);
+    });
   }
 
   // ─ 4. ADR domain_refs resolution ───────────────────────────────────
@@ -292,100 +274,108 @@ function validateCrossRefs(
     const sets = perContext.get(ctxName)!;
     const path = (kind: string, name: string) => `context:${ctxName}.${kind}:${name}`;
 
-    // Events: raised_by → aggregate in same context
-    for (const e of ctx.events ?? []) {
-      if (e.raised_by && !sets.aggregates.has(e.raised_by)) {
-        err(
-          issues,
-          `Event "${e.name}" raised_by "${e.raised_by}" does not match any aggregate in context "${ctxName}"`,
-          path("event", e.name),
-        );
-      }
-    }
-
-    // Commands: handled_by → aggregate, actor → actor name
-    for (const c of ctx.commands ?? []) {
-      if (c.handled_by && !sets.aggregates.has(c.handled_by)) {
-        err(
-          issues,
-          `Command "${c.name}" handled_by "${c.handled_by}" does not match any aggregate in context "${ctxName}"`,
-          path("command", c.name),
-        );
-      }
-      if (c.actor && !actorNames.has(c.actor)) {
-        err(
-          issues,
-          `Command "${c.name}" actor "${c.actor}" does not match any actor`,
-          path("command", c.name),
-        );
-      }
-    }
-
-    // Aggregates: handles → commands, emits → events
-    for (const a of ctx.aggregates ?? []) {
-      for (const h of a.handles ?? []) {
-        if (!sets.commands.has(h)) {
-          err(
-            issues,
-            `Aggregate "${a.name}" handles "${h}" but no such command in context "${ctxName}"`,
-            path("aggregate", a.name),
-          );
+    forEachItem(ctx, (type, name, item) => {
+      switch (type) {
+        case "event": {
+          const e = item as DomainEvent;
+          if (e.raised_by && !sets.aggregates.has(e.raised_by)) {
+            err(
+              issues,
+              `Event "${e.name}" raised_by "${e.raised_by}" does not match any aggregate in context "${ctxName}"`,
+              path("event", e.name),
+            );
+          }
+          break;
         }
-      }
-      for (const e of a.emits ?? []) {
-        if (!sets.events.has(e)) {
-          err(
-            issues,
-            `Aggregate "${a.name}" emits "${e}" but no such event in context "${ctxName}"`,
-            path("aggregate", a.name),
-          );
+        case "command": {
+          const c = item as Command;
+          if (c.handled_by && !sets.aggregates.has(c.handled_by)) {
+            err(
+              issues,
+              `Command "${c.name}" handled_by "${c.handled_by}" does not match any aggregate in context "${ctxName}"`,
+              path("command", c.name),
+            );
+          }
+          if (c.actor && !actorNames.has(c.actor)) {
+            err(
+              issues,
+              `Command "${c.name}" actor "${c.actor}" does not match any actor`,
+              path("command", c.name),
+            );
+          }
+          break;
         }
-      }
-    }
-
-    // Policies: triggers → events, emits → commands
-    for (const p of ctx.policies ?? []) {
-      for (const t of p.triggers ?? []) {
-        if (!sets.events.has(t)) {
-          err(
-            issues,
-            `Policy "${p.name}" triggers on "${t}" but no such event in context "${ctxName}"`,
-            path("policy", p.name),
-          );
+        case "aggregate": {
+          const a = item as Aggregate;
+          for (const h of a.handles ?? []) {
+            if (!sets.commands.has(h)) {
+              err(
+                issues,
+                `Aggregate "${a.name}" handles "${h}" but no such command in context "${ctxName}"`,
+                path("aggregate", a.name),
+              );
+            }
+          }
+          for (const e of a.emits ?? []) {
+            if (!sets.events.has(e)) {
+              err(
+                issues,
+                `Aggregate "${a.name}" emits "${e}" but no such event in context "${ctxName}"`,
+                path("aggregate", a.name),
+              );
+            }
+          }
+          break;
         }
-      }
-      for (const e of p.emits ?? []) {
-        if (!sets.commands.has(e)) {
-          err(
-            issues,
-            `Policy "${p.name}" emits "${e}" but no such command in context "${ctxName}"`,
-            path("policy", p.name),
-          );
+        case "policy": {
+          const p = item as Policy;
+          for (const t of p.triggers ?? []) {
+            if (!sets.events.has(t)) {
+              err(
+                issues,
+                `Policy "${p.name}" triggers on "${t}" but no such event in context "${ctxName}"`,
+                path("policy", p.name),
+              );
+            }
+          }
+          for (const e of p.emits ?? []) {
+            if (!sets.commands.has(e)) {
+              err(
+                issues,
+                `Policy "${p.name}" emits "${e}" but no such command in context "${ctxName}"`,
+                path("policy", p.name),
+              );
+            }
+          }
+          break;
         }
-      }
-    }
-
-    // Read models: subscribes_to → events, used_by → actors
-    for (const r of ctx.read_models ?? []) {
-      for (const s of r.subscribes_to ?? []) {
-        if (!sets.events.has(s)) {
-          err(
-            issues,
-            `ReadModel "${r.name}" subscribes_to "${s}" but no such event in context "${ctxName}"`,
-            path("read_model", r.name),
-          );
+        case "read_model": {
+          const r = item as ReadModel;
+          for (const s of r.subscribes_to ?? []) {
+            if (!sets.events.has(s)) {
+              err(
+                issues,
+                `ReadModel "${r.name}" subscribes_to "${s}" but no such event in context "${ctxName}"`,
+                path("read_model", r.name),
+              );
+            }
+          }
+          for (const u of r.used_by ?? []) {
+            if (!actorNames.has(u)) {
+              err(
+                issues,
+                `ReadModel "${r.name}" used_by "${u}" but no such actor`,
+                path("read_model", r.name),
+              );
+            }
+          }
+          break;
         }
+        case "glossary":
+          // Glossary entries have no intra-context references to validate.
+          break;
       }
-      for (const u of r.used_by ?? []) {
-        if (!actorNames.has(u)) {
-          err(
-            issues,
-            `ReadModel "${r.name}" used_by "${u}" but no such actor`,
-            path("read_model", r.name),
-          );
-        }
-      }
-    }
+    });
   }
 
   // ─ 6. Flow step resolution ─────────────────────────────────────────
@@ -404,24 +394,18 @@ function validateCrossRefs(
   // ─ 7. Configurable warnings ────────────────────────────────────────
   if (options.warnMissingFields) {
     for (const [ctxName, ctx] of model.contexts) {
-      for (const e of ctx.events ?? []) {
-        if (!e.fields || e.fields.length === 0) {
-          warn(
-            issues,
-            `Event "${e.name}" has no fields defined`,
-            `context:${ctxName}.event:${e.name}`,
-          );
+      forEachItem(ctx, (type, name, item) => {
+        if (type === "event" || type === "command") {
+          const typed = item as DomainEvent | Command;
+          if (!typed.fields || typed.fields.length === 0) {
+            warn(
+              issues,
+              `${type === "event" ? "Event" : "Command"} "${name}" has no fields defined`,
+              `context:${ctxName}.${type}:${name}`,
+            );
+          }
         }
-      }
-      for (const c of ctx.commands ?? []) {
-        if (!c.fields || c.fields.length === 0) {
-          warn(
-            issues,
-            `Command "${c.name}" has no fields defined`,
-            `context:${ctxName}.command:${c.name}`,
-          );
-        }
-      }
+      });
     }
   }
 }

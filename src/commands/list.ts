@@ -7,6 +7,7 @@
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../core/loader.js";
 import type { DomainContext, Actor } from "../types/domain.js";
+import { forEachItem, itemDescription } from "../shared/item-visitor.js";
 
 /** A row in the list output table. */
 interface ListRow {
@@ -43,65 +44,15 @@ function collectRows(root?: string): ListRow[] {
       description: ctx.description,
     });
 
-    for (const e of ctx.events ?? []) {
+    forEachItem(ctx, (type, name, item) => {
       rows.push({
-        id: `${ctxName}.${e.name}`,
-        type: "event",
+        id: `${ctxName}.${name}`,
+        type,
         context: ctxName,
-        name: e.name,
-        description: e.description,
+        name,
+        description: itemDescription(item),
       });
-    }
-
-    for (const c of ctx.commands ?? []) {
-      rows.push({
-        id: `${ctxName}.${c.name}`,
-        type: "command",
-        context: ctxName,
-        name: c.name,
-        description: c.description,
-      });
-    }
-
-    for (const p of ctx.policies ?? []) {
-      rows.push({
-        id: `${ctxName}.${p.name}`,
-        type: "policy",
-        context: ctxName,
-        name: p.name,
-        description: p.description,
-      });
-    }
-
-    for (const a of ctx.aggregates ?? []) {
-      rows.push({
-        id: `${ctxName}.${a.name}`,
-        type: "aggregate",
-        context: ctxName,
-        name: a.name,
-        description: a.description,
-      });
-    }
-
-    for (const r of ctx.read_models ?? []) {
-      rows.push({
-        id: `${ctxName}.${r.name}`,
-        type: "read_model",
-        context: ctxName,
-        name: r.name,
-        description: r.description,
-      });
-    }
-
-    for (const g of ctx.glossary ?? []) {
-      rows.push({
-        id: `${ctxName}.${g.term}`,
-        type: "glossary",
-        context: ctxName,
-        name: g.term,
-        description: g.definition,
-      });
-    }
+    });
   }
 
   // ADRs

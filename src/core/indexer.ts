@@ -15,7 +15,9 @@
 import { mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
-import type { DomainModel, DomainContext, AdrRecord, Actor } from "../types/domain.js";
+import type { DomainModel, DomainContext, AdrRecord, Actor, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "../types/domain.js";
+import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
+import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
 import { repoRoot } from "../utils/paths.js";
 
 // better-sqlite3 is a CJS package; use createRequire for ESM interop.
@@ -179,104 +181,113 @@ function collectRows(model: DomainModel): IndexRow[] {
       adrRefs: "[]",
     });
 
-    // Glossary entries
-    for (const entry of ctx.glossary ?? []) {
-      const aliases = entry.aliases ?? [];
-      rows.push({
-        id: `${ctxName}.${entry.term}`,
-        type: "glossary",
-        context: ctxName,
-        name: entry.term,
-        tags: aliases.join(" "),
-        text: joinText(entry.definition, ...aliases),
-        relations: "[]",
-        adrRefs: JSON.stringify(entry.adr_refs ?? []),
-      });
-    }
+    // Glossary, events, commands, policies, aggregates, read models
+    forEachItem(ctx, (type, name, item) => {
+      const id = `${ctxName}.${name}`;
+      const adrRefs = JSON.stringify(itemAdrRefs(item) ?? []);
 
-    // Events
-    for (const evt of ctx.events ?? []) {
-      const relIds: string[] = [];
-      if (evt.raised_by) relIds.push(`${ctxName}.${evt.raised_by}`);
-      rows.push({
-        id: `${ctxName}.${evt.name}`,
-        type: "event",
-        context: ctxName,
-        name: evt.name,
-        tags: "",
-        text: joinText(evt.description, fieldsText(evt.fields)),
-        relations: JSON.stringify(relIds),
-        adrRefs: JSON.stringify(evt.adr_refs ?? []),
-      });
-    }
-
-    // Commands
-    for (const cmd of ctx.commands ?? []) {
-      const relIds: string[] = [];
-      if (cmd.handled_by) relIds.push(`${ctxName}.${cmd.handled_by}`);
-      if (cmd.actor) relIds.push(`actor.${cmd.actor}`);
-      rows.push({
-        id: `${ctxName}.${cmd.name}`,
-        type: "command",
-        context: ctxName,
-        name: cmd.name,
-        tags: "",
-        text: joinText(cmd.description, fieldsText(cmd.fields)),
-        relations: JSON.stringify(relIds),
-        adrRefs: JSON.stringify(cmd.adr_refs ?? []),
-      });
-    }
-
-    // Policies
-    for (const pol of ctx.policies ?? []) {
-      const relIds: string[] = [];
-      for (const t of pol.triggers ?? []) relIds.push(`${ctxName}.${t}`);
-      for (const e of pol.emits ?? []) relIds.push(`${ctxName}.${e}`);
-      rows.push({
-        id: `${ctxName}.${pol.name}`,
-        type: "policy",
-        context: ctxName,
-        name: pol.name,
-        tags: "",
-        text: joinText(pol.description),
-        relations: JSON.stringify(relIds),
-        adrRefs: JSON.stringify(pol.adr_refs ?? []),
-      });
-    }
-
-    // Aggregates
-    for (const agg of ctx.aggregates ?? []) {
-      const relIds: string[] = [];
-      for (const h of agg.handles ?? []) relIds.push(`${ctxName}.${h}`);
-      for (const e of agg.emits ?? []) relIds.push(`${ctxName}.${e}`);
-      rows.push({
-        id: `${ctxName}.${agg.name}`,
-        type: "aggregate",
-        context: ctxName,
-        name: agg.name,
-        tags: "",
-        text: joinText(agg.description),
-        relations: JSON.stringify(relIds),
-        adrRefs: JSON.stringify(agg.adr_refs ?? []),
-      });
-    }
-
-    // Read Models
-    for (const rm of ctx.read_models ?? []) {
-      const relIds: string[] = [];
-      for (const sub of rm.subscribes_to ?? []) relIds.push(`${ctxName}.${sub}`);
-      for (const user of rm.used_by ?? []) relIds.push(`actor.${user}`);
-      rows.push({
-        id: `${ctxName}.${rm.name}`,
-        type: "read_model",
-        context: ctxName,
-        name: rm.name,
-        tags: "",
-        text: joinText(rm.description),
-        relations: JSON.stringify(relIds),
-        adrRefs: JSON.stringify(rm.adr_refs ?? []),
-      });
-    }
+      switch (type) {
+        case "glossary": {
+          const entry = item as GlossaryEntry;
+          const aliases = entry.aliases ?? [];
+          rows.push({
+            id,
+            type: "glossary",
+            context: ctxName,
+            name: entry.term,
+            tags: aliases.join(" "),
+            text: joinText(entry.definition, ...aliases),
+            relations: "[]",
+            adrRefs,
+          });
+          break;
+        }
+        case "event": {
+          const evt = item as DomainEvent;
+          const relIds: string[] = [];
+          if (evt.raised_by) relIds.push(`${ctxName}.${evt.raised_by}`);
+          rows.push({
+            id,
+            type: "event",
+            context: ctxName,
+            name: evt.name,
+            tags: "",
+            text: joinText(evt.description, fieldsText(evt.fields)),
+            relations: JSON.stringify(relIds),
+            adrRefs,
+          });
+          break;
+        }
+        case "command": {
+          const cmd = item as Command;
+          const relIds: string[] = [];
+          if (cmd.handled_by) relIds.push(`${ctxName}.${cmd.handled_by}`);
+          if (cmd.actor) relIds.push(`actor.${cmd.actor}`);
+          rows.push({
+            id,
+            type: "command",
+            context: ctxName,
+            name: cmd.name,
+            tags: "",
+            text: joinText(cmd.description, fieldsText(cmd.fields)),
+            relations: JSON.stringify(relIds),
+            adrRefs,
+          });
+          break;
+        }
+        case "policy": {
+          const pol = item as Policy;
+          const relIds: string[] = [];
+          for (const t of pol.triggers ?? []) relIds.push(`${ctxName}.${t}`);
+          for (const e of pol.emits ?? []) relIds.push(`${ctxName}.${e}`);
+          rows.push({
+            id,
+            type: "policy",
+            context: ctxName,
+            name: pol.name,
+            tags: "",
+            text: joinText(pol.description),
+            relations: JSON.stringify(relIds),
+            adrRefs,
+          });
+          break;
+        }
+        case "aggregate": {
+          const agg = item as Aggregate;
+          const relIds: string[] = [];
+          for (const h of agg.handles ?? []) relIds.push(`${ctxName}.${h}`);
+          for (const e of agg.emits ?? []) relIds.push(`${ctxName}.${e}`);
+          rows.push({
+            id,
+            type: "aggregate",
+            context: ctxName,
+            name: agg.name,
+            tags: "",
+            text: joinText(agg.description),
+            relations: JSON.stringify(relIds),
+            adrRefs,
+          });
+          break;
+        }
+        case "read_model": {
+          const rm = item as ReadModel;
+          const relIds: string[] = [];
+          for (const sub of rm.subscribes_to ?? []) relIds.push(`${ctxName}.${sub}`);
+          for (const user of rm.used_by ?? []) relIds.push(`actor.${user}`);
+          rows.push({
+            id,
+            type: "read_model",
+            context: ctxName,
+            name: rm.name,
+            tags: "",
+            text: joinText(rm.description),
+            relations: JSON.stringify(relIds),
+            adrRefs,
+          });
+          break;
+        }
+      }
+    });
   }
 
   // ── ADRs ──────────────────────────────────────────────────────────

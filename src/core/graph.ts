@@ -10,7 +10,9 @@
  * performs a breadth-first traversal up to a specified depth.
  */
 
-import type { DomainModel } from "../types/domain.js";
+import type { DomainModel, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "../types/domain.js";
+import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
+import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -147,101 +149,77 @@ export class DomainGraph {
       const ctxId = ensureNode(`context.${ctxName}`, "context", ctxName);
       wireAdrRefs(ctxId, undefined); // contexts don't have adr_refs currently
 
-      // Glossary
-      for (const entry of ctx.glossary ?? []) {
-        const id = ensureNode(scopedId(ctxName, entry.term), "glossary", entry.term, ctxName);
+      // Visit all item types: create node, add contains edge, wire ADR refs,
+      // then apply type-specific relationship wiring.
+      forEachItem(ctx, (type: ItemType, name: string, item: AnyDomainItem) => {
+        const nodeKind = type as NodeKind;
+        const id = ensureNode(scopedId(ctxName, name), nodeKind, name, ctxName);
         addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, entry.adr_refs);
-      }
+        wireAdrRefs(id, itemAdrRefs(item));
 
-      // Events
-      for (const evt of ctx.events ?? []) {
-        const id = ensureNode(scopedId(ctxName, evt.name), "event", evt.name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, evt.adr_refs);
-
-        // raised_by → aggregate
-        if (evt.raised_by) {
-          const aggId = ensureNode(scopedId(ctxName, evt.raised_by), "aggregate", evt.raised_by, ctxName);
-          addEdge(aggId, id, "emits");
+        // Type-specific relationship wiring
+        switch (type) {
+          case "event": {
+            const evt = item as DomainEvent;
+            if (evt.raised_by) {
+              const aggId = ensureNode(scopedId(ctxName, evt.raised_by), "aggregate", evt.raised_by, ctxName);
+              addEdge(aggId, id, "emits");
+            }
+            break;
+          }
+          case "command": {
+            const cmd = item as Command;
+            if (cmd.handled_by) {
+              const aggId = ensureNode(scopedId(ctxName, cmd.handled_by), "aggregate", cmd.handled_by, ctxName);
+              addEdge(aggId, id, "handles");
+            }
+            if (cmd.actor) {
+              const aId = ensureNode(actorId(cmd.actor), "actor", cmd.actor);
+              addEdge(aId, id, "initiates");
+            }
+            break;
+          }
+          case "policy": {
+            const pol = item as Policy;
+            for (const trigger of pol.triggers ?? []) {
+              const evtId = ensureNode(scopedId(ctxName, trigger), "event", trigger, ctxName);
+              addEdge(evtId, id, "triggers");
+            }
+            for (const emitted of pol.emits ?? []) {
+              const cmdId = ensureNode(scopedId(ctxName, emitted), "command", emitted, ctxName);
+              addEdge(id, cmdId, "emits");
+            }
+            break;
+          }
+          case "aggregate": {
+            const agg = item as Aggregate;
+            for (const h of agg.handles ?? []) {
+              const cmdId = ensureNode(scopedId(ctxName, h), "command", h, ctxName);
+              addEdge(id, cmdId, "handles");
+            }
+            for (const e of agg.emits ?? []) {
+              const evtId = ensureNode(scopedId(ctxName, e), "event", e, ctxName);
+              addEdge(id, evtId, "emits");
+            }
+            break;
+          }
+          case "read_model": {
+            const rm = item as ReadModel;
+            for (const sub of rm.subscribes_to ?? []) {
+              const evtId = ensureNode(scopedId(ctxName, sub), "event", sub, ctxName);
+              addEdge(id, evtId, "subscribes_to");
+            }
+            for (const user of rm.used_by ?? []) {
+              const aId = ensureNode(actorId(user), "actor", user);
+              addEdge(id, aId, "used_by");
+            }
+            break;
+          }
+          case "glossary":
+            // Glossary items have no type-specific relationship wiring.
+            break;
         }
-      }
-
-      // Commands
-      for (const cmd of ctx.commands ?? []) {
-        const id = ensureNode(scopedId(ctxName, cmd.name), "command", cmd.name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, cmd.adr_refs);
-
-        // handled_by → aggregate
-        if (cmd.handled_by) {
-          const aggId = ensureNode(scopedId(ctxName, cmd.handled_by), "aggregate", cmd.handled_by, ctxName);
-          addEdge(aggId, id, "handles");
-        }
-
-        // actor → actor node
-        if (cmd.actor) {
-          const aId = ensureNode(actorId(cmd.actor), "actor", cmd.actor);
-          addEdge(aId, id, "initiates");
-        }
-      }
-
-      // Policies
-      for (const pol of ctx.policies ?? []) {
-        const id = ensureNode(scopedId(ctxName, pol.name), "policy", pol.name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, pol.adr_refs);
-
-        // triggers (when)
-        for (const trigger of pol.triggers ?? []) {
-          const evtId = ensureNode(scopedId(ctxName, trigger), "event", trigger, ctxName);
-          addEdge(evtId, id, "triggers");
-        }
-
-        // emits (then)
-        for (const emitted of pol.emits ?? []) {
-          const cmdId = ensureNode(scopedId(ctxName, emitted), "command", emitted, ctxName);
-          addEdge(id, cmdId, "emits");
-        }
-      }
-
-      // Aggregates
-      for (const agg of ctx.aggregates ?? []) {
-        const id = ensureNode(scopedId(ctxName, agg.name), "aggregate", agg.name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, agg.adr_refs);
-
-        // handles → commands
-        for (const h of agg.handles ?? []) {
-          const cmdId = ensureNode(scopedId(ctxName, h), "command", h, ctxName);
-          addEdge(id, cmdId, "handles");
-        }
-
-        // emits → events
-        for (const e of agg.emits ?? []) {
-          const evtId = ensureNode(scopedId(ctxName, e), "event", e, ctxName);
-          addEdge(id, evtId, "emits");
-        }
-      }
-
-      // Read Models
-      for (const rm of ctx.read_models ?? []) {
-        const id = ensureNode(scopedId(ctxName, rm.name), "read_model", rm.name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, rm.adr_refs);
-
-        // subscribes_to → events
-        for (const sub of rm.subscribes_to ?? []) {
-          const evtId = ensureNode(scopedId(ctxName, sub), "event", sub, ctxName);
-          addEdge(id, evtId, "subscribes_to");
-        }
-
-        // used_by → actors
-        for (const user of rm.used_by ?? []) {
-          const aId = ensureNode(actorId(user), "actor", user);
-          addEdge(id, aId, "used_by");
-        }
-      }
+      });
     }
 
     // ── ADRs ──────────────────────────────────────────────────────

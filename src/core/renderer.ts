@@ -21,6 +21,8 @@ import type {
   AdrRecord,
   Field,
 } from "../types/domain.js";
+import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
+import type { AnyDomainItem } from "../shared/item-visitor.js";
 import { docsDir, templatesDir } from "../utils/paths.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -125,16 +127,9 @@ function collectContextAdrs(
 ): AdrRecord[] {
   const refs = new Set<string>();
 
-  const addRefs = (adrRefs?: string[]) => {
-    for (const r of adrRefs ?? []) refs.add(r);
-  };
-
-  for (const e of ctx.events ?? []) addRefs(e.adr_refs);
-  for (const c of ctx.commands ?? []) addRefs(c.adr_refs);
-  for (const p of ctx.policies ?? []) addRefs(p.adr_refs);
-  for (const a of ctx.aggregates ?? []) addRefs(a.adr_refs);
-  for (const rm of ctx.read_models ?? []) addRefs(rm.adr_refs);
-  for (const g of ctx.glossary ?? []) addRefs(g.adr_refs);
+  forEachItem(ctx, (_type, _name, item) => {
+    for (const r of itemAdrRefs(item) ?? []) refs.add(r);
+  });
 
   const records: AdrRecord[] = [];
   for (const ref of [...refs].sort()) {
@@ -299,29 +294,32 @@ export function renderDocs(
 
     // ── 3. Per-item pages ─────────────────────────────────────────
 
-    const renderItems = <T extends { name: string }>(
-      items: T[] | undefined,
-      itemType: string,
-    ) => {
-      for (const item of items ?? []) {
-        const data = buildItemData(itemType, ctxName, item as unknown as Parameters<typeof buildItemData>[2]);
-        writeOutput(
-          join(ctxDir, `${item.name}.md`),
-          tpl.item(data),
-          written,
-        );
-      }
+    /** Map item type to the display label used in templates. */
+    const typeLabel: Record<string, string> = {
+      event: "Event",
+      command: "Command",
+      policy: "Policy",
+      aggregate: "Aggregate",
+      read_model: "Read Model",
+      glossary: "Glossary",
     };
 
-    renderItems(ctx.events, "Event");
-    renderItems(ctx.commands, "Command");
-    renderItems(ctx.policies, "Policy");
-    renderItems(ctx.aggregates, "Aggregate");
-    renderItems(ctx.read_models, "Read Model");
-    renderItems(
-      ctx.glossary?.map((g) => ({ ...g, name: g.term })),
-      "Glossary",
-    );
+    forEachItem(ctx, (type, name, item) => {
+      // Glossary entries need a synthetic `name` property for buildItemData.
+      const dataItem = type === "glossary"
+        ? { ...item, name: (item as { term: string }).term }
+        : item;
+      const data = buildItemData(
+        typeLabel[type],
+        ctxName,
+        dataItem as unknown as Parameters<typeof buildItemData>[2],
+      );
+      writeOutput(
+        join(ctxDir, `${name}.md`),
+        tpl.item(data),
+        written,
+      );
+    });
   }
 
   return { fileCount: written.length, files: written };
