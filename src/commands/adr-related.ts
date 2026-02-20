@@ -107,7 +107,7 @@ export function registerAdrRelated(adrCmd: Cmd): void {
 
         const adr = model.adrs.get(id)!;
         const domainRefs = (adr.domain_refs ?? []) as string[];
-        const itemsReferencing = domainItemsReferencingAdr(model, id);
+        const itemsReferencing = domainItemsReferencingAdr(model, id as AdrRef);
 
         console.log(`\n# Related items for ${id} (${adr.title})\n`);
 
