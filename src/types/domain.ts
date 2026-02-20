@@ -182,6 +182,8 @@ export interface AdrRecord {
   domain_refs?: DomainRef[];
   /** ID of the ADR that supersedes this one. */
   superseded_by?: AdrRef;
+  /** Markdown body text (everything after the closing ---), with formatting stripped. */
+  body?: string;
 }
 
 // ── Domain Index ──────────────────────────────────────────────────────

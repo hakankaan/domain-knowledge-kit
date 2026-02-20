@@ -295,6 +295,7 @@ function collectRows(model: DomainModel): IndexRow[] {
         adr.title,
         adr.status,
         adr.deciders?.join(" "),
+        adr.body,
       ),
       relations: JSON.stringify(relIds),
       adrRefs: "[]",

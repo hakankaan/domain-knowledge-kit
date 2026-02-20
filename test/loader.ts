@@ -187,6 +187,28 @@ try {
   assert("parseAdrFrontmatter returns record", adr !== null);
   assert("parseAdrFrontmatter id correct", adr?.id === "adr-0042");
   assert("parseAdrFrontmatter status correct", adr?.status === "proposed");
+  assert("parseAdrFrontmatter extracts body", adr?.body === "Hello");
+
+  const adrWithBody = parseAdrFrontmatter(
+    "---\nid: adr-0099\ntitle: Rich\nstatus: accepted\ndate: 2026-03-01\n---\n\n## Context\n\nWe need a [search engine](https://example.com) for **full-text** queries.\n\n## Decision\n\nUse `SQLite FTS5` for indexing.\n",
+  );
+  assert("parseAdrFrontmatter with rich body returns record", adrWithBody !== null);
+  assert(
+    "body strips markdown formatting",
+    adrWithBody?.body !== undefined &&
+      adrWithBody.body.includes("search engine") &&
+      adrWithBody.body.includes("full-text") &&
+      adrWithBody.body.includes("SQLite FTS5") &&
+      !adrWithBody.body.includes("##") &&
+      !adrWithBody.body.includes("**") &&
+      !adrWithBody.body.includes("`"),
+  );
+
+  const adrNoBody = parseAdrFrontmatter(
+    "---\nid: adr-0050\ntitle: Empty\nstatus: proposed\ndate: 2026-02-20\n---\n",
+  );
+  assert("parseAdrFrontmatter with no body has undefined body", adrNoBody?.body === undefined);
+
   const noFront = parseAdrFrontmatter("# No frontmatter here\n");
   assert("parseAdrFrontmatter returns null for missing frontmatter", noFront === null);
   const incompleteFront = parseAdrFrontmatter("---\nid: adr-0042\n---\n");

@@ -125,9 +125,10 @@ function validateSchemas(
     check("context.schema.json", ctx, `context:${name}`);
   }
 
-  // ADR frontmatter
+  // ADR frontmatter (strip runtime-only `body` field before validation)
   for (const [id, adr] of model.adrs) {
-    check("adr-frontmatter.schema.json", adr, `adr:${id}`);
+    const { body: _, ...frontmatter } = adr;
+    check("adr-frontmatter.schema.json", frontmatter, `adr:${id}`);
   }
 }
 

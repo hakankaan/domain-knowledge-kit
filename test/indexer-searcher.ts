@@ -167,6 +167,19 @@ function setup() {
       "---",
       "",
       "# ADR-0001 — Use YAML for domain models",
+      "",
+      "## Context",
+      "",
+      "We evaluated serialization formats including JSON, TOML, and YAML.",
+      "YAML provides the best human-readability for domain modeling artifacts.",
+      "",
+      "## Decision",
+      "",
+      "Adopt YAML as the canonical serialization format for all domain definitions.",
+      "",
+      "## Consequences",
+      "",
+      "Domain experts can directly read and edit model files without specialized tooling.",
     ].join("\n"),
   );
 
@@ -253,6 +266,30 @@ try {
   assert(
     "search 'YAML' includes adr-0001",
     yamlResults.some((r) => r.id === "adr-0001"),
+  );
+
+  // ── Search ADR body content ─────────────────────────────────────
+
+  console.log("\n=== Search ADR body content ===");
+  const serializationResults = search("serialization", {}, { dbPath: DB_PATH });
+  assert("search 'serialization' returns results", serializationResults.length > 0);
+  assert(
+    "search 'serialization' finds adr-0001 via body content",
+    serializationResults.some((r) => r.id === "adr-0001"),
+  );
+
+  const readabilityResults = search("human-readability", {}, { dbPath: DB_PATH });
+  assert("search 'human-readability' returns results", readabilityResults.length > 0);
+  assert(
+    "search 'human-readability' finds adr-0001 via body content",
+    readabilityResults.some((r) => r.id === "adr-0001"),
+  );
+
+  const toolingResults = search("tooling", {}, { dbPath: DB_PATH });
+  assert("search 'tooling' returns results", toolingResults.length > 0);
+  assert(
+    "search 'tooling' finds adr-0001 via Consequences section",
+    toolingResults.some((r) => r.id === "adr-0001"),
   );
 
   // ── Search glossary (aliases) ─────────────────────────────────────
