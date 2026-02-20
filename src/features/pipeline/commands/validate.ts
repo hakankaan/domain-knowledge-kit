@@ -5,8 +5,8 @@
  * cross-reference rules, and exits with code 1 on errors.
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../shared/loader.js";
-import { validateDomainModel } from "../core/validator.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { validateDomainModel } from "../validator.js";
 
 /** Register the `validate` subcommand. */
 export function registerValidate(program: Cmd): void {

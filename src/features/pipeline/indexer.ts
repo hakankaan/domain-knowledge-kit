@@ -15,10 +15,10 @@
 import { mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
-import type { DomainModel, DomainContext, AdrRecord, Actor, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "../shared/types/domain.js";
-import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
-import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
-import { repoRoot } from "../shared/paths.js";
+import type { DomainModel, DomainContext, AdrRecord, Actor, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "../../shared/types/domain.js";
+import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
+import type { ItemType, AnyDomainItem } from "../../shared/item-visitor.js";
+import { repoRoot } from "../../shared/paths.js";
 
 // better-sqlite3 is a CJS package; use createRequire for ESM interop.
 const require = createRequire(import.meta.url);

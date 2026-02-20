@@ -37,6 +37,7 @@ export {
   adrDir,
   docsDir,
   templatesDir,
+  schemaDir,
   repoRelative,
 } from "./paths.js";
 

@@ -5,10 +5,10 @@
  * Handlebars templates, and rebuilds the FTS5 search index.
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../shared/loader.js";
-import { validateDomainModel } from "../core/validator.js";
-import { renderDocs } from "../core/renderer.js";
-import { buildIndex } from "../core/indexer.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { validateDomainModel } from "../validator.js";
+import { renderDocs } from "../renderer.js";
+import { buildIndex } from "../indexer.js";
 
 /** Register the `render` subcommand. */
 export function registerRender(program: Cmd): void {

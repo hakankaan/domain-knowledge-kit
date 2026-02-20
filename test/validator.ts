@@ -11,7 +11,7 @@ import { loadDomainModel } from "../src/shared/loader.js";
 import {
   validateDomainModel,
   type ValidationResult,
-} from "../src/core/validator.js";
+} from "../src/features/pipeline/validator.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

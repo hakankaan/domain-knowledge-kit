@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync, rmSync, existsSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { renderDocs } from "../src/core/renderer.js";
+import { renderDocs } from "../src/features/pipeline/renderer.js";
 import type {
   DomainModel,
   DomainIndex,

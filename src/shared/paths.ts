@@ -56,6 +56,11 @@ export function templatesDir(root?: string): string {
   return join(repoRoot(root), "tools", "domain-pack", "templates");
 }
 
+/** Absolute path to `tools/domain-pack/schema/`. */
+export function schemaDir(root?: string): string {
+  return join(repoRoot(root), "tools", "domain-pack", "schema");
+}
+
 /**
  * Turn an absolute path into a repo-relative POSIX path
  * (forward slashes, no leading `./`).

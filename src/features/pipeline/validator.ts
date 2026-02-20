@@ -25,9 +25,9 @@ import type {
   Policy,
   Aggregate,
   ReadModel,
-} from "../shared/types/domain.js";
-import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
-import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
+} from "../../shared/types/domain.js";
+import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
+import type { ItemType, AnyDomainItem } from "../../shared/item-visitor.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
 // under both tsc (Node16 resolution) and tsx (ESM runtime).
@@ -417,7 +417,7 @@ function validateCrossRefs(
  * Works both from source (`src/core/`) and compiled (`dist/core/`).
  */
 function defaultSchemaDir(): string {
-  return join(import.meta.dirname, "../../tools/domain-pack/schema");
+  return join(import.meta.dirname, "../../../tools/domain-pack/schema");
 }
 
 /**
