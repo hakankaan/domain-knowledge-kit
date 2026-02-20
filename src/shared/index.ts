@@ -46,3 +46,6 @@ export { parseYaml, stringifyYaml } from "./yaml.js";
 
 // ── ADR parser ────────────────────────────────────────────────────────
 export { parseAdrFrontmatter, parseAdrFile } from "./adr-parser.js";
+
+// ── Error formatting ──────────────────────────────────────────────────
+export { formatCliError, isYAMLException, isNodeSystemError } from "./errors.js";
