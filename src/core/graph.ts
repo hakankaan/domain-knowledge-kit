@@ -104,9 +104,14 @@ export class DomainGraph {
 
     /** Ensure a node exists and return its id. */
     function ensureNode(id: string, kind: NodeKind, name: string, context?: string): string {
-      if (!nodes.has(id)) {
+      const existing = nodes.get(id);
+      if (!existing) {
         nodes.set(id, { id, kind, name, context });
         adj.set(id, new Set());
+      } else if (existing.kind === "glossary" && kind !== "glossary") {
+        // Structural kinds (aggregate, event, command, etc.) take precedence
+        // over glossary when both share the same scoped ID within a context.
+        existing.kind = kind;
       }
       return id;
     }
