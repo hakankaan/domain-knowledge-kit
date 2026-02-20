@@ -41,7 +41,32 @@ docs/
   adr/                   # Architecture Decision Records (Markdown + YAML frontmatter)
   domain/                # Generated documentation (do not edit by hand)
 
-src/                     # CLI source code
+src/
+  cli.ts                 # Slim CLI entry point (registers commands)
+  features/              # Vertical feature slices
+    query/               # List, show, search, related commands
+      commands/          #   CLI command handlers
+      searcher.ts        #   FTS5 search logic
+      tests/             #   Co-located unit tests
+    adr/                 # ADR show & related commands
+      commands/          #   CLI command handlers
+    pipeline/            # Validate, render, index pipeline
+      commands/          #   CLI command handlers
+      validator.ts       #   Schema + cross-ref validation
+      renderer.ts        #   Handlebars doc generation
+      indexer.ts          #   Search index builder
+      tests/             #   Co-located unit tests
+  shared/                # Cross-cutting infrastructure
+    types/               #   DomainModel, SearchIndexRecord, etc.
+    loader.ts            #   YAML model loading
+    graph.ts             #   BFS graph traversal
+    item-visitor.ts      #   Generic item iteration utility
+    adr-parser.ts        #   ADR frontmatter parsing
+    paths.ts             #   Path resolution helpers
+    errors.ts            #   Error formatting
+    yaml.ts              #   YAML I/O helpers
+    tests/               #   Co-located unit tests
+
 tools/
   domain-pack/
     schema/              # JSON Schemas for domain YAML validation
@@ -53,6 +78,12 @@ tools/
   skills/                  # Copilot skill definitions
   agents/                  # Copilot agent definitions
 ```
+
+### Architecture: Vertical Feature Slices
+
+The source code is organized into **vertical feature slices** rather than horizontal layers. Each feature slice (`query`, `adr`, `pipeline`) owns its commands, core logic, and tests. The `shared/` module contains cross-cutting infrastructure used by all slices (loader, graph traversal, type definitions, etc.).
+
+This structure ensures that adding a new domain item type or feature requires changes localized to one slice, reducing coupling and making the codebase easier to navigate.
 
 ## Adding a Bounded Context
 

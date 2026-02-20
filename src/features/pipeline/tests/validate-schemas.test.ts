@@ -3,10 +3,14 @@
  * Loads every schema into ajv with $ref resolution and
  * validates one good + one bad sample for key schemas.
  */
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
+import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+// ajv & ajv-formats are CJS packages; use createRequire for clean interop
+const require = createRequire(import.meta.url);
+const Ajv = require("ajv").default as typeof import("ajv").default;
+const addFormats = require("ajv-formats").default as typeof import("ajv-formats").default;
 
 const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/domain-pack/schema");
 const files = readdirSync(SCHEMA_DIR).filter((f) => f.endsWith(".schema.json"));
