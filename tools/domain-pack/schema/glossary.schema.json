@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "glossary.schema.json",
+  "title": "Glossary Entry",
+  "description": "A ubiquitous-language term within a bounded context",
+  "type": "object",
+  "properties": {
+    "term": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The canonical term name"
+    },
+    "definition": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plain-language definition of the term"
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Alternative names for this term"
+    },
+    "adr_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+      "uniqueItems": true,
+      "description": "Related ADR identifiers (e.g. adr-0001)"
+    }
+  },
+  "required": ["term", "definition"],
+  "additionalProperties": false
+}

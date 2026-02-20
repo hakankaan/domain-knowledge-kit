@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "adr-frontmatter.schema.json",
+  "title": "ADR Frontmatter",
+  "description": "Frontmatter metadata for an Architecture Decision Record",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^adr-\\d{4}$",
+      "description": "Stable ADR identifier (e.g. adr-0001)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable title of the decision"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "accepted", "deprecated", "superseded"],
+      "description": "Current lifecycle status of the ADR"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO-8601 date when the decision was recorded (YYYY-MM-DD)"
+    },
+    "deciders": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "People involved in making this decision"
+    },
+    "domain_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
+        "description": "Domain item reference in context.Name format (e.g. ordering.OrderPlaced)"
+      },
+      "uniqueItems": true,
+      "description": "Domain items related to this decision"
+    },
+    "superseded_by": {
+      "type": "string",
+      "pattern": "^adr-\\d{4}$",
+      "description": "ID of the ADR that supersedes this one"
+    }
+  },
+  "required": ["id", "title", "status", "date"],
+  "additionalProperties": false
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "actors.schema.json",
+  "title": "Actors File",
+  "description": "Top-level actors definition file (domain/actors.yml)",
+  "type": "object",
+  "properties": {
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9 ]*$",
+            "description": "Actor display name (e.g. Customer, Payment Gateway)"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["human", "system", "external"],
+            "description": "Whether the actor is a person, internal system, or external system"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What role this actor plays in the domain"
+          },
+          "adr_refs": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+            "uniqueItems": true,
+            "description": "Related ADR identifiers"
+          }
+        },
+        "required": ["name", "type", "description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["actors"],
+  "additionalProperties": false
+}

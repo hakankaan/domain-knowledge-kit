@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "context.schema.json",
+  "title": "Bounded Context",
+  "description": "A bounded context YAML file containing domain items (domain/contexts/<name>.yml)",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Kebab-case context identifier used as the first segment of domain item IDs (e.g. ordering)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this bounded context is responsible for"
+    },
+    "glossary": {
+      "type": "array",
+      "items": { "$ref": "glossary.schema.json" },
+      "description": "Ubiquitous-language terms scoped to this context"
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "event.schema.json" },
+      "description": "Domain events raised within this context"
+    },
+    "commands": {
+      "type": "array",
+      "items": { "$ref": "command.schema.json" },
+      "description": "Commands handled within this context"
+    },
+    "policies": {
+      "type": "array",
+      "items": { "$ref": "policy.schema.json" },
+      "description": "Reactive policies within this context"
+    },
+    "aggregates": {
+      "type": "array",
+      "items": { "$ref": "aggregate.schema.json" },
+      "description": "Aggregates within this context"
+    },
+    "read_models": {
+      "type": "array",
+      "items": { "$ref": "read-model.schema.json" },
+      "description": "Read models (projections) within this context"
+    }
+  },
+  "required": ["name", "description"],
+  "additionalProperties": false
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aggregate.schema.json",
+  "title": "Aggregate",
+  "description": "A domain aggregate that handles commands and emits events",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9]*$",
+      "description": "PascalCase aggregate name (e.g. Order)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this aggregate represents in the domain"
+    },
+    "handles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Command names handled by this aggregate"
+    },
+    "emits": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Event names emitted by this aggregate"
+    },
+    "adr_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+      "uniqueItems": true,
+      "description": "Related ADR identifiers"
+    }
+  },
+  "required": ["name", "description"],
+  "additionalProperties": false
+}

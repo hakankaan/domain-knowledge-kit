@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "command.schema.json",
+  "title": "Command",
+  "description": "A command handled by an aggregate within a bounded context",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9]*$",
+      "description": "PascalCase command name (e.g. PlaceOrder)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this command instructs the system to do"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        },
+        "required": ["name", "type"],
+        "additionalProperties": false
+      },
+      "description": "Input fields for this command"
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the actor that initiates this command"
+    },
+    "handled_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the aggregate that handles this command"
+    },
+    "adr_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+      "uniqueItems": true,
+      "description": "Related ADR identifiers"
+    }
+  },
+  "required": ["name", "description"],
+  "additionalProperties": false
+}

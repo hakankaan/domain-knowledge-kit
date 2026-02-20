@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "index.schema.json",
+  "title": "Domain Index",
+  "description": "Top-level domain index file (domain/index.yml)",
+  "type": "object",
+  "properties": {
+    "contexts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Context identifier matching a file under domain/contexts/"
+          },
+          "description": {
+            "type": "string",
+            "description": "Short summary of the bounded context"
+          }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      },
+      "description": "Registered bounded contexts"
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Flow name"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this flow accomplishes"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
+                  "description": "Domain item reference (context.Name)"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["command", "event", "policy", "read_model"],
+                  "description": "Type of the referenced item"
+                },
+                "note": {
+                  "type": "string",
+                  "description": "Optional annotation for this step"
+                }
+              },
+              "required": ["ref", "type"],
+              "additionalProperties": false
+            },
+            "description": "Ordered sequence of domain item references forming the flow"
+          }
+        },
+        "required": ["name", "steps"],
+        "additionalProperties": false
+      },
+      "description": "Cross-context flows linking domain items in sequence"
+    }
+  },
+  "required": ["contexts"],
+  "additionalProperties": false
+}

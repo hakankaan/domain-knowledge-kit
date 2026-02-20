@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "read-model.schema.json",
+  "title": "Read Model",
+  "description": "A read model (projection) built from domain events",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9]*$",
+      "description": "PascalCase read model name (e.g. OrderSummary)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What data this read model exposes"
+    },
+    "subscribes_to": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Event names this read model subscribes to"
+    },
+    "used_by": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Actor names that consume this read model"
+    },
+    "adr_refs": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+      "uniqueItems": true,
+      "description": "Related ADR identifiers"
+    }
+  },
+  "required": ["name", "description"],
+  "additionalProperties": false
+}
