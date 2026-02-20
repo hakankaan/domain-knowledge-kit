@@ -23,7 +23,7 @@ import type {
   ReadModel,
   GlossaryEntry,
   AdrRef,
-} from "../types/domain.js";
+} from "./types/domain.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 

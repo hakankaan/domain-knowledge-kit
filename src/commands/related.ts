@@ -5,8 +5,8 @@
  * and lists all reachable items within the specified depth.
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../core/loader.js";
-import { DomainGraph } from "../core/graph.js";
+import { loadDomainModel } from "../shared/loader.js";
+import { DomainGraph } from "../shared/graph.js";
 
 /** Register the `related` subcommand. */
 export function registerRelated(program: Cmd): void {

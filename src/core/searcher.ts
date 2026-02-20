@@ -9,8 +9,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import type { DomainGraph } from "./graph.js";
-import { repoRoot } from "../utils/paths.js";
+import type { DomainGraph } from "../shared/graph.js";
+import { repoRoot } from "../shared/paths.js";
 
 // better-sqlite3 CJS interop
 const require = createRequire(import.meta.url);

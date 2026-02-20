@@ -13,15 +13,15 @@ import type {
   DomainIndex,
   DomainModel,
   AdrRecord,
-} from "../types/domain.js";
-import { parseYaml } from "../utils/yaml.js";
-import { parseAdrFile } from "../utils/adr-parser.js";
+} from "./types/domain.js";
+import { parseYaml } from "./yaml.js";
+import { parseAdrFile } from "./adr-parser.js";
 import {
   actorsFile,
   contextsDir,
   indexFile,
   adrDir,
-} from "../utils/paths.js";
+} from "./paths.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

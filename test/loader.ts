@@ -17,9 +17,9 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadDomainModel } from "../src/core/loader.js";
-import { parseAdrFrontmatter } from "../src/utils/adr-parser.js";
-import { parseYaml, stringifyYaml } from "../src/utils/yaml.js";
+import { loadDomainModel } from "../src/shared/loader.js";
+import { parseAdrFrontmatter } from "../src/shared/adr-parser.js";
+import { parseYaml, stringifyYaml } from "../src/shared/yaml.js";
 
 // ── Test scaffolding fixtures ─────────────────────────────────────────
 

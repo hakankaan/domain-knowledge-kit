@@ -7,7 +7,7 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadDomainModel } from "../src/core/loader.js";
+import { loadDomainModel } from "../src/shared/loader.js";
 import {
   validateDomainModel,
   type ValidationResult,

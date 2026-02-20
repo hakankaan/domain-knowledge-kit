@@ -14,7 +14,7 @@ import type {
   Actor,
   DomainContext,
   AdrRecord,
-} from "../src/types/domain.js";
+} from "../src/shared/types/domain.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 

@@ -10,9 +10,9 @@
  * performs a breadth-first traversal up to a specified depth.
  */
 
-import type { DomainModel, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "../types/domain.js";
-import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
-import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
+import type { DomainModel, DomainEvent, Command, Policy, Aggregate, ReadModel, GlossaryEntry } from "./types/domain.js";
+import { forEachItem, itemAdrRefs } from "./item-visitor.js";
+import type { ItemType, AnyDomainItem } from "./item-visitor.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 

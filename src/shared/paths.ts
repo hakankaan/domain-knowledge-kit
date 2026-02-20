@@ -10,14 +10,14 @@ import { resolve, join, relative } from "node:path";
  * Resolve the repository root.
  *
  * When running from source (`tsx src/cli.ts`) `import.meta.dirname`
- * points at `src/utils/`, so we go up two levels. When running from
- * the compiled output (`dist/utils/`) we also go up two levels.
+ * points at `src/shared/`, so we go up two levels. When running from
+ * the compiled output (`dist/shared/`) we also go up two levels.
  *
  * Callers can override by passing an explicit `repoRoot`.
  */
 export function repoRoot(override?: string): string {
   if (override) return resolve(override);
-  // import.meta.dirname is src/utils  or dist/utils
+  // import.meta.dirname is src/shared  or dist/shared
   return resolve(import.meta.dirname, "../..");
 }
 

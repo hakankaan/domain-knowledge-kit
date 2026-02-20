@@ -6,8 +6,8 @@
  */
 import type { Command as Cmd } from "commander";
 import { search } from "../core/searcher.js";
-import { DomainGraph } from "../core/graph.js";
-import { loadDomainModel } from "../core/loader.js";
+import { DomainGraph } from "../shared/graph.js";
+import { loadDomainModel } from "../shared/loader.js";
 
 /** Register the `search` subcommand. */
 export function registerSearch(program: Cmd): void {

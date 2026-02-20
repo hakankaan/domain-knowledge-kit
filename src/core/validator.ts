@@ -25,7 +25,7 @@ import type {
   Policy,
   Aggregate,
   ReadModel,
-} from "../types/domain.js";
+} from "../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../shared/item-visitor.js";
 import type { ItemType, AnyDomainItem } from "../shared/item-visitor.js";
 

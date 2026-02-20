@@ -5,7 +5,7 @@
  * frontmatter block (delimited by `---`) into typed `AdrRecord` objects.
  */
 import { readFileSync } from "node:fs";
-import type { AdrRecord } from "../types/domain.js";
+import type { AdrRecord } from "./types/domain.js";
 import { parseYaml } from "./yaml.js";
 
 /** Regex that captures the YAML block between the opening and closing `---`. */

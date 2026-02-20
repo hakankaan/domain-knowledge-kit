@@ -9,8 +9,8 @@
  *   listed in its own adr_refs
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../core/loader.js";
-import type { AdrRef, DomainModel } from "../types/domain.js";
+import { loadDomainModel } from "../shared/loader.js";
+import type { AdrRef, DomainModel } from "../shared/types/domain.js";
 
 /** Collect domain item IDs that reference a specific ADR. */
 function domainItemsReferencingAdr(model: DomainModel, adrId: AdrRef): string[] {
