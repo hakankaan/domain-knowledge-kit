@@ -6,6 +6,12 @@
   "bin": {
     "domain-knowledge-kit": "dist/cli.js"
   },
+  "files": [
+    "dist/",
+    "tools/domain-pack/schema/",
+    "tools/domain-pack/templates/",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
