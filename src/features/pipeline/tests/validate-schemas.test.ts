@@ -8,7 +8,7 @@ import addFormats from "ajv-formats";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const SCHEMA_DIR = join(import.meta.dirname, "../tools/domain-pack/schema");
+const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/domain-pack/schema");
 const files = readdirSync(SCHEMA_DIR).filter((f) => f.endsWith(".schema.json"));
 
 // ---- Load all schemas into ajv ----

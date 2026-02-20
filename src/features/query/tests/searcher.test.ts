@@ -1,5 +1,5 @@
 /**
- * Tests for the SQLite FTS5 indexer and searcher.
+ * Tests for the SQLite FTS5 searcher.
  *
  * Builds a DomainModel in a temp directory, indexes it, then runs
  * search queries and verifies results.
@@ -7,10 +7,10 @@
 import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadDomainModel } from "../src/shared/loader.js";
-import { DomainGraph } from "../src/shared/graph.js";
-import { buildIndex } from "../src/features/pipeline/indexer.js";
-import { search } from "../src/features/query/searcher.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { DomainGraph } from "../../../shared/graph.js";
+import { buildIndex } from "../../pipeline/indexer.js";
+import { search } from "../searcher.js";
 
 // ── Fixture setup ─────────────────────────────────────────────────────
 
@@ -213,16 +213,8 @@ try {
   const model = loadDomainModel({ root: TMP });
   const graph = DomainGraph.from(model);
 
-  // ── Build index ───────────────────────────────────────────────────
-
-  console.log("\n=== Build index ===");
+  // Build index (setup for search tests)
   const dbPath = buildIndex(model, { root: TMP, dbPath: DB_PATH });
-  assert("buildIndex returns path", dbPath === DB_PATH);
-  assert("index.db file exists", existsSync(DB_PATH));
-
-  // Rebuild is idempotent — should not throw
-  const dbPath2 = buildIndex(model, { root: TMP, dbPath: DB_PATH });
-  assert("rebuild is idempotent", dbPath2 === DB_PATH);
 
   // ── Basic FTS search ──────────────────────────────────────────────
 

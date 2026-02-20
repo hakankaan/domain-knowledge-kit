@@ -7,15 +7,15 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadDomainModel } from "../src/shared/loader.js";
+import { loadDomainModel } from "../../../shared/loader.js";
 import {
   validateDomainModel,
   type ValidationResult,
-} from "../src/features/pipeline/validator.js";
+} from "../validator.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-const SCHEMA_DIR = join(import.meta.dirname, "../tools/domain-pack/schema");
+const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/domain-pack/schema");
 
 let passed = 0;
 let failed = 0;

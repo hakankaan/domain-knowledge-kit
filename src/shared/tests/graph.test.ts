@@ -7,8 +7,8 @@
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadDomainModel } from "../src/shared/loader.js";
-import { DomainGraph } from "../src/shared/graph.js";
+import { loadDomainModel } from "../loader.js";
+import { DomainGraph } from "../graph.js";
 
 // ── Fixture setup ─────────────────────────────────────────────────────
 

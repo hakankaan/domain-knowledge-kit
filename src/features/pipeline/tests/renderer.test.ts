@@ -7,14 +7,14 @@
 import { mkdirSync, readFileSync, rmSync, existsSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { renderDocs } from "../src/features/pipeline/renderer.js";
+import { renderDocs } from "../renderer.js";
 import type {
   DomainModel,
   DomainIndex,
   Actor,
   DomainContext,
   AdrRecord,
-} from "../src/shared/types/domain.js";
+} from "../../../shared/types/domain.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ function assertContains(label: string, content: string, expected: string): void 
 const TMP = join(tmpdir(), `dkk-renderer-test-${Date.now()}`);
 const OUT_DIR = join(TMP, "output");
 const TPL_DIR = join(TMP, "templates");
-const REAL_TPL_DIR = join(import.meta.dirname, "..", "tools", "domain-pack", "templates");
+const REAL_TPL_DIR = join(import.meta.dirname, "../../../..", "tools", "domain-pack", "templates");
 
 function buildModel(): DomainModel {
   const index: DomainIndex = {
