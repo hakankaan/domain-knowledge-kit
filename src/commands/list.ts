@@ -178,8 +178,9 @@ export function registerList(program: Cmd): void {
     .description("List domain items with optional filters")
     .option("-c, --context <name>", "Filter by bounded context")
     .option("-t, --type <type>", "Filter by item type (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context)")
+    .option("--json", "Output as JSON")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { context?: string; type?: string; root?: string }) => {
+    .action((opts: { context?: string; type?: string; json?: boolean; root?: string }) => {
       let rows = collectRows(opts.root);
 
       if (opts.context) {
@@ -189,6 +190,11 @@ export function registerList(program: Cmd): void {
       if (opts.type) {
         const t = opts.type.toLowerCase();
         rows = rows.filter((r) => r.type.toLowerCase() === t);
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(rows, null, 2));
+        return;
       }
 
       console.log(`\n${rows.length} item(s) found:\n`);

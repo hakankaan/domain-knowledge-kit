@@ -16,41 +16,61 @@ export function registerRender(program: Cmd): void {
     .command("render")
     .description("Validate, render Markdown docs, and rebuild search index")
     .option("--skip-validation", "Skip schema + cross-ref validation")
+    .option("--json", "Output as JSON")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { skipValidation?: boolean; root?: string }) => {
+    .action((opts: { skipValidation?: boolean; json?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
 
       // 1. Validate (unless skipped)
       if (!opts.skipValidation) {
-        console.log("Validating domain model…");
+        if (!opts.json) console.log("Validating domain model…");
         const result = validateDomainModel(model);
 
-        for (const w of result.warnings) {
-          const loc = w.path ? ` (${w.path})` : "";
-          console.warn(`⚠  ${w.message}${loc}`);
-        }
-        for (const e of result.errors) {
-          const loc = e.path ? ` (${e.path})` : "";
-          console.error(`✗  ${e.message}${loc}`);
+        if (!opts.json) {
+          for (const w of result.warnings) {
+            const loc = w.path ? ` (${w.path})` : "";
+            console.warn(`\u26a0  ${w.message}${loc}`);
+          }
+          for (const e of result.errors) {
+            const loc = e.path ? ` (${e.path})` : "";
+            console.error(`\u2717  ${e.message}${loc}`);
+          }
         }
 
         if (!result.valid) {
-          console.error(`\n✗ Validation failed with ${result.errors.length} error(s). Fix errors before rendering.\n`);
+          if (opts.json) {
+            console.log(JSON.stringify({
+              success: false,
+              error: "Validation failed",
+              validationErrors: result.errors.map((e) => ({ message: e.message, path: e.path ?? null })),
+            }, null, 2));
+          } else {
+            console.error(`\n\u2717 Validation failed with ${result.errors.length} error(s). Fix errors before rendering.\n`);
+          }
           process.exit(1);
         }
-        console.log("✓ Validation passed.\n");
+        if (!opts.json) console.log("\u2713 Validation passed.\n");
       }
 
       // 2. Render docs
-      console.log("Rendering documentation…");
+      if (!opts.json) console.log("Rendering documentation…");
       const renderResult = renderDocs(model, { root: opts.root });
-      console.log(`✓ Rendered ${renderResult.fileCount} file(s).\n`);
+      if (!opts.json) console.log(`\u2713 Rendered ${renderResult.fileCount} file(s).\n`);
 
       // 3. Build search index
-      console.log("Building search index…");
+      if (!opts.json) console.log("Building search index…");
       const dbPath = buildIndex(model, { root: opts.root });
-      console.log(`✓ Search index written to ${dbPath}.\n`);
+      if (!opts.json) console.log(`\u2713 Search index written to ${dbPath}.\n`);
 
-      console.log("Done.");
+      if (opts.json) {
+        console.log(JSON.stringify({
+          success: true,
+          rendered: renderResult.fileCount,
+          files: renderResult.files,
+          searchIndex: dbPath,
+        }, null, 2));
+      } else {
+        console.log("Done.");
+      }
     });
 }

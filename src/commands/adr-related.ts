@@ -92,8 +92,9 @@ export function registerAdrRelated(adrCmd: Cmd): void {
   adrCmd
     .command("related <id>")
     .description("Show bidirectional domain-ADR links for an ADR or domain item")
+    .option("--json", "Output as JSON")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string, opts: { root?: string }) => {
+    .action((id: string, opts: { json?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
 
       const isAdr = id.startsWith("adr-");
@@ -101,13 +102,27 @@ export function registerAdrRelated(adrCmd: Cmd): void {
       if (isAdr) {
         // ADR → domain items
         if (!model.adrs.has(id)) {
-          console.error(`Error: ADR "${id}" not found.`);
+          if (opts.json) {
+            console.log(JSON.stringify({ error: `ADR "${id}" not found` }, null, 2));
+          } else {
+            console.error(`Error: ADR "${id}" not found.`);
+          }
           process.exit(1);
         }
 
         const adr = model.adrs.get(id)!;
         const domainRefs = (adr.domain_refs ?? []) as string[];
         const itemsReferencing = domainItemsReferencingAdr(model, id as AdrRef);
+
+        if (opts.json) {
+          console.log(JSON.stringify({
+            id,
+            title: adr.title,
+            domainRefs,
+            referencedBy: itemsReferencing,
+          }, null, 2));
+          return;
+        }
 
         console.log(`\n# Related items for ${id} (${adr.title})\n`);
 
@@ -133,6 +148,16 @@ export function registerAdrRelated(adrCmd: Cmd): void {
         const own = ownAdrRefs(model, id);
         const referencing = adrsReferencingItem(model, id);
         const allAdrs = [...new Set([...own, ...referencing])].sort();
+
+        if (opts.json) {
+          console.log(JSON.stringify({
+            id,
+            ownAdrRefs: own,
+            referencedByAdrs: referencing,
+            allAdrs,
+          }, null, 2));
+          return;
+        }
 
         console.log(`\n# Related ADRs for ${id}\n`);
 

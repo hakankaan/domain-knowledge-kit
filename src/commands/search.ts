@@ -19,6 +19,7 @@ export function registerSearch(program: Cmd): void {
     .option("--tag <tag>", "Filter results by tag/keyword")
     .option("--limit <n>", "Maximum results to return", "20")
     .option("--expand", "Expand top results with graph neighbours")
+    .option("--json", "Output as JSON")
     .option("-r, --root <path>", "Override repository root")
     .action((query: string, opts: {
       context?: string;
@@ -26,6 +27,7 @@ export function registerSearch(program: Cmd): void {
       tag?: string;
       limit?: string;
       expand?: boolean;
+      json?: boolean;
       root?: string;
     }) => {
       const filters = {
@@ -45,6 +47,11 @@ export function registerSearch(program: Cmd): void {
         limit: parseInt(opts.limit ?? "20", 10),
         graph,
       });
+
+      if (opts.json) {
+        console.log(JSON.stringify(results, null, 2));
+        return;
+      }
 
       if (results.length === 0) {
         console.log(`\nNo results for "${query}".\n`);

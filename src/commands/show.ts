@@ -81,14 +81,24 @@ export function registerShow(program: Cmd): void {
   program
     .command("show <id>")
     .description("Show full YAML for a domain item by ID (e.g. ordering.OrderPlaced, actor.Customer, adr-0001)")
+    .option("--json", "Output as JSON")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string, opts: { root?: string }) => {
+    .action((id: string, opts: { json?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
       const result = resolveItem(model, id);
 
       if (!result.found || !result.data) {
-        console.error(`Error: Item "${id}" not found.`);
+        if (opts.json) {
+          console.log(JSON.stringify({ error: `Item "${id}" not found` }, null, 2));
+        } else {
+          console.error(`Error: Item "${id}" not found.`);
+        }
         process.exit(1);
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({ id, label: result.label, data: result.data }, null, 2));
+        return;
       }
 
       console.log(`\n# ${result.label}\n`);
