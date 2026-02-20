@@ -1,0 +1,89 @@
+# {{name}}
+
+> Auto-generated — do not edit manually. Run `domain-knowledge-kit render` to regenerate.
+
+{{description}}
+
+## Glossary
+
+{{#if glossary}}
+| Term | Definition | Aliases |
+|------|------------|---------|
+{{#each glossary}}
+| **{{term}}** | {{definition}} | {{#if aliases}}{{join aliases ", "}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No glossary entries._
+{{/if}}
+
+## Events
+
+{{#if events}}
+| Event | Description | Raised By | Fields |
+|-------|-------------|-----------|--------|
+{{#each events}}
+| [{{name}}]({{name}}.md) | {{description}} | {{#if raised_by}}`{{raised_by}}`{{else}}—{{/if}} | {{#if fields}}{{fieldSummary fields}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No events._
+{{/if}}
+
+## Commands
+
+{{#if commands}}
+| Command | Description | Actor | Handled By | Fields |
+|---------|-------------|-------|------------|--------|
+{{#each commands}}
+| [{{name}}]({{name}}.md) | {{description}} | {{#if actor}}`{{actor}}`{{else}}—{{/if}} | {{#if handled_by}}`{{handled_by}}`{{else}}—{{/if}} | {{#if fields}}{{fieldSummary fields}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No commands._
+{{/if}}
+
+## Policies
+
+{{#if policies}}
+| Policy | Description | Triggers | Emits |
+|--------|-------------|----------|-------|
+{{#each policies}}
+| [{{name}}]({{name}}.md) | {{description}} | {{#if triggers}}{{join triggers ", "}}{{else}}—{{/if}} | {{#if emits}}{{join emits ", "}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No policies._
+{{/if}}
+
+## Aggregates
+
+{{#if aggregates}}
+| Aggregate | Description | Handles | Emits |
+|-----------|-------------|---------|-------|
+{{#each aggregates}}
+| [{{name}}]({{name}}.md) | {{description}} | {{#if handles}}{{join handles ", "}}{{else}}—{{/if}} | {{#if emits}}{{join emits ", "}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No aggregates._
+{{/if}}
+
+## Read Models
+
+{{#if read_models}}
+| Read Model | Description | Subscribes To | Used By |
+|------------|-------------|---------------|---------|
+{{#each read_models}}
+| [{{name}}]({{name}}.md) | {{description}} | {{#if subscribes_to}}{{join subscribes_to ", "}}{{else}}—{{/if}} | {{#if used_by}}{{join used_by ", "}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No read models._
+{{/if}}
+
+## Linked ADRs
+
+{{#if adrs}}
+| ADR | Title | Status |
+|-----|-------|--------|
+{{#each adrs}}
+| {{id}} | {{title}} | {{status}} |
+{{/each}}
+{{else}}
+_No linked ADRs._
+{{/if}}

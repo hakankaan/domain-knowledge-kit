@@ -46,6 +46,16 @@ export function adrDir(root?: string): string {
   return join(repoRoot(root), "docs", "adr");
 }
 
+/** Absolute path to `docs/domain/` (rendered output). */
+export function docsDir(root?: string): string {
+  return join(repoRoot(root), "docs", "domain");
+}
+
+/** Absolute path to `tools/domain-pack/templates/`. */
+export function templatesDir(root?: string): string {
+  return join(repoRoot(root), "tools", "domain-pack", "templates");
+}
+
 /**
  * Turn an absolute path into a repo-relative POSIX path
  * (forward slashes, no leading `./`).

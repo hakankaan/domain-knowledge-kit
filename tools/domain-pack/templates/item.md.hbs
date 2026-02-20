@@ -1,0 +1,65 @@
+# {{name}}
+
+> Auto-generated — do not edit manually. Run `domain-knowledge-kit render` to regenerate.
+
+**Type:** {{itemType}} · **Context:** [{{context}}](index.md)
+
+## Summary
+
+{{description}}
+
+{{#if meaning}}
+## Meaning
+
+{{meaning}}
+{{/if}}
+
+{{#if fields}}
+## Fields
+
+| Name | Type | Description |
+|------|------|-------------|
+{{#each fields}}
+| `{{name}}` | `{{type}}` | {{#if description}}{{description}}{{else}}—{{/if}} |
+{{/each}}
+{{/if}}
+
+{{#if rules}}
+## Rules & Invariants
+
+{{#each rules}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+{{#if examples}}
+## Examples
+
+{{#each examples}}
+- {{this}}
+{{/each}}
+{{/if}}
+
+## Relationships
+
+{{#if relationships}}
+| Relationship | Target |
+|-------------|--------|
+{{#each relationships}}
+| {{label}} | `{{target}}` |
+{{/each}}
+{{else}}
+_No relationships._
+{{/if}}
+
+## Linked ADRs
+
+{{#if adr_refs}}
+| ADR |
+|-----|
+{{#each adr_refs}}
+| {{this}} |
+{{/each}}
+{{else}}
+_No linked ADRs._
+{{/if}}

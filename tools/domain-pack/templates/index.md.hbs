@@ -1,0 +1,60 @@
+# Domain Knowledge Index
+
+> Auto-generated — do not edit manually. Run `domain-knowledge-kit render` to regenerate.
+
+## Bounded Contexts
+
+{{#if contexts}}
+| Context | Description |
+|---------|-------------|
+{{#each contexts}}
+| [{{name}}]({{name}}/index.md) | {{description}} |
+{{/each}}
+{{else}}
+_No bounded contexts registered._
+{{/if}}
+
+## Actors
+
+{{#if actors}}
+| Actor | Type | Description |
+|-------|------|-------------|
+{{#each actors}}
+| {{name}} | {{type}} | {{description}} |
+{{/each}}
+{{else}}
+_No actors defined._
+{{/if}}
+
+## Glossary Index
+
+{{#if glossaryEntries}}
+| Term | Context | Definition |
+|------|---------|------------|
+{{#each glossaryEntries}}
+| {{term}} | [{{context}}]({{context}}/index.md) | {{definition}} |
+{{/each}}
+{{else}}
+_No glossary entries._
+{{/if}}
+
+## Key Flows
+
+{{#if flows}}
+{{#each flows}}
+### {{name}}
+
+{{#if description}}
+{{description}}
+{{/if}}
+
+| # | Step | Type |
+|---|------|------|
+{{#each steps}}
+| {{stepNumber}} | `{{ref}}` | {{type}} |
+{{/each}}
+
+{{/each}}
+{{else}}
+_No cross-context flows defined._
+{{/if}}
