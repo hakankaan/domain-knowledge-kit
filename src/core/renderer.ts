@@ -12,7 +12,7 @@
  *       <ItemName>.md               ← per-item page
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import Handlebars from "handlebars";
 import type {
@@ -261,6 +261,10 @@ export function renderDocs(
   registerHelpers(Handlebars);
   const tpl = loadTemplates(tplDir);
 
+  // Clean stale output: remove the entire output directory so that files
+  // from contexts/items that no longer exist in the YAML model are purged.
+  // This mirrors the indexer's drop-and-recreate approach for a clean rebuild.
+  rmSync(outDir, { recursive: true, force: true });
   ensureDir(outDir);
 
   // ── 1. Render top-level index ─────────────────────────────────────
