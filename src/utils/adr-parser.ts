@@ -25,6 +25,11 @@ export function parseAdrFrontmatter(markdown: string): AdrRecord | null {
   // The frontmatter must at minimum contain `id`, `title`, `status`, `date`.
   if (!raw.id || !raw.title || !raw.status || !raw.date) return null;
 
+  // js-yaml auto-converts ISO date strings to Date objects; normalise back.
+  if (raw.date instanceof Date) {
+    raw.date = raw.date.toISOString().slice(0, 10);
+  }
+
   return raw as unknown as AdrRecord;
 }
 
