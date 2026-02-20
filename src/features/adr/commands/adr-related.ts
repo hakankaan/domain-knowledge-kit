@@ -9,8 +9,9 @@
  *   listed in its own adr_refs
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../shared/loader.js";
-import type { AdrRef, DomainModel } from "../shared/types/domain.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import type { AdrRef, DomainModel } from "../../../shared/types/domain.js";
+import { forEachItem, itemAdrRefs, itemName } from "../../../shared/item-visitor.js";
 
 /** Collect domain item IDs that reference a specific ADR. */
 function domainItemsReferencingAdr(model: DomainModel, adrId: AdrRef): string[] {
@@ -23,26 +24,13 @@ function domainItemsReferencingAdr(model: DomainModel, adrId: AdrRef): string[] 
     }
   }
 
-  // Context items
+  // Context items — use shared item visitor
   for (const [ctxName, ctx] of model.contexts) {
-    for (const e of ctx.events ?? []) {
-      if (e.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${e.name}`);
-    }
-    for (const c of ctx.commands ?? []) {
-      if (c.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${c.name}`);
-    }
-    for (const p of ctx.policies ?? []) {
-      if (p.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${p.name}`);
-    }
-    for (const a of ctx.aggregates ?? []) {
-      if (a.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${a.name}`);
-    }
-    for (const r of ctx.read_models ?? []) {
-      if (r.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${r.name}`);
-    }
-    for (const g of ctx.glossary ?? []) {
-      if (g.adr_refs?.includes(adrId)) refs.push(`${ctxName}.${g.term}`);
-    }
+    forEachItem(ctx, (_type, name, item) => {
+      if (itemAdrRefs(item)?.includes(adrId)) {
+        refs.push(`${ctxName}.${name}`);
+      }
+    });
   }
 
   return refs.sort();
@@ -68,20 +56,21 @@ function ownAdrRefs(model: DomainModel, itemId: string): string[] {
     return (actor?.adr_refs ?? []) as string[];
   }
 
-  // Context-scoped item
+  // Context-scoped item — use shared item visitor
   const dotIdx = itemId.indexOf(".");
   if (dotIdx > 0) {
     const ctxName = itemId.slice(0, dotIdx);
-    const itemName = itemId.slice(dotIdx + 1);
+    const itemNameStr = itemId.slice(dotIdx + 1);
     const ctx = model.contexts.get(ctxName);
     if (!ctx) return [];
 
-    for (const e of ctx.events ?? []) if (e.name === itemName) return (e.adr_refs ?? []) as string[];
-    for (const c of ctx.commands ?? []) if (c.name === itemName) return (c.adr_refs ?? []) as string[];
-    for (const p of ctx.policies ?? []) if (p.name === itemName) return (p.adr_refs ?? []) as string[];
-    for (const a of ctx.aggregates ?? []) if (a.name === itemName) return (a.adr_refs ?? []) as string[];
-    for (const r of ctx.read_models ?? []) if (r.name === itemName) return (r.adr_refs ?? []) as string[];
-    for (const g of ctx.glossary ?? []) if (g.term === itemName) return (g.adr_refs ?? []) as string[];
+    let result: string[] = [];
+    forEachItem(ctx, (_type, name, item) => {
+      if (name === itemNameStr) {
+        result = (itemAdrRefs(item) ?? []) as string[];
+      }
+    });
+    return result;
   }
 
   return [];

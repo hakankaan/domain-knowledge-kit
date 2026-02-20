@@ -5,8 +5,8 @@
  * its frontmatter metadata as YAML, plus location on disk.
  */
 import type { Command as Cmd } from "commander";
-import { loadDomainModel } from "../shared/loader.js";
-import { stringifyYaml } from "../shared/yaml.js";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { stringifyYaml } from "../../../shared/yaml.js";
 
 /** Register the `adr show` subcommand on an `adr` parent command. */
 export function registerAdrShow(adrCmd: Cmd): void {

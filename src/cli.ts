@@ -6,8 +6,8 @@ import { registerSearch } from "./features/query/commands/search.js";
 import { registerRelated } from "./features/query/commands/related.js";
 import { registerValidate } from "./commands/validate.js";
 import { registerRender } from "./commands/render.js";
-import { registerAdrShow } from "./commands/adr-show.js";
-import { registerAdrRelated } from "./commands/adr-related.js";
+import { registerAdrShow } from "./features/adr/commands/adr-show.js";
+import { registerAdrRelated } from "./features/adr/commands/adr-related.js";
 
 // ── Error formatting ──────────────────────────────────────────────────
 
