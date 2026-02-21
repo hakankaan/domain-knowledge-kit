@@ -8,6 +8,8 @@ import { registerValidate } from "./features/pipeline/commands/validate.js";
 import { registerRender } from "./features/pipeline/commands/render.js";
 import { registerAdrShow } from "./features/adr/commands/adr-show.js";
 import { registerAdrRelated } from "./features/adr/commands/adr-related.js";
+import { registerInit } from "./features/agent/commands/init.js";
+import { registerPrime } from "./features/agent/commands/prime.js";
 import { formatCliError } from "./shared/errors.js";
 
 /** Whether to show full stack traces (set DEBUG=1 in env). */
@@ -29,6 +31,8 @@ registerSearch(program);
 registerRelated(program);
 registerValidate(program);
 registerRender(program);
+registerInit(program);
+registerPrime(program);
 
 // ADR sub-command group
 const adrCmd = program

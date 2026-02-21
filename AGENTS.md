@@ -76,3 +76,32 @@ npx tsx src/cli.ts render
 
 Both must exit 0. The `render` command also rebuilds the search index.
 
+
+<!-- dkk:start -->
+## Domain Knowledge Kit
+
+This project uses a structured, YAML-based domain model managed by **dkk** (Domain Knowledge Kit).
+
+Run `dkk prime` to get full agent context including domain structure, CLI commands, and workflows.
+
+### Quick Reference
+
+```bash
+dkk prime             # Output full agent context
+dkk list              # List all domain items
+dkk show <id>         # Display a domain item
+dkk search "<query>"  # Full-text search
+dkk related <id>      # Graph traversal of related items
+dkk validate          # Schema + cross-reference validation
+dkk render            # Validate, render docs, rebuild search index
+```
+
+### Quality Gates
+
+Before committing domain changes, run:
+
+```bash
+dkk validate
+dkk render
+```
+<!-- dkk:end -->

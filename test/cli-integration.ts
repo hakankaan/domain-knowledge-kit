@@ -8,7 +8,7 @@
  * Uses temporary directories with the --root flag to isolate each test.
  */
 import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
-import { mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -650,14 +650,79 @@ try {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 11. Smoke test: all commands registered in --help output
+  // 11. init command — create, append, idempotent
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== init: creates AGENTS.md when none exists ===");
+  {
+    const root = makeTempRoot("init-create");
+    tempRoots.push(root);
+    const result = run(["init"], { root });
+    assert("init exits 0", result.exitCode === 0);
+    assert("init prints created", result.stdout.includes("Created"));
+    const content = readFileSync(join(root, "AGENTS.md"), "utf-8");
+    assert("AGENTS.md has DKK markers", content.includes("<!-- dkk:start -->") && content.includes("<!-- dkk:end -->"));
+    assert("AGENTS.md has dkk prime reference", content.includes("dkk prime"));
+  }
+
+  console.log("\n=== init: appends to existing AGENTS.md ===");
+  {
+    const root = makeTempRoot("init-append");
+    tempRoots.push(root);
+    const existingContent = "# Agent Instructions\n\nExisting content here.\n";
+    writeFileSync(join(root, "AGENTS.md"), existingContent, "utf-8");
+    const result = run(["init"], { root });
+    assert("init append exits 0", result.exitCode === 0);
+    assert("init prints appended", result.stdout.includes("Appended"));
+    const content = readFileSync(join(root, "AGENTS.md"), "utf-8");
+    assert("preserves existing content", content.includes("Existing content here"));
+    assert("appended DKK section", content.includes("<!-- dkk:start -->"));
+  }
+
+  console.log("\n=== init: idempotent on re-run ===");
+  {
+    const root = makeTempRoot("init-idempotent");
+    tempRoots.push(root);
+    // First run
+    run(["init"], { root });
+    const afterFirst = readFileSync(join(root, "AGENTS.md"), "utf-8");
+    // Second run
+    const result = run(["init"], { root });
+    assert("init re-run exits 0", result.exitCode === 0);
+    assert("init re-run prints updated", result.stdout.includes("Updated"));
+    const afterSecond = readFileSync(join(root, "AGENTS.md"), "utf-8");
+    assert("content unchanged after re-run", afterFirst === afterSecond);
+    // Only one pair of markers
+    const startCount = (afterSecond.match(/<!-- dkk:start -->/g) || []).length;
+    assert("only one start marker", startCount === 1);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 12. prime command — stdout output with key sections
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== prime: outputs agent context ===");
+  {
+    const result = run(["prime"]);
+    assert("prime exits 0", result.exitCode === 0);
+    assert("prime has Project Overview", result.stdout.includes("Project Overview"));
+    assert("prime has Core Principles", result.stdout.includes("Core Principles"));
+    assert("prime has Domain Model Structure", result.stdout.includes("Domain Model Structure"));
+    assert("prime has Retrieval", result.stdout.includes("Domain-First Retrieval"));
+    assert("prime has Making Domain Changes", result.stdout.includes("Making Domain Changes"));
+    assert("prime has ID Conventions", result.stdout.includes("ID Conventions"));
+    assert("prime has CLI Command Reference", result.stdout.includes("CLI Command Reference"));
+    assert("prime has File Conventions", result.stdout.includes("File Conventions"));
+    assert("prime uses dkk as CLI name", result.stdout.includes("dkk list"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 13. Smoke test: all commands registered in --help output
   // ═══════════════════════════════════════════════════════════════════
   console.log("\n=== smoke: all commands registered in --help ===");
   {
     const result = run(["--help"]);
     assert("--help exits 0", result.exitCode === 0);
     const helpText = result.stdout;
-    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "adr"];
+    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "init", "prime", "adr"];
     for (const cmd of topLevelCommands) {
       assert(`--help lists '${cmd}' command`, helpText.includes(cmd));
     }
