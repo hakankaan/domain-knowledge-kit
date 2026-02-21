@@ -7,25 +7,34 @@ Domain Knowledge Kit lets you define bounded contexts, events, commands, policie
 ## Quick Start
 
 ```bash
-# Install dependencies
-npm install
+# Install globally from npm
+npm install -g domain-knowledge-kit
+
+# Or run without installing
+npx dkk --help
 
 # Validate the domain model
-npm run dev -- validate
+dkk validate
 
 # Render generated documentation
-npm run dev -- render
+dkk render
 
 # Search domain items
-npm run dev -- search "order"
+dkk search "order"
 ```
 
-`npm run dev` is shorthand for `npx tsx src/cli.ts`. After building (`npm run build`), the CLI is also available as `domain-knowledge-kit`:
+### Contributing / local development
 
 ```bash
+npm install
+
+# Run directly via tsx (no build step needed)
+npm run dev -- validate
+npm run dev -- render
+
+# Or build first and use the compiled binary
 npm run build
-npx domain-knowledge-kit validate
-npx domain-knowledge-kit render
+npx dkk validate
 ```
 
 ## Directory Layout
@@ -110,8 +119,8 @@ This structure ensures that adding a new domain item type or feature requires ch
 3. Run quality gates:
 
    ```bash
-   npx tsx src/cli.ts validate
-   npx tsx src/cli.ts render
+   dkk validate
+   dkk render
    ```
 
 ## Adding an ADR and Linking It
@@ -149,13 +158,13 @@ This structure ensures that adding a new domain item type or feature requires ch
 3. Run quality gates:
 
    ```bash
-   npx tsx src/cli.ts validate
-   npx tsx src/cli.ts render
+   dkk validate
+   dkk render
    ```
 
 ## CLI Command Reference
 
-During development, substitute `npx tsx src/cli.ts` (or `npm run dev --`) for `domain-knowledge-kit`.
+All commands below use `dkk` (the installed CLI). During local development, substitute `npm run dev --` or `npx tsx src/cli.ts` for `dkk`.
 
 ### `list`
 

@@ -4,7 +4,7 @@
   "description": "Domain Knowledge Pack — YAML + ADR links + deterministic search + generated docs",
   "type": "module",
   "bin": {
-    "domain-knowledge-kit": "dist/cli.js"
+    "dkk": "dist/cli.js"
   },
   "files": [
     "dist/",
@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "check": "npm run typecheck && npm run lint",
+    "prepublishOnly": "npm run build",
     "test": "tsx src/features/pipeline/tests/validate-schemas.test.ts && tsx src/shared/tests/loader.test.ts && tsx src/features/pipeline/tests/validator.test.ts && tsx src/shared/tests/graph.test.ts && tsx src/features/pipeline/tests/indexer.test.ts && tsx src/features/query/tests/searcher.test.ts && tsx src/features/pipeline/tests/renderer.test.ts && tsx src/shared/tests/verify-collision-fix.test.ts && tsx test/cli-integration.ts"
   },
   "engines": {

@@ -18,7 +18,7 @@ const DEBUG = Boolean(process.env.DEBUG);
 const program = new Command();
 
 program
-  .name("domain-knowledge-kit")
+  .name("dkk")
   .description("Domain Knowledge Pack CLI")
   .version("0.1.0");
 
