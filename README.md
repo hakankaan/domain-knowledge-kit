@@ -11,16 +11,16 @@ Domain Knowledge Kit lets you define bounded contexts, events, commands, policie
 npm install
 
 # Validate the domain model
-npx tsx src/cli.ts validate
+npm run dev -- validate
 
 # Render generated documentation
-npx tsx src/cli.ts render
+npm run dev -- render
 
 # Search domain items
-npx tsx src/cli.ts search "order"
+npm run dev -- search "order"
 ```
 
-After building (`npm run build`), the CLI is available as `domain-knowledge-kit`:
+`npm run dev` is shorthand for `npx tsx src/cli.ts`. After building (`npm run build`), the CLI is also available as `domain-knowledge-kit`:
 
 ```bash
 npm run build
@@ -72,11 +72,11 @@ tools/
     schema/              # JSON Schemas for domain YAML validation
     templates/           # Handlebars templates for doc generation
 
+test/
+  cli-integration.ts     # End-to-end CLI integration tests
+
 .github/
   copilot-instructions.md  # Copilot integration instructions
-  prompts/                 # Copilot prompt files
-  skills/                  # Copilot skill definitions
-  agents/                  # Copilot agent definitions
 ```
 
 ### Architecture: Vertical Feature Slices
@@ -116,7 +116,7 @@ This structure ensures that adding a new domain item type or feature requires ch
 
 ## Adding an ADR and Linking It
 
-1. Create a Markdown file in `docs/adr/` following the naming convention `NNNN-short-title.md`:
+1. Create a Markdown file in `docs/adr/` following the naming convention `adr-NNNN.md` (e.g. `adr-0002.md`):
 
    ```markdown
    ---
@@ -155,18 +155,88 @@ This structure ensures that adding a new domain item type or feature requires ch
 
 ## CLI Command Reference
 
-| Command                          | Purpose                                                      |
-|----------------------------------|--------------------------------------------------------------|
-| `domain-knowledge-kit list`      | List all domain items (`--context`, `--type` filters)        |
-| `domain-knowledge-kit show <id>` | Display full YAML of a domain item                           |
-| `domain-knowledge-kit search <query>` | FTS5 full-text search with ranking                      |
-| `domain-knowledge-kit related <id>` | BFS graph traversal of related items                      |
-| `domain-knowledge-kit validate`  | Schema + cross-reference validation                          |
-| `domain-knowledge-kit render`    | Validate, render docs, and rebuild search index              |
-| `domain-knowledge-kit adr show <id>` | Display ADR frontmatter                                 |
-| `domain-knowledge-kit adr related <id>` | Show bidirectional ADR ↔ domain links                |
+During development, substitute `npx tsx src/cli.ts` (or `npm run dev --`) for `domain-knowledge-kit`.
 
-During development, use `npx tsx src/cli.ts` instead of `domain-knowledge-kit`.
+### `list`
+
+List all domain items.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --context <name>` | — | Filter by bounded context |
+| `-t, --type <type>` | — | Filter by item type (`event`, `command`, `policy`, `aggregate`, `read_model`, `glossary`, `actor`, `adr`, `flow`, `context`) |
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `show <id>`
+
+Display the full YAML of a single domain item.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `search <query>`
+
+FTS5 full-text search with ranking. Requires a pre-built index — run `render` first.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --context <name>` | — | Filter results to a bounded context |
+| `-t, --type <type>` | — | Filter by item type |
+| `--tag <tag>` | — | Filter by tag/keyword |
+| `--limit <n>` | `20` | Maximum number of results |
+| `--expand` | — | Expand top results with graph neighbours |
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `related <id>`
+
+BFS graph traversal of related items.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-d, --depth <n>` | `1` | Maximum BFS traversal depth |
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `validate`
+
+Schema + cross-reference validation.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--warn-missing-fields` | — | Warn about events/commands with no `fields` defined |
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `render`
+
+Validate → render Handlebars Markdown docs → rebuild FTS5 SQLite search index.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-validation` | — | Skip the schema + cross-ref validation step |
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `adr show <id>`
+
+Display ADR frontmatter as YAML.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | — | Output as JSON |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `adr related <id>`
+
+Show bidirectional ADR ↔ domain links. Given an ADR id, lists domain items that reference it; given a domain item id, lists ADRs that reference it.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-r, --root <path>` | repo root | Override repository root |
 
 ## ID Conventions
 
@@ -180,13 +250,8 @@ During development, use `npx tsx src/cli.ts` instead of `domain-knowledge-kit`.
 
 ## Copilot Integration
 
-This project includes GitHub Copilot integration artifacts:
-
-- **Instructions** — [.github/copilot-instructions.md](.github/copilot-instructions.md) configures Copilot to understand the domain model structure and use domain-first retrieval.
-- **Prompts** — [.github/prompts/](.github/prompts/) contains prompt files for domain search, domain updates, and change review.
-- **Skills** — [.github/skills/](.github/skills/) defines a domain knowledge skill for Copilot.
-- **Agents** — [.github/agents/](.github/agents/) defines agents for planning and task investigation.
+[.github/copilot-instructions.md](.github/copilot-instructions.md) configures GitHub Copilot to understand the domain model structure and use domain-first retrieval (search → show → related → adr related).
 
 ## License
 
-MIT
+Elastic-2.0
