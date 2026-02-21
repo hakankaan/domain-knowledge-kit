@@ -1,13 +1,19 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { registerList } from "./commands/list.js";
-import { registerShow } from "./commands/show.js";
-import { registerSearch } from "./commands/search.js";
-import { registerRelated } from "./commands/related.js";
-import { registerValidate } from "./commands/validate.js";
-import { registerRender } from "./commands/render.js";
-import { registerAdrShow } from "./commands/adr-show.js";
-import { registerAdrRelated } from "./commands/adr-related.js";
+import { registerList } from "./features/query/commands/list.js";
+import { registerShow } from "./features/query/commands/show.js";
+import { registerSearch } from "./features/query/commands/search.js";
+import { registerRelated } from "./features/query/commands/related.js";
+import { registerValidate } from "./features/pipeline/commands/validate.js";
+import { registerRender } from "./features/pipeline/commands/render.js";
+import { registerAdrShow } from "./features/adr/commands/adr-show.js";
+import { registerAdrRelated } from "./features/adr/commands/adr-related.js";
+import { formatCliError } from "./shared/errors.js";
+
+/** Whether to show full stack traces (set DEBUG=1 in env). */
+const DEBUG = Boolean(process.env.DEBUG);
+
+// ── CLI setup ─────────────────────────────────────────────────────────
 
 const program = new Command();
 
@@ -32,4 +38,10 @@ const adrCmd = program
 registerAdrShow(adrCmd);
 registerAdrRelated(adrCmd);
 
-program.parse();
+program.parseAsync().catch((err: unknown) => {
+  console.error(`Error: ${formatCliError(err)}`);
+  if (DEBUG && err instanceof Error && err.stack) {
+    console.error(`\nStack trace:\n${err.stack}`);
+  }
+  process.exit(1);
+});
