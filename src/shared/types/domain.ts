@@ -18,6 +18,18 @@ export interface Field {
 /** ADR reference in the form "adr-NNNN". */
 export type AdrRef = `adr-${string}`;
 
+/** A given/when/then scenario example for an event or command. */
+export interface Example {
+  /** Short human-readable description of the scenario. */
+  description: string;
+  /** Pre-conditions (given). */
+  given?: string[];
+  /** Trigger / action (when). */
+  when?: string[];
+  /** Expected outcomes (then). */
+  then?: string[];
+}
+
 /** Domain item reference in context.Name format (e.g. "ordering.OrderPlaced"). */
 export type DomainRef = `${string}.${string}`;
 
@@ -69,6 +81,8 @@ export interface DomainEvent {
   fields?: Field[];
   /** Name of the aggregate that raises this event. */
   raised_by?: string;
+  /** Given/when/then usage scenarios. */
+  examples?: Example[];
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }
@@ -87,6 +101,8 @@ export interface Command {
   actor?: string;
   /** Name of the aggregate that handles this command. */
   handled_by?: string;
+  /** Given/when/then usage scenarios. */
+  examples?: Example[];
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }

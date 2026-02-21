@@ -20,6 +20,7 @@ import type {
   DomainContext,
   AdrRecord,
   Field,
+  Example,
 } from "../../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
 import type { AnyDomainItem } from "../../shared/item-visitor.js";
@@ -157,6 +158,7 @@ function buildItemData(
     description: string;
     fields?: Field[];
     adr_refs?: string[];
+    examples?: Example[];
     // event-specific
     raised_by?: string;
     // command-specific
@@ -209,6 +211,7 @@ function buildItemData(
     description: item.description ?? item.definition ?? "",
     meaning: item.definition, // glossary entries carry a definition
     fields: item.fields,
+    examples: item.examples,
     aliases: item.aliases,
     relationships: relationships.length > 0 ? relationships : undefined,
     adr_refs: item.adr_refs,

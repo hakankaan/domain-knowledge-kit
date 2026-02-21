@@ -39,6 +39,21 @@
       "minLength": 1,
       "description": "Name of the aggregate that handles this command"
     },
+    "examples": {
+      "type": "array",
+      "description": "Given/when/then usage scenarios for this command",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "given": { "type": "array", "items": { "type": "string" } },
+          "when": { "type": "array", "items": { "type": "string" } },
+          "then": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["description"],
+        "additionalProperties": false
+      }
+    },
     "adr_refs": {
       "type": "array",
       "items": { "type": "string", "pattern": "^adr-\\d{4}$" },

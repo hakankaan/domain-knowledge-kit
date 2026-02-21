@@ -36,7 +36,27 @@
 ## Examples
 
 {{#each examples}}
+### {{description}}
+
+{{#if given}}
+**Given:**
+{{#each given}}
 - {{this}}
+{{/each}}
+{{/if}}
+{{#if when}}
+**When:**
+{{#each when}}
+- {{this}}
+{{/each}}
+{{/if}}
+{{#if then}}
+**Then:**
+{{#each then}}
+- {{this}}
+{{/each}}
+{{/if}}
+
 {{/each}}
 {{/if}}
 
