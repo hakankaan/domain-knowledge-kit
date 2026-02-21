@@ -1,86 +1,87 @@
-# Copilot Instructions — Domain Knowledge Kit
+# Copilot Instructions — DKK Development
 
-## Project Overview
+These instructions are for **contributing to the DKK codebase itself**, not for using DKK in your project. Users of DKK should run `dkk prime` for full agent context.
 
-This repository defines a **Domain Knowledge Pack**: a structured, YAML-based domain model with Architecture Decision Records (ADRs), full-text search, and generated Markdown documentation. The CLI tool is `domain-knowledge-kit` (dev: `npx tsx src/cli.ts`).
+## What DKK Is
 
-## Core Principles
+DKK (Domain Knowledge Kit) is a CLI tool that lets teams define their business domain as structured YAML, link it to Architecture Decision Records, validate cross-references, render Markdown docs, and expose full-text search — all designed for AI agent consumption.
 
-1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under `domain/`.
-2. **ADRs live in `.dkk/adr/`** as Markdown files with YAML frontmatter. They link to domain items via `domain_refs` and domain items link back via `adr_refs`.
-3. **Every change to domain files must pass quality gates:** run `npx tsx src/cli.ts validate` then `npx tsx src/cli.ts render` before committing.
+## Development Setup
 
-## Domain Model Structure
-
-```
-domain/
-  index.yml          # Top-level: registered contexts + cross-context flows
-  actors.yml          # Global actors (human | system | external)
-  contexts/
-    <name>.yml        # Bounded context with events, commands, policies,
-                      #   aggregates, read_models, glossary
-.dkk/adr/
-  adr-NNNN.md        # Architecture Decision Records (YAML frontmatter)
+```bash
+npm install              # Install dependencies
+npm run dev -- <command> # Run CLI in dev (e.g. npm run dev -- validate)
+npx tsx src/cli.ts       # Alternative: run CLI entry point directly
+npm run build            # Compile TypeScript to dist/
+npm run typecheck        # Type-check without emitting
+npm run lint             # ESLint
+npx vitest run           # Run tests
 ```
 
-## Domain-First Retrieval
+Published binary name: `dkk`. Dev equivalent: `npx tsx src/cli.ts`.
 
-When answering questions about the domain:
+## Source Code Structure
 
-1. **Search first.** Use `npx tsx src/cli.ts search "<query>"` to find relevant domain items.
-2. **Show details.** Use `npx tsx src/cli.ts show <id>` to inspect a specific item (e.g. `ordering.OrderPlaced`, `actor.Customer`, `adr-0001`).
-3. **Explore relationships.** Use `npx tsx src/cli.ts related <id>` to discover connected items via BFS graph traversal.
-4. **Check ADR links.** Use `npx tsx src/cli.ts adr related <id>` to find bidirectional ADR ↔ domain links.
-5. **List items.** Use `npx tsx src/cli.ts list` with optional `--context` and `--type` filters.
+```
+src/
+  cli.ts                          # Entry point — registers all commands with Commander
+  features/
+    query/                        # Read-only commands: list, show, search, related
+      searcher.ts                 # SQLite FTS5 search logic
+      commands/                   # Command registration (list.ts, show.ts, etc.)
+      tests/                      # searcher.test.ts
+    pipeline/                     # Write commands: validate, render
+      validator.ts                # Schema + cross-reference validation
+      renderer.ts                 # Handlebars doc generation
+      indexer.ts                  # FTS5 index builder
+      commands/                   # validate.ts, render.ts
+      tests/                      # validator.test.ts, renderer.test.ts, etc.
+    adr/                          # ADR sub-commands: adr show, adr related
+      commands/
+    agent/                        # Agent integration: init, prime
+      commands/
+        init.ts                   # Creates/updates AGENTS.md with DKK section
+        prime.ts                  # Outputs comprehensive agent context to stdout
+  shared/
+    loader.ts                     # YAML file loader
+    graph.ts                      # BFS graph traversal
+    item-visitor.ts               # Visitor pattern for domain items
+    adr-parser.ts                 # ADR markdown + frontmatter parser
+    paths.ts                      # Path resolution (repoRoot, schema paths, etc.)
+    errors.ts                     # Error formatting
+    yaml.ts                       # YAML parse/serialize helpers
+    types/
+      domain.ts                   # TypeScript types for domain model
+```
 
-Always ground answers in the actual domain model data rather than assumptions.
+## Key Conventions
 
-## Making Domain Changes
+- **TypeScript strict mode**, ES2022 target, Node16 module resolution.
+- **ESM only** — all imports use `.js` extensions.
+- Each CLI command lives in `src/features/<area>/commands/<name>.ts` and exports a `register<Name>(program)` function.
+- Commands are registered in `src/cli.ts`.
+- JSON Schemas for domain YAML validation live in `tools/dkk/schema/`.
+- Handlebars templates for doc rendering live in `tools/dkk/templates/`.
+- Tests use **vitest** and live alongside source in `tests/` subdirectories.
+- Integration tests are in `test/cli-integration.ts`.
 
-When modifying the domain model:
+## Domain Model
 
-1. **Edit YAML files directly** — add or modify items in the appropriate context file under `domain/contexts/`, or in `domain/actors.yml` / `domain/index.yml`.
-2. **Maintain referential integrity:**
-   - `adr_refs` values must match existing ADR ids in `.dkk/adr/`.
-   - `domain_refs` in ADR frontmatter must match existing domain item ids (`context.ItemName`).
-   - Cross-references (`handles`, `emits`, `triggers`, `subscribes_to`, `used_by`, `raised_by`, `handled_by`, `actor`) must reference items that exist in the same bounded context (or global actors).
-3. **Update related ADRs** when a change alters an architectural decision.
-4. **Run quality gates after every change:**
-   ```bash
-   npx tsx src/cli.ts validate
-   npx tsx src/cli.ts render
-   ```
+The `domain/` directory in this repo contains a sample domain model used for testing the CLI. When editing domain YAML:
 
-## ID Conventions
-
-| Item Type    | ID Format                          | Example                    |
-|--------------|------------------------------------|----------------------------|
-| Context item | `<context>.<ItemName>`             | `ordering.OrderPlaced`     |
-| Actor        | `actor.<Name>`                     | `actor.Customer`           |
-| ADR          | `adr-NNNN`                         | `adr-0001`                 |
-| Flow         | `flow.<Name>`                      | `flow.OrderFulfillment`    |
-| Context      | `context.<name>`                   | `context.ordering`         |
-
-## CLI Command Reference
-
-| Command                       | Purpose                                              |
-|-------------------------------|------------------------------------------------------|
-| `domain list`                 | List all domain items (filterable by `--context`, `--type`) |
-| `domain show <id>`            | Display full YAML of a domain item                   |
-| `domain search <query>`       | FTS5 full-text search with ranking                   |
-| `domain related <id>`         | BFS graph traversal of related items                 |
-| `domain validate`             | Schema + cross-reference validation                  |
-| `domain render`               | Validate → render docs → rebuild search index        |
-| `domain adr show <id>`        | Display ADR frontmatter                              |
-| `domain adr related <id>`     | Show bidirectional ADR ↔ domain links                |
-
-## File Conventions
-
+- Run `npx tsx src/cli.ts validate` then `npx tsx src/cli.ts render` to verify changes.
 - YAML files use `.yml` extension.
-- Names are PascalCase for items (events, commands, etc.) and kebab-case for contexts and ADR ids.
-- JSON Schemas live in `tools/dkk/schema/`; Handlebars templates in `tools/dkk/templates/`.
-- Generated documentation goes to `.dkk/docs/` (do not edit by hand).
+- Item names are PascalCase; context names and ADR ids are kebab-case.
+- Generated docs go to `.dkk/docs/` — never edit by hand.
 
+## Agent Integration Design
+
+DKK provides two integration points for AI agents in user repos:
+
+1. **`dkk init`** — Injects a DKK section into `AGENTS.md` (delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` markers). The section is a hardcoded string in `init.ts`.
+2. **`dkk prime`** — Outputs a comprehensive agent context document to stdout. The content is a hardcoded string in `prime.ts` covering item types, retrieval/update/review workflows, YAML structure reference, validation, and all CLI commands.
+
+When modifying agent-facing content, edit the string literals in `init.ts` or `prime.ts` directly — there are no external templates.
 
 ## Issue Tracking
 

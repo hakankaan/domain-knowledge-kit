@@ -39,17 +39,20 @@ If `AGENTS.md` doesn't exist, it's created. If it already has a DKK section, it'
 
 ## `dkk prime` — Full Agent Context
 
-`dkk prime` outputs a comprehensive context document to stdout. It's designed to be consumed by AI agents at the start of a conversation or session, covering:
+`dkk prime` outputs a comprehensive context document to stdout. It's designed to be consumed by AI agents at the start of a conversation or session. The output covers:
 
-- Project overview and core principles
-- Domain model structure (file paths, item types)
-- Retrieval workflow (search → show → related → adr related)
-- Change workflow (edit YAML → validate → render)
-- ID conventions and naming rules
-- Full CLI reference
-- File conventions
+- **Project overview** and core principles
+- **Item types** — All 8 domain item types with their key fields
+- **Domain model structure** — File paths and conventions
+- **Search workflow** — Step-by-step domain search: parse → search → show → related → ADR links → compile results
+- **Update workflow** — Making domain changes: inspect → edit YAML → maintain referential integrity → update ADRs → quality gates, plus a full YAML structure reference
+- **Change review workflow** — Reviewing for domain impact: identify affected items → trace blast radius → check invariants → find linked ADRs → compile analysis
+- **Validation checks** — Schema conformance, cross-references, context registration
+- **ID conventions** and naming rules
+- **Full CLI reference**
+- **File conventions**
 
-Agents that run `dkk prime` get everything they need to understand and work with the domain model.
+Agents that run `dkk prime` get everything they need to understand, query, modify, and review the domain model.
 
 ## Domain-First Retrieval
 
@@ -113,40 +116,6 @@ When AI agents modify domain YAML files, they should follow this workflow:
    dkk validate
    dkk render
    ```
-
-## GitHub Copilot Integration
-
-DKK includes a Copilot instructions file at `.github/copilot-instructions.md` that configures GitHub Copilot to:
-
-- Treat domain YAML as the single source of truth
-- Use domain-first retrieval (search → show → related) when answering domain questions
-- Maintain referential integrity when editing domain files
-- Run quality gates after changes
-
-This file is automatically picked up by GitHub Copilot in VS Code and on GitHub.
-
-## Reusable Prompts
-
-The `.github/prompts/` directory contains reusable prompt files for common domain workflows:
-
-| Prompt | Purpose |
-|--------|---------|
-| `domain_search.prompt.md` | Search the domain model, show results with ADR links |
-| `domain_update.prompt.md` | Apply domain changes with YAML patches and quality gates |
-| `domain_change_review.prompt.md` | Review changes for domain impact, blast radius, and ADR effects |
-| `start-ready-task.prompt.md` | Pick up and start a ready task from the issue tracker |
-
-These prompts work with GitHub Copilot's agent mode and other AI tools that support prompt files.
-
-## Portable Agent Skill
-
-For agent frameworks that support skills, DKK provides a portable skill definition at `.github/skills/domain-knowledge/skill.md`. This skill teaches any AI agent:
-
-- The canonical domain model structure
-- All item types and their fields
-- ID conventions
-- Retrieval and update rules
-- Validation checks
 
 ## What Agents Can Do
 
