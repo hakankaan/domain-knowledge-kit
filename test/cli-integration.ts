@@ -706,8 +706,8 @@ try {
     assert("prime has Project Overview", result.stdout.includes("Project Overview"));
     assert("prime has Core Principles", result.stdout.includes("Core Principles"));
     assert("prime has Domain Model Structure", result.stdout.includes("Domain Model Structure"));
-    assert("prime has Retrieval", result.stdout.includes("Domain-First Retrieval"));
-    assert("prime has Making Domain Changes", result.stdout.includes("Making Domain Changes"));
+    assert("prime has Retrieval", result.stdout.includes("Domain Search Workflow"));
+    assert("prime has Making Domain Changes", result.stdout.includes("Domain Update Workflow"));
     assert("prime has ID Conventions", result.stdout.includes("ID Conventions"));
     assert("prime has CLI Command Reference", result.stdout.includes("CLI Command Reference"));
     assert("prime has File Conventions", result.stdout.includes("File Conventions"));
