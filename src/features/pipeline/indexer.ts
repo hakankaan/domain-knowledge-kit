@@ -212,7 +212,7 @@ function collectRows(model: DomainModel): IndexRow[] {
             context: ctxName,
             name: evt.name,
             tags: "",
-            text: joinText(evt.description, fieldsText(evt.fields)),
+            text: joinText(evt.description, fieldsText(evt.fields), ...(evt.invariants ?? [])),
             relations: JSON.stringify(relIds),
             adrRefs,
           });
@@ -229,7 +229,7 @@ function collectRows(model: DomainModel): IndexRow[] {
             context: ctxName,
             name: cmd.name,
             tags: "",
-            text: joinText(cmd.description, fieldsText(cmd.fields)),
+            text: joinText(cmd.description, fieldsText(cmd.fields), ...(cmd.preconditions ?? []), ...(cmd.rejections ?? [])),
             relations: JSON.stringify(relIds),
             adrRefs,
           });
@@ -263,7 +263,7 @@ function collectRows(model: DomainModel): IndexRow[] {
             context: ctxName,
             name: agg.name,
             tags: "",
-            text: joinText(agg.description),
+            text: joinText(agg.description, ...(agg.invariants ?? [])),
             relations: JSON.stringify(relIds),
             adrRefs,
           });

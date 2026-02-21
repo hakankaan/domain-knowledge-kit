@@ -27,6 +27,11 @@
       "uniqueItems": true,
       "description": "Event names emitted by this aggregate"
     },
+    "invariants": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Business invariants / rules enforced by this aggregate"
+    },
     "adr_refs": {
       "type": "array",
       "items": { "type": "string", "pattern": "^adr-\\d{4}$" },

@@ -175,6 +175,10 @@ function buildItemData(
     // glossary-specific
     aliases?: string[];
     definition?: string;
+    // rules / invariants
+    invariants?: string[];
+    preconditions?: string[];
+    rejections?: string[];
   },
 ) {
   const relationships: Relationship[] = [];
@@ -211,6 +215,17 @@ function buildItemData(
     description: item.description ?? item.definition ?? "",
     meaning: item.definition, // glossary entries carry a definition
     fields: item.fields,
+    rules: [
+      ...(item.invariants ?? []),
+      ...(item.preconditions ?? []),
+      ...(item.rejections ?? []),
+    ].length > 0
+      ? [
+          ...(item.invariants ?? []),
+          ...(item.preconditions ?? []),
+          ...(item.rejections ?? []),
+        ]
+      : undefined,
     examples: item.examples,
     aliases: item.aliases,
     relationships: relationships.length > 0 ? relationships : undefined,

@@ -54,6 +54,16 @@
         "additionalProperties": false
       }
     },
+    "preconditions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Conditions that must be true before this command can be accepted"
+    },
+    "rejections": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Reasons this command may be rejected"
+    },
     "adr_refs": {
       "type": "array",
       "items": { "type": "string", "pattern": "^adr-\\d{4}$" },

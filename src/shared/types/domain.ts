@@ -101,6 +101,12 @@ export interface Command {
   actor?: string;
   /** Name of the aggregate that handles this command. */
   handled_by?: string;
+  /** Conditions that must be true before this command can be accepted. */
+  preconditions?: string[];
+  /** Reasons this command may be rejected. */
+  rejections?: string[];
+  /** Business invariants / rules that must hold when this event is raised. */
+  invariants?: string[];
   /** Given/when/then usage scenarios. */
   examples?: Example[];
   /** Related ADR identifiers. */
@@ -135,6 +141,8 @@ export interface Aggregate {
   handles?: string[];
   /** Event names emitted by this aggregate. */
   emits?: string[];
+  /** Business invariants / rules enforced by this aggregate. */
+  invariants?: string[];
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }

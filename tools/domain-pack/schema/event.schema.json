@@ -49,6 +49,11 @@
         "additionalProperties": false
       }
     },
+    "invariants": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Business invariants / rules that must hold when this event is raised"
+    },
     "adr_refs": {
       "type": "array",
       "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
