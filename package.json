@@ -1,8 +1,16 @@
 {
   "name": "domain-knowledge-kit",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Domain Knowledge Pack — YAML + ADR links + deterministic search + generated docs",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hakankaan/domain-knowledge-kit.git"
+  },
+  "homepage": "https://github.com/hakankaan/domain-knowledge-kit#readme",
+  "bugs": {
+    "url": "https://github.com/hakankaan/domain-knowledge-kit/issues"
+  },
   "bin": {
     "dkk": "dist/cli.js"
   },
