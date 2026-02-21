@@ -255,8 +255,8 @@ function collectRows(model: DomainModel): IndexRow[] {
         case "aggregate": {
           const agg = item as Aggregate;
           const relIds: string[] = [];
-          for (const h of agg.handles ?? []) relIds.push(`${ctxName}.${h}`);
-          for (const e of agg.emits ?? []) relIds.push(`${ctxName}.${e}`);
+          for (const h of agg.handles?.commands ?? []) relIds.push(`${ctxName}.${h}`);
+          for (const e of agg.emits?.events ?? []) relIds.push(`${ctxName}.${e}`);
           rows.push({
             id,
             type: "aggregate",

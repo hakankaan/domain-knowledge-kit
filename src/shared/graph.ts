@@ -193,11 +193,11 @@ export class DomainGraph {
           }
           case "aggregate": {
             const agg = item as Aggregate;
-            for (const h of agg.handles ?? []) {
+            for (const h of agg.handles?.commands ?? []) {
               const cmdId = ensureNode(scopedId(ctxName, h), "command", h, ctxName);
               addEdge(id, cmdId, "handles");
             }
-            for (const e of agg.emits ?? []) {
+            for (const e of agg.emits?.events ?? []) {
               const evtId = ensureNode(scopedId(ctxName, e), "event", e, ctxName);
               addEdge(id, evtId, "emits");
             }

@@ -307,7 +307,7 @@ function validateCrossRefs(
         }
         case "aggregate": {
           const a = item as Aggregate;
-          for (const h of a.handles ?? []) {
+          for (const h of a.handles?.commands ?? []) {
             if (!sets.commands.has(h)) {
               err(
                 issues,
@@ -316,7 +316,7 @@ function validateCrossRefs(
               );
             }
           }
-          for (const e of a.emits ?? []) {
+          for (const e of a.emits?.events ?? []) {
             if (!sets.events.has(e)) {
               err(
                 issues,

@@ -105,8 +105,8 @@ function buildModel(): DomainModel {
       {
         name: "Order",
         description: "Order aggregate root",
-        handles: ["PlaceOrder"],
-        emits: ["OrderPlaced"],
+        handles: { commands: ["PlaceOrder"] },
+        emits: { events: ["OrderPlaced"] },
       },
     ],
     read_models: [],

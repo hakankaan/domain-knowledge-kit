@@ -16,16 +16,30 @@
       "description": "What this aggregate represents in the domain"
     },
     "handles": {
-      "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true,
-      "description": "Command names handled by this aggregate"
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Command names handled by this aggregate"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Commands handled by this aggregate"
     },
     "emits": {
-      "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true,
-      "description": "Event names emitted by this aggregate"
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Event names emitted by this aggregate"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Events emitted by this aggregate"
     },
     "invariants": {
       "type": "array",

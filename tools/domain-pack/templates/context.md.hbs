@@ -58,7 +58,7 @@ _No policies._
 | Aggregate | Description | Handles | Emits |
 |-----------|-------------|---------|-------|
 {{#each aggregates}}
-| [{{name}}]({{name}}.md) | {{description}} | {{#if handles}}{{join handles ", "}}{{else}}—{{/if}} | {{#if emits}}{{join emits ", "}}{{else}}—{{/if}} |
+| [{{name}}]({{name}}.md) | {{description}} | {{#if handles.commands}}{{join handles.commands ", "}}{{else}}—{{/if}} | {{#if emits.events}}{{join emits.events ", "}}{{else}}—{{/if}} |
 {{/each}}
 {{else}}
 _No aggregates._

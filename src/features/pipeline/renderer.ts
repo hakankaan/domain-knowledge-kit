@@ -164,11 +164,11 @@ function buildItemData(
     // command-specific
     actor?: string;
     handled_by?: string;
-    // policy-specific
+    // policy-specific (emits is a flat string array for policies)
     triggers?: string[];
-    emits?: string[];
-    // aggregate-specific
-    handles?: string[];
+    emits?: string[] | { events?: string[] };
+    // aggregate-specific (nested after schema refactor)
+    handles?: string[] | { commands?: string[] };
     // read-model-specific
     subscribes_to?: string[];
     used_by?: string[];
@@ -195,11 +195,23 @@ function buildItemData(
   for (const t of item.triggers ?? []) {
     relationships.push({ label: "Triggered by", target: t });
   }
-  for (const e of item.emits ?? []) {
-    relationships.push({ label: "Emits", target: e });
-  }
-  for (const h of item.handles ?? []) {
-    relationships.push({ label: "Handles", target: h });
+  if (itemType === "Aggregate") {
+    // After schema refactor: aggregate handles/emits are nested objects
+    const agg = item as unknown as { handles?: { commands?: string[] }; emits?: { events?: string[] } };
+    for (const h of agg.handles?.commands ?? []) {
+      relationships.push({ label: "Handles", target: h });
+    }
+    for (const e of agg.emits?.events ?? []) {
+      relationships.push({ label: "Emits", target: e });
+    }
+  } else {
+    // Policy (and any other types): emits is still a flat string array
+    for (const e of (item.emits as string[] | undefined) ?? []) {
+      relationships.push({ label: "Emits", target: e });
+    }
+    for (const h of (item.handles as string[] | undefined) ?? []) {
+      relationships.push({ label: "Handles", target: h });
+    }
   }
   for (const s of item.subscribes_to ?? []) {
     relationships.push({ label: "Subscribes to", target: s });

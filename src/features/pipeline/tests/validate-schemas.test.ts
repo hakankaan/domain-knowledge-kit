@@ -91,9 +91,15 @@ expect("policy: valid", "policy.schema.json", {
 expect("aggregate: valid", "aggregate.schema.json", {
   name: "Order",
   description: "Order aggregate",
+  handles: { commands: ["PlaceOrder"] },
+  emits: { events: ["OrderPlaced"] },
+}, true);
+expect("aggregate: flat handles rejected", "aggregate.schema.json", {
+  name: "Order",
+  description: "Order aggregate",
   handles: ["PlaceOrder"],
   emits: ["OrderPlaced"],
-}, true);
+}, false);
 
 // ---- read-model.schema.json ----
 expect("read-model: valid", "read-model.schema.json", {

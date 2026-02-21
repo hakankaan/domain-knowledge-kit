@@ -137,10 +137,10 @@ export interface Aggregate {
   name: string;
   /** What this aggregate represents in the domain. */
   description: string;
-  /** Command names handled by this aggregate. */
-  handles?: string[];
-  /** Event names emitted by this aggregate. */
-  emits?: string[];
+  /** Commands handled by this aggregate (nested: handles.commands). */
+  handles?: { commands?: string[] };
+  /** Events emitted by this aggregate (nested: emits.events). */
+  emits?: { events?: string[] };
   /** Business invariants / rules enforced by this aggregate. */
   invariants?: string[];
   /** Related ADR identifiers. */
