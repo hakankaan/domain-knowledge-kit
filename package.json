@@ -10,6 +10,7 @@
     "dist/",
     "tools/domain-pack/schema/",
     "tools/domain-pack/templates/",
+    "LICENSE",
     "README.md"
   ],
   "scripts": {
@@ -25,7 +26,7 @@
     "node": ">=21.2.0"
   },
   "keywords": [],
-  "license": "MIT",
+  "license": "Elastic-2.0",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
