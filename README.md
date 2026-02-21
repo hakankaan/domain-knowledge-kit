@@ -1,222 +1,113 @@
 # Domain Knowledge Kit
 
-A structured, YAML-based domain model with Architecture Decision Records (ADRs), full-text search, and generated Markdown documentation.
+Define, validate, search, and document your domain model — all from YAML.
 
-Domain Knowledge Kit lets you define bounded contexts, events, commands, policies, aggregates, read models, and glossary terms in YAML — then validate, render, and search them from the CLI.
+## What Is This?
+
+Domain Knowledge Kit (DKK) is a CLI tool for teams practicing Domain-Driven Design. Instead of scattering domain knowledge across wikis, diagrams, and tribal memory, you define your **bounded contexts**, **events**, **commands**, **policies**, **aggregates**, **read models**, and **glossary** in structured YAML files. DKK then:
+
+- **Validates** schema conformance and referential integrity across your entire model
+- **Generates** browsable Markdown documentation from your YAML definitions
+- **Builds** a full-text search index (SQLite FTS5) for instant domain queries
+- **Links** Architecture Decision Records (ADRs) bidirectionally to domain items
+- **Integrates** with AI coding agents so they understand your domain, not just your code
 
 ## Quick Start
 
 ```bash
-# Install globally from npm
+# Install
 npm install -g domain-knowledge-kit
 
-# Or run without installing
-npx dkk --help
+# Create a bounded context
+cat > domain/contexts/ordering.yml << 'EOF'
+name: ordering
+description: Handles customer order lifecycle.
+events:
+  - name: OrderPlaced
+    description: Raised when a customer order is confirmed.
+    raised_by: Order
+commands:
+  - name: PlaceOrder
+    description: Submit a new customer order.
+    handled_by: Order
+aggregates:
+  - name: Order
+    description: Manages order state and invariants.
+    handles: [PlaceOrder]
+    emits: [OrderPlaced]
+policies: []
+read_models: []
+glossary: []
+EOF
 
-# Validate the domain model
+# Register it
+# Add "- name: ordering" to the contexts array in domain/index.yml
+
+# Validate and render
 dkk validate
-
-# Render generated documentation
 dkk render
 
-# Search domain items
+# Explore
 dkk search "order"
+dkk show ordering.OrderPlaced
+dkk related ordering.Order
 ```
 
-## Adding a Bounded Context
+→ **[Full Getting Started Guide](docs/getting-started.md)** — step-by-step walkthrough with examples.
 
-1. Create a new file `domain/contexts/<name>.yml`:
+## Documentation
 
-   ```yaml
-   name: <name>
-   description: A short description of this bounded context.
-   events: []
-   commands: []
-   policies: []
-   aggregates: []
-   read_models: []
-   glossary: []
-   ```
+| Guide | What You'll Learn |
+|-------|-------------------|
+| **[Getting Started](docs/getting-started.md)** | Install, create your first context, run quality gates, search and explore |
+| **[Domain Modeling](docs/domain-modeling.md)** | All item types, YAML structure, cross-references, naming conventions, ID formats |
+| **[CLI Reference](docs/cli-reference.md)** | Every command and flag: `list`, `show`, `search`, `related`, `validate`, `render`, `init`, `prime`, `adr show`, `adr related` |
+| **[ADR Guide](docs/adr-guide.md)** | Architecture Decision Records: format, bidirectional linking, querying, best practices |
+| **[AI Agent Integration](docs/ai-agent-integration.md)** | `dkk init`, `dkk prime`, Copilot integration, reusable prompts, portable skills |
 
-2. Register it in `domain/index.yml`:
-
-   ```yaml
-   contexts:
-     - name: <name>
-   ```
-
-3. Run quality gates:
-
-   ```bash
-   dkk validate
-   dkk render
-   ```
-
-## Adding an ADR and Linking It
-
-1. Create a Markdown file in `.dkk/adr/` following the naming convention `adr-NNNN.md` (e.g. `adr-0002.md`):
-
-   ```markdown
-   ---
-   id: adr-NNNN
-   title: Short Title
-   status: proposed
-   date: YYYY-MM-DD
-   domain_refs:
-     - <context>.<ItemName>
-   ---
-
-   ## Context
-   ...
-
-   ## Decision
-   ...
-
-   ## Consequences
-   ...
-   ```
-
-2. Link back from domain items by adding the ADR id to their `adr_refs`:
-
-   ```yaml
-   # In domain/contexts/<name>.yml, on the relevant item:
-   adr_refs:
-     - adr-NNNN
-   ```
-
-3. Run quality gates:
-
-   ```bash
-   dkk validate
-   dkk render
-   ```
-
-## CLI Command Reference
-
-All commands below use `dkk` (the installed CLI). During local development, substitute `npm run dev --` or `npx tsx src/cli.ts` for `dkk`.
-
-### `list`
-
-List all domain items.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-c, --context <name>` | — | Filter by bounded context |
-| `-t, --type <type>` | — | Filter by item type (`event`, `command`, `policy`, `aggregate`, `read_model`, `glossary`, `actor`, `adr`, `flow`, `context`) |
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `show <id>`
-
-Display the full YAML of a single domain item.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `search <query>`
-
-FTS5 full-text search with ranking. Requires a pre-built index — run `render` first.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-c, --context <name>` | — | Filter results to a bounded context |
-| `-t, --type <type>` | — | Filter by item type |
-| `--tag <tag>` | — | Filter by tag/keyword |
-| `--limit <n>` | `20` | Maximum number of results |
-| `--expand` | — | Expand top results with graph neighbours |
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `related <id>`
-
-BFS graph traversal of related items.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-d, --depth <n>` | `1` | Maximum BFS traversal depth |
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `validate`
-
-Schema + cross-reference validation.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--warn-missing-fields` | — | Warn about events/commands with no `fields` defined |
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `render`
-
-Validate → render Handlebars Markdown docs → rebuild FTS5 SQLite search index.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--skip-validation` | — | Skip the schema + cross-ref validation step |
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `init`
-
-Create or update `AGENTS.md` with a DKK onboarding section. The section is delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers, making the operation idempotent — re-running replaces the section in place.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `prime`
-
-Output comprehensive DKK agent context to stdout. Designed for AI agent consumption — covers project overview, core principles, domain structure, retrieval workflow, change workflow, ID conventions, CLI reference, and file conventions.
-
-### `adr show <id>`
-
-Display ADR frontmatter as YAML.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | — | Output as JSON |
-| `-r, --root <path>` | repo root | Override repository root |
-
-### `adr related <id>`
-
-Show bidirectional ADR ↔ domain links. Given an ADR id, lists domain items that reference it; given a domain item id, lists ADRs that reference it.
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `-r, --root <path>` | repo root | Override repository root |
-
-## ID Conventions
-
-| Item Type    | Format                     | Example                  |
-|--------------|----------------------------|--------------------------|
-| Context item | `<context>.<ItemName>`     | `ordering.OrderPlaced`   |
-| Actor        | `actor.<Name>`             | `actor.Customer`         |
-| ADR          | `adr-NNNN`                 | `adr-0001`               |
-| Flow         | `flow.<Name>`              | `flow.OrderFulfillment`  |
-| Context      | `context.<name>`           | `context.ordering`       |
-
-## Agent Onboarding
-
-Domain Knowledge Kit includes built-in support for AI agent onboarding:
+## Key Commands
 
 ```bash
-# Add a DKK section to AGENTS.md (idempotent)
-dkk init
-
-# Output full agent context to stdout
-dkk prime
+dkk validate              # Schema + cross-reference validation
+dkk render                # Validate → render docs → rebuild search index
+dkk search "payment"      # Full-text search with ranking
+dkk show ordering.Order   # Display full item definition
+dkk related ordering.Order  # Graph traversal of connected items
+dkk list --type event     # List all events across contexts
+dkk init                  # Set up AI agent onboarding
+dkk prime                 # Output agent context to stdout
 ```
 
-`dkk init` creates or updates `AGENTS.md` with a delimited section pointing agents to `dkk prime`. `dkk prime` outputs a comprehensive context document covering the domain model structure, CLI commands, and workflows.
+→ **[Full CLI Reference](docs/cli-reference.md)**
 
-[.github/copilot-instructions.md](.github/copilot-instructions.md) configures GitHub Copilot to understand the domain model structure and use domain-first retrieval (search → show → related → adr related).
+## AI Agent Integration
 
-## License
+DKK has first-class support for AI coding agents. Two commands get you set up:
 
-Elastic-2.0
+```bash
+dkk init    # Add a DKK section to AGENTS.md (idempotent)
+dkk prime   # Output full domain context for AI consumption
+```
+
+Agents can then search, show, and traverse your domain model — making domain-aware decisions when writing, reviewing, or refactoring code. DKK also ships with GitHub Copilot instructions, reusable agent prompts, and a portable agent skill.
+
+→ **[AI Agent Integration Guide](docs/ai-agent-integration.md)**
+
+## Directory Layout
+
+```
+domain/                         # Domain model (YAML)
+  index.yml                     #   Contexts + flows
+  actors.yml                    #   Global actors
+  contexts/<name>.yml           #   Bounded context definitions
+.dkk/                           # Generated + managed
+  adr/                          #   Architecture Decision Records
+  docs/                         #   Generated docs (do not edit)
+src/                            # Source code (vertical slices)
+tools/dkk/                      # Schemas + templates
+  schema/                       #   JSON Schemas for validation
+  templates/                    #   Handlebars templates for rendering
+```
 
 ## Contributing / Local Development
 
@@ -227,66 +118,13 @@ npm install
 npm run dev -- validate
 npm run dev -- render
 
-# Or build first and use the compiled binary
+# Or build first
 npm run build
 npx dkk validate
 ```
 
-## Directory Layout
+The source code uses **vertical feature slices** — each feature (`query`, `adr`, `pipeline`, `agent`) owns its commands, logic, and tests. Cross-cutting infrastructure lives in `shared/`.
 
-```
-domain/
-  index.yml              # Registered contexts + cross-context flows
-  actors.yml             # Global actors (human | system | external)
-  contexts/
-    <name>.yml           # Bounded context definition
+## License
 
-.dkk/
-  adr/                   # Architecture Decision Records (Markdown + YAML frontmatter)
-  docs/                  # Generated documentation (do not edit by hand)
-
-src/
-  cli.ts                 # Slim CLI entry point (registers commands)
-  features/              # Vertical feature slices
-    query/               # List, show, search, related commands
-      commands/          #   CLI command handlers
-      searcher.ts        #   FTS5 search logic
-      tests/             #   Co-located unit tests
-    adr/                 # ADR show & related commands
-      commands/          #   CLI command handlers
-    agent/               # Agent onboarding (init, prime)
-      commands/          #   CLI command handlers
-    pipeline/            # Validate, render, index pipeline
-      commands/          #   CLI command handlers
-      validator.ts       #   Schema + cross-ref validation
-      renderer.ts        #   Handlebars doc generation
-      indexer.ts          #   Search index builder
-      tests/             #   Co-located unit tests
-  shared/                # Cross-cutting infrastructure
-    types/               #   DomainModel, SearchIndexRecord, etc.
-    loader.ts            #   YAML model loading
-    graph.ts             #   BFS graph traversal
-    item-visitor.ts      #   Generic item iteration utility
-    adr-parser.ts        #   ADR frontmatter parsing
-    paths.ts             #   Path resolution helpers
-    errors.ts            #   Error formatting
-    yaml.ts              #   YAML I/O helpers
-    tests/               #   Co-located unit tests
-
-tools/
-  dkk/
-    schema/              # JSON Schemas for domain YAML validation
-    templates/           # Handlebars templates for doc generation
-
-test/
-  cli-integration.ts     # End-to-end CLI integration tests
-
-.github/
-  copilot-instructions.md  # Copilot integration instructions
-```
-
-### Architecture: Vertical Feature Slices
-
-The source code is organized into **vertical feature slices** rather than horizontal layers. Each feature slice (`query`, `adr`, `pipeline`) owns its commands, core logic, and tests. The `shared/` module contains cross-cutting infrastructure used by all slices (loader, graph traversal, type definitions, etc.).
-
-This structure ensures that adding a new domain item type or feature requires changes localized to one slice, reducing coupling and making the codebase easier to navigate.
+Elastic-2.0
