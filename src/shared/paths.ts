@@ -41,14 +41,14 @@ export function indexFile(root?: string): string {
   return join(domainDir(root), "index.yml");
 }
 
-/** Absolute path to `docs/adr/`. */
+/** Absolute path to `.domain-pack/adr/`. */
 export function adrDir(root?: string): string {
-  return join(repoRoot(root), "docs", "adr");
+  return join(repoRoot(root), ".domain-pack", "adr");
 }
 
-/** Absolute path to `docs/domain/` (rendered output). */
+/** Absolute path to `.domain-pack/docs/` (rendered output). */
 export function docsDir(root?: string): string {
-  return join(repoRoot(root), "docs", "domain");
+  return join(repoRoot(root), ".domain-pack", "docs");
 }
 
 /** Absolute path to `tools/domain-pack/templates/`. */

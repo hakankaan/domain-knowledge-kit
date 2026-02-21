@@ -15,7 +15,7 @@ The domain model is stored as YAML files on disk:
 | `domain/index.yml` | Registered bounded contexts and cross-context flows |
 | `domain/actors.yml` | Global actors (human, system, external) |
 | `domain/contexts/<name>.yml` | Bounded context: events, commands, policies, aggregates, read models, glossary |
-| `docs/adr/adr-NNNN.md` | Architecture Decision Records with YAML frontmatter linking to domain items |
+| `.domain-pack/adr/adr-NNNN.md` | Architecture Decision Records with YAML frontmatter linking to domain items |
 
 ### Item Types
 
@@ -56,7 +56,7 @@ When modifying the domain model:
 
 1. **Edit YAML files directly** — never generate domain items from application code.
 2. **Maintain referential integrity:**
-   - `adr_refs` must point to existing ADRs in `docs/adr/`.
+   - `adr_refs` must point to existing ADRs in `.domain-pack/adr/`.
    - `domain_refs` in ADR frontmatter must point to existing domain items.
    - Cross-references (`handles`, `emits`, `triggers`, `subscribes_to`, `used_by`, `raised_by`, `handled_by`, `actor`) must resolve within the same context or to global actors.
 3. **Follow naming conventions:**
@@ -80,9 +80,9 @@ The validator checks:
 ## Generated Documentation
 
 Running `npx tsx src/cli.ts render` produces:
-- `docs/domain/index.md` — Top-level domain overview.
-- `docs/domain/<context>/index.md` — Per-context overview.
-- `docs/domain/<context>/<ItemName>.md` — Per-item detail page.
+- `.domain-pack/docs/index.md` — Top-level domain overview.
+- `.domain-pack/docs/<context>/index.md` — Per-context overview.
+- `.domain-pack/docs/<context>/<ItemName>.md` — Per-item detail page.
 - SQLite FTS5 search index for the `search` command.
 
-Do not edit files under `docs/domain/` by hand; they are regenerated on each render.
+Do not edit files under `.domain-pack/docs/` by hand; they are regenerated on each render.

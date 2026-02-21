@@ -10,7 +10,7 @@
  *         ordering.yml          (flat context)
  *         shipping/
  *           context.yml         (directory context)
- *     docs/
+ *     .domain-pack/
  *       adr/
  *         0001-use-yaml.md
  */
@@ -26,7 +26,7 @@ import { parseYaml, stringifyYaml } from "../yaml.js";
 const TMP = join(tmpdir(), `dkk-test-${Date.now()}`);
 const DOMAIN = join(TMP, "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
-const ADR_DIR = join(TMP, "docs", "adr");
+const ADR_DIR = join(TMP, ".domain-pack", "adr");
 
 function setup() {
   // Create directory tree (per-item structure)
@@ -294,7 +294,7 @@ try {
   console.log("\n=== loader.ts (empty domain) ===");
   const emptyTmp = join(tmpdir(), `dkk-empty-${Date.now()}`);
   mkdirSync(join(emptyTmp, "domain", "contexts"), { recursive: true });
-  mkdirSync(join(emptyTmp, "docs", "adr"), { recursive: true });
+  mkdirSync(join(emptyTmp, ".domain-pack", "adr"), { recursive: true });
   writeFileSync(join(emptyTmp, "domain", "index.yml"), "contexts: []\n");
   writeFileSync(join(emptyTmp, "domain", "actors.yml"), "actors: []\n");
 

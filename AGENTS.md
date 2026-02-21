@@ -46,9 +46,9 @@ bd sync               # Sync with git
 
 - YAML files use `.yml` extension
 - Item names are PascalCase (events, commands, etc.); contexts and ADR ids are kebab-case
-- ADRs live in `docs/adr/` as Markdown with YAML frontmatter
+- ADRs live in `.domain-pack/adr/` as Markdown with YAML frontmatter
 - ADRs link to domain items via `domain_refs`; domain items link back via `adr_refs`
-- Generated docs go to `docs/domain/` — never edit by hand
+- Generated docs go to `.domain-pack/docs/` — never edit by hand
 
 ### Domain CLI Commands
 

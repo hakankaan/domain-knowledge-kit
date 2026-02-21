@@ -17,7 +17,7 @@ import { search } from "../searcher.js";
 const TMP = join(tmpdir(), `dkk-search-test-${Date.now()}`);
 const DOMAIN = join(TMP, "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
-const ADR_DIR = join(TMP, "docs", "adr");
+const ADR_DIR = join(TMP, ".domain-pack", "adr");
 const DB_PATH = join(TMP, ".domain-pack", "index.db");
 
 function setup() {

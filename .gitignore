@@ -4,12 +4,6 @@ node_modules/
 # Build output
 dist/
 
-# Generated docs
-docs/domain/
-
-# Domain pack cache
-.domain-pack/
-
 # OS files
 .DS_Store
 Thumbs.db

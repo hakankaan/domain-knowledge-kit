@@ -11,7 +11,7 @@ import { DomainGraph } from "../graph.js";
 const TMP = join(tmpdir(), `dkk-collision-fix-${Date.now()}`);
 const DOMAIN = join(TMP, "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
-const ADR_DIR = join(TMP, "docs", "adr");
+const ADR_DIR = join(TMP, ".domain-pack", "adr");
 
 let passed = 0;
 let failed = 0;

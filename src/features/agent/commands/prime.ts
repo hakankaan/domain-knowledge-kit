@@ -19,7 +19,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 ## Core Principles
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`domain/\`.
-2. **ADRs live in \`docs/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
+2. **ADRs live in \`.domain-pack/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
 3. **Every change to domain files must pass quality gates:** run \`dkk validate\` then \`dkk render\` before committing.
 
 ## Domain Model Structure
@@ -36,8 +36,9 @@ domain/
       aggregates/     # Aggregate roots
       policies/       # Policies / reactors
       read_models/    # Read models / projections
-docs/adr/
-  adr-NNNN.md        # Architecture Decision Records (YAML frontmatter)
+.domain-pack/
+  adr/
+    adr-NNNN.md        # Architecture Decision Records (YAML frontmatter)
 \`\`\`
 
 ## Domain-First Retrieval
@@ -58,7 +59,7 @@ When modifying the domain model:
 
 1. **Edit YAML files directly** — add or modify items in the appropriate context file under \`domain/contexts/\`, or in \`domain/actors.yml\` / \`domain/index.yml\`.
 2. **Maintain referential integrity:**
-   - \`adr_refs\` values must match existing ADR ids in \`docs/adr/\`.
+   - \`adr_refs\` values must match existing ADR ids in \`.domain-pack/adr/\`.
    - \`domain_refs\` in ADR frontmatter must match existing domain item ids (\`context.ItemName\`).
    - Cross-references (\`handles\`, \`emits\`, \`triggers\`, \`subscribes_to\`, \`used_by\`, \`raised_by\`, \`handled_by\`, \`actor\`) must reference items that exist in the same bounded context (or global actors).
 3. **Update related ADRs** when a change alters an architectural decision.
@@ -98,7 +99,7 @@ When modifying the domain model:
 - YAML files use \`.yml\` extension.
 - Names are PascalCase for items (events, commands, etc.) and kebab-case for contexts and ADR ids.
 - JSON Schemas live in \`tools/domain-pack/schema/\`; Handlebars templates in \`tools/domain-pack/templates/\`.
-- Generated documentation goes to \`docs/domain/\` (do not edit by hand).
+- Generated documentation goes to \`.domain-pack/docs/\` (do not edit by hand).
 `;
 }
 

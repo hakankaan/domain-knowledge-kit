@@ -1,7 +1,7 @@
 /**
  * ADR frontmatter parser.
  *
- * Reads Markdown files from `docs/adr/` and extracts the YAML
+ * Reads Markdown files from `.domain-pack/adr/` and extracts the YAML
  * frontmatter block (delimited by `---`) into typed `AdrRecord` objects.
  */
 import { readFileSync } from "node:fs";

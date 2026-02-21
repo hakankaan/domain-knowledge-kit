@@ -73,7 +73,7 @@ function run(args: string[], opts?: { root?: string }): RunResult {
 function makeTempRoot(suffix: string): string {
   const root = join(tmpdir(), `dkk-cli-${suffix}-${Date.now()}`);
   mkdirSync(join(root, "domain", "contexts"), { recursive: true });
-  mkdirSync(join(root, "docs", "adr"), { recursive: true });
+  mkdirSync(join(root, ".domain-pack", "adr"), { recursive: true });
   return root;
 }
 
@@ -108,7 +108,7 @@ function writeContextDir(
 /** Write an ADR Markdown file. */
 function writeAdr(root: string, filename: string, frontmatter: string, body = "Content."): void {
   writeFileSync(
-    join(root, "docs", "adr", filename),
+    join(root, ".domain-pack", "adr", filename),
     `---\n${frontmatter}\n---\n\n# Title\n\n${body}\n`,
     "utf-8",
   );

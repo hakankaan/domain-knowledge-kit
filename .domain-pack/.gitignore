@@ -1,0 +1,5 @@
+# SQLite search index (rebuilt by `dkk render`)
+index.db
+
+# Generated documentation (rebuilt by `dkk render`)
+docs/
