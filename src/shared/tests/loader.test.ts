@@ -29,9 +29,12 @@ const CONTEXTS = join(DOMAIN, "contexts");
 const ADR_DIR = join(TMP, "docs", "adr");
 
 function setup() {
-  // Create directory tree
-  mkdirSync(CONTEXTS, { recursive: true });
-  mkdirSync(join(CONTEXTS, "shipping"), { recursive: true });
+  // Create directory tree (per-item structure)
+  mkdirSync(join(CONTEXTS, "ordering", "events"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "commands"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "aggregates"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "commands"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "read-models"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
   // domain/index.yml
@@ -70,54 +73,86 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering.yml (flat context)
+  // domain/contexts/ordering/context.yml — identity + glossary
   writeFileSync(
-    join(CONTEXTS, "ordering.yml"),
+    join(CONTEXTS, "ordering", "context.yml"),
     [
       "name: ordering",
       'description: "Handles the order lifecycle"',
       "glossary:",
       "  - term: Order",
       '    definition: "A customer purchase request"',
-      "events:",
-      "  - name: OrderPlaced",
-      '    description: "Raised when an order is placed"',
-      "    fields:",
-      "      - name: orderId",
-      "        type: UUID",
-      "    raised_by: Order",
-      "commands:",
-      "  - name: PlaceOrder",
-      '    description: "Submit a new order"',
-      "    actor: Customer",
-      "    handled_by: Order",
-      "aggregates:",
-      "  - name: Order",
-      '    description: "Order aggregate root"',
-      "    handles:",
-      "      - PlaceOrder",
-      "    emits:",
-      "      - OrderPlaced",
     ].join("\n"),
   );
 
-  // domain/contexts/shipping/context.yml (directory context)
+  // domain/contexts/ordering/events/OrderPlaced.yml
+  writeFileSync(
+    join(CONTEXTS, "ordering", "events", "OrderPlaced.yml"),
+    [
+      "name: OrderPlaced",
+      'description: "Raised when an order is placed"',
+      "fields:",
+      "  - name: orderId",
+      "    type: UUID",
+      "raised_by: Order",
+    ].join("\n"),
+  );
+
+  // domain/contexts/ordering/commands/PlaceOrder.yml
+  writeFileSync(
+    join(CONTEXTS, "ordering", "commands", "PlaceOrder.yml"),
+    [
+      "name: PlaceOrder",
+      'description: "Submit a new order"',
+      "actor: Customer",
+      "handled_by: Order",
+    ].join("\n"),
+  );
+
+  // domain/contexts/ordering/aggregates/Order.yml
+  writeFileSync(
+    join(CONTEXTS, "ordering", "aggregates", "Order.yml"),
+    [
+      "name: Order",
+      'description: "Order aggregate root"',
+      "handles:",
+      "  commands:",
+      "    - PlaceOrder",
+      "emits:",
+      "  events:",
+      "    - OrderPlaced",
+    ].join("\n"),
+  );
+
+  // domain/contexts/shipping/context.yml — identity only
   writeFileSync(
     join(CONTEXTS, "shipping", "context.yml"),
     [
       "name: shipping",
       'description: "Handles shipment tracking"',
-      "commands:",
-      "  - name: ShipOrder",
-      '    description: "Initiate shipment for an order"',
-      "    handled_by: Shipment",
-      "read_models:",
-      "  - name: ShipmentStatus",
-      '    description: "Current status of a shipment"',
-      "    subscribes_to:",
-      "      - ShipmentDispatched",
-      "    used_by:",
-      "      - Customer",
+    ].join("\n"),
+  );
+
+  // domain/contexts/shipping/commands/ShipOrder.yml
+  writeFileSync(
+    join(CONTEXTS, "shipping", "commands", "ShipOrder.yml"),
+    [
+      "name: ShipOrder",
+      'description: "Initiate shipment for an order"',
+      "handled_by: Shipment",
+    ].join("\n"),
+  );
+
+  // domain/contexts/shipping/read-models/ShipmentStatus.yml
+  writeFileSync(
+    join(CONTEXTS, "shipping", "read-models", "ShipmentStatus.yml"),
+    [
+      "name: ShipmentStatus",
+      'description: "Current status of a shipment"',
+      "subscribes_to:",
+      "  - ShipmentDispatched",
+      "used_by:",
+      "  - Customer",
     ].join("\n"),
   );
 

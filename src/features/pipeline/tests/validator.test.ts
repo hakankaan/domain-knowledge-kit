@@ -60,6 +60,29 @@ function writeAdr(dir: string, filename: string, frontmatter: string): void {
   );
 }
 
+/**
+ * Write a per-item context directory under domain/contexts/<name>/.
+ * - contextYaml: YAML for context.yml (contains name, description, optional glossary)
+ * - items: map of sub-dir name → array of [filename, yamlContent] pairs
+ */
+function writeContextDir(
+  root: string,
+  contextYaml: string,
+  items: Record<string, Array<[string, string]>> = {},
+): void {
+  const nameMatch = contextYaml.match(/^name:\s*(\S+)/m);
+  const name = nameMatch![1];
+  const ctxDir = join(root, "domain", "contexts", name);
+  mkdirSync(ctxDir, { recursive: true });
+  writeYaml(join(ctxDir, "context.yml"), contextYaml);
+  for (const [subDir, files] of Object.entries(items)) {
+    mkdirSync(join(ctxDir, subDir), { recursive: true });
+    for (const [filename, content] of files) {
+      writeYaml(join(ctxDir, subDir, filename), content);
+    }
+  }
+}
+
 // ── Test: Valid model ─────────────────────────────────────────────────
 
 function testValidModel() {
@@ -91,40 +114,41 @@ function testValidModel() {
     ].join("\n"),
   );
 
-  writeYaml(
-    join(root, "domain", "contexts", "ordering.yml"),
-    [
-      "name: ordering",
-      'description: "Handles orders"',
-      "glossary:",
-      "  - term: OrderLifecycle",
-      '    definition: "The lifecycle of a purchase request"',
-      "events:",
-      "  - name: OrderPlaced",
-      '    description: "Raised when order placed"',
-      "    fields:",
-      "      - name: orderId",
-      "        type: UUID",
-      "    raised_by: Order",
-      "commands:",
-      "  - name: PlaceOrder",
-      '    description: "Submit a new order"',
-      "    actor: Customer",
-      "    handled_by: Order",
-      "    fields:",
-      "      - name: items",
-      "        type: array",
-      "aggregates:",
-      "  - name: Order",
-      '    description: "Order aggregate root"',
-      "    handles:",
-      "      commands:",
-      "        - PlaceOrder",
-      "    emits:",
-      "      events:",
-      "        - OrderPlaced",
-    ].join("\n"),
-  );
+  writeContextDir(root, [
+    "name: ordering",
+    'description: "Handles orders"',
+    "glossary:",
+    "  - term: OrderLifecycle",
+    '    definition: "The lifecycle of a purchase request"',
+  ].join("\n"), {
+    events: [["OrderPlaced.yml", [
+      "name: OrderPlaced",
+      'description: "Raised when order placed"',
+      "fields:",
+      "  - name: orderId",
+      "    type: UUID",
+      "raised_by: Order",
+    ].join("\n")]],
+    commands: [["PlaceOrder.yml", [
+      "name: PlaceOrder",
+      'description: "Submit a new order"',
+      "actor: Customer",
+      "handled_by: Order",
+      "fields:",
+      "  - name: items",
+      "    type: array",
+    ].join("\n")]],
+    aggregates: [["Order.yml", [
+      "name: Order",
+      'description: "Order aggregate root"',
+      "handles:",
+      "  commands:",
+      "    - PlaceOrder",
+      "emits:",
+      "  events:",
+      "    - OrderPlaced",
+    ].join("\n")]],
+  });
 
   writeAdr(
     join(root, "docs", "adr"),
@@ -162,18 +186,17 @@ function testBrokenAdrRefs() {
     join(root, "domain", "actors.yml"),
     "actors: []\n",
   );
-  writeYaml(
-    join(root, "domain", "contexts", "ordering.yml"),
-    [
-      "name: ordering",
-      'description: "Orders"',
-      "events:",
-      "  - name: OrderPlaced",
-      '    description: "Placed"',
-      "    adr_refs:",
-      "      - adr-9999",
-    ].join("\n"),
-  );
+  writeContextDir(root, [
+    "name: ordering",
+    'description: "Orders"',
+  ].join("\n"), {
+    events: [["OrderPlaced.yml", [
+      "name: OrderPlaced",
+      'description: "Placed"',
+      "adr_refs:",
+      "  - adr-9999",
+    ].join("\n")]],
+  });
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -225,45 +248,45 @@ function testBrokenIntraContextRefs() {
     join(root, "domain", "actors.yml"),
     "actors:\n  - name: Admin\n    type: human\n    description: Admin user\n",
   );
-  writeYaml(
-    join(root, "domain", "contexts", "sales.yml"),
-    [
-      "name: sales",
-      'description: "Sales context"',
-      "events:",
-      "  - name: SaleCompleted",
-      '    description: "A sale was completed"',
-      "    raised_by: NonExistentAggregate",
-      "commands:",
-      "  - name: CompleteSale",
-      '    description: "Complete a sale"',
-      "    handled_by: GhostAggregate",
-      "    actor: GhostActor",
-      "aggregates:",
-      "  - name: Sale",
-      '    description: "Sale aggregate"',
-      "    handles:",
-      "      commands:",
-      "        - NonExistentCommand",
-      "    emits:",
-      "      events:",
-      "        - NonExistentEvent",
-      "policies:",
-      "  - name: NotifyOnSale",
-      '    description: "Notify on sale"',
-      "    triggers:",
-      "      - GhostEvent",
-      "    emits:",
-      "      - GhostCommand",
-      "read_models:",
-      "  - name: SaleDashboard",
-      '    description: "Dashboard"',
-      "    subscribes_to:",
-      "      - GhostEvent",
-      "    used_by:",
-      "      - GhostActor",
-    ].join("\n"),
-  );
+  writeContextDir(root, "name: sales\ndescription: \"Sales context\"", {
+    events: [["SaleCompleted.yml", [
+      "name: SaleCompleted",
+      'description: "A sale was completed"',
+      "raised_by: NonExistentAggregate",
+    ].join("\n")]],
+    commands: [["CompleteSale.yml", [
+      "name: CompleteSale",
+      'description: "Complete a sale"',
+      "handled_by: GhostAggregate",
+      "actor: GhostActor",
+    ].join("\n")]],
+    aggregates: [["Sale.yml", [
+      "name: Sale",
+      'description: "Sale aggregate"',
+      "handles:",
+      "  commands:",
+      "    - NonExistentCommand",
+      "emits:",
+      "  events:",
+      "    - NonExistentEvent",
+    ].join("\n")]],
+    policies: [["NotifyOnSale.yml", [
+      "name: NotifyOnSale",
+      'description: "Notify on sale"',
+      "triggers:",
+      "  - GhostEvent",
+      "emits:",
+      "  - GhostCommand",
+    ].join("\n")]],
+    "read-models": [["SaleDashboard.yml", [
+      "name: SaleDashboard",
+      'description: "Dashboard"',
+      "subscribes_to:",
+      "  - GhostEvent",
+      "used_by:",
+      "  - GhostActor",
+    ].join("\n")]],
+  });
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -289,19 +312,10 @@ function testDuplicateNames() {
 
   writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
   writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
-  writeYaml(
-    join(root, "domain", "contexts", "ctx.yml"),
-    [
-      "name: ctx",
-      'description: "Test context"',
-      "events:",
-      "  - name: Clash",
-      '    description: "Event"',
-      "commands:",
-      "  - name: Clash",
-      '    description: "Command"',
-    ].join("\n"),
-  );
+  writeContextDir(root, "name: ctx\ndescription: \"Test context\"", {
+    events: [["Clash.yml", "name: Clash\ndescription: \"Event\""]],
+    commands: [["Clash.yml", "name: Clash\ndescription: \"Command\""]],
+  });
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -319,19 +333,15 @@ function testGlossaryAggregateCollision() {
 
   writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
   writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
-  writeYaml(
-    join(root, "domain", "contexts", "ctx.yml"),
-    [
-      "name: ctx",
-      'description: "Test context"',
-      "glossary:",
-      "  - term: Order",
-      '    definition: "A purchase"',
-      "aggregates:",
-      "  - name: Order",
-      '    description: "Root"',
-    ].join("\n"),
-  );
+  writeContextDir(root, [
+    "name: ctx",
+    'description: "Test context"',
+    "glossary:",
+    "  - term: Order",
+    '    definition: "A purchase"',
+  ].join("\n"), {
+    aggregates: [["Order.yml", "name: Order\ndescription: \"Root\""]],
+  });
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -427,19 +437,10 @@ function testWarnMissingFields() {
 
   writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
   writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
-  writeYaml(
-    join(root, "domain", "contexts", "ctx.yml"),
-    [
-      "name: ctx",
-      'description: "Test"',
-      "events:",
-      "  - name: NoFieldsEvent",
-      '    description: "Event with no fields"',
-      "commands:",
-      "  - name: NoFieldsCommand",
-      '    description: "Command with no fields"',
-    ].join("\n"),
-  );
+  writeContextDir(root, 'name: ctx\ndescription: "Test"', {
+    events: [["NoFieldsEvent.yml", 'name: NoFieldsEvent\ndescription: "Event with no fields"']],
+    commands: [["NoFieldsCommand.yml", 'name: NoFieldsCommand\ndescription: "Command with no fields"']],
+  });
 
   const model = loadDomainModel({ root });
 

@@ -27,7 +27,9 @@ function assert(label: string, condition: boolean, detail?: string) {
 }
 
 function setup() {
-  mkdirSync(CONTEXTS, { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "events"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "commands"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "aggregates"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
   writeFileSync(
@@ -47,34 +49,36 @@ function setup() {
   );
 
   // Context where glossary term "Order" collides with aggregate "Order"
-  writeFileSync(
-    join(CONTEXTS, "ordering.yml"),
-    [
-      "name: ordering",
-      'description: "Handles orders"',
-      "glossary:",
-      "  - term: Order",
-      '    definition: "A customer purchase request"',
-      "  - term: LineItem",
-      '    definition: "An item within an order"',
-      "events:",
-      "  - name: OrderPlaced",
-      '    description: "Raised when an order is placed"',
-      "    raised_by: Order",
-      "commands:",
-      "  - name: PlaceOrder",
-      '    description: "Submit a new order"',
-      "    actor: Customer",
-      "    handled_by: Order",
-      "aggregates:",
-      "  - name: Order",
-      '    description: "Order aggregate root"',
-      "    handles:",
-      "      - PlaceOrder",
-      "    emits:",
-      "      - OrderPlaced",
-    ].join("\n"),
-  );
+  writeFileSync(join(CONTEXTS, "ordering", "context.yml"), [
+    "name: ordering",
+    'description: "Handles orders"',
+    "glossary:",
+    "  - term: Order",
+    '    definition: "A customer purchase request"',
+    "  - term: LineItem",
+    '    definition: "An item within an order"',
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "events", "OrderPlaced.yml"), [
+    "name: OrderPlaced",
+    'description: "Raised when an order is placed"',
+    "raised_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "commands", "PlaceOrder.yml"), [
+    "name: PlaceOrder",
+    'description: "Submit a new order"',
+    "actor: Customer",
+    "handled_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "aggregates", "Order.yml"), [
+    "name: Order",
+    'description: "Order aggregate root"',
+    "handles:",
+    "  commands:",
+    "    - PlaceOrder",
+    "emits:",
+    "  events:",
+    "    - OrderPlaced",
+  ].join("\n"));
 
   writeFileSync(join(ADR_DIR, "README.md"), "# ADRs\n");
 }

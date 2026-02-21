@@ -19,8 +19,15 @@ const ADR_DIR = join(TMP, "docs", "adr");
 const DB_PATH = join(TMP, ".domain-pack", "index.db");
 
 function setup() {
-  mkdirSync(CONTEXTS, { recursive: true });
-  mkdirSync(join(CONTEXTS, "shipping"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "events"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "commands"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "policies"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "aggregates"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "ordering", "read-models"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "events"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "commands"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "aggregates"), { recursive: true });
+  mkdirSync(join(CONTEXTS, "shipping", "read-models"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
   // domain/index.yml
@@ -59,95 +66,106 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering.yml
-  writeFileSync(
-    join(CONTEXTS, "ordering.yml"),
-    [
-      "name: ordering",
-      'description: "Handles the order lifecycle"',
-      "glossary:",
-      "  - term: Order",
-      '    definition: "A customer purchase request"',
-      "    aliases:",
-      "      - Purchase",
-      "      - Booking",
-      "    adr_refs:",
-      "      - adr-0001",
-      "events:",
-      "  - name: OrderPlaced",
-      '    description: "Raised when an order is placed"',
-      "    fields:",
-      "      - name: orderId",
-      "        type: UUID",
-      "    raised_by: Order",
-      "  - name: OrderCancelled",
-      '    description: "Raised when an order is cancelled"',
-      "    raised_by: Order",
-      "commands:",
-      "  - name: PlaceOrder",
-      '    description: "Submit a new order"',
-      "    actor: Customer",
-      "    handled_by: Order",
-      "  - name: CancelOrder",
-      '    description: "Cancel an existing order"',
-      "    handled_by: Order",
-      "policies:",
-      "  - name: NotifyOnCancel",
-      '    description: "Notify customer when order is cancelled"',
-      "    triggers:",
-      "      - OrderCancelled",
-      "    emits:",
-      "      - SendNotification",
-      "aggregates:",
-      "  - name: Order",
-      '    description: "Order aggregate root"',
-      "    handles:",
-      "      - PlaceOrder",
-      "      - CancelOrder",
-      "    emits:",
-      "      - OrderPlaced",
-      "      - OrderCancelled",
-      "read_models:",
-      "  - name: OrderSummary",
-      '    description: "Summary view of all orders"',
-      "    subscribes_to:",
-      "      - OrderPlaced",
-      "      - OrderCancelled",
-      "    used_by:",
-      "      - Customer",
-    ].join("\n"),
-  );
+  // domain/contexts/ordering/ — per-item directory
+  writeFileSync(join(CONTEXTS, "ordering", "context.yml"), [
+    "name: ordering",
+    'description: "Handles the order lifecycle"',
+    "glossary:",
+    "  - term: Order",
+    '    definition: "A customer purchase request"',
+    "    aliases:",
+    "      - Purchase",
+    "      - Booking",
+    "    adr_refs:",
+    "      - adr-0001",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "events", "OrderPlaced.yml"), [
+    "name: OrderPlaced",
+    'description: "Raised when an order is placed"',
+    "fields:",
+    "  - name: orderId",
+    "    type: UUID",
+    "raised_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "events", "OrderCancelled.yml"), [
+    "name: OrderCancelled",
+    'description: "Raised when an order is cancelled"',
+    "raised_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "commands", "PlaceOrder.yml"), [
+    "name: PlaceOrder",
+    'description: "Submit a new order"',
+    "actor: Customer",
+    "handled_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "commands", "CancelOrder.yml"), [
+    "name: CancelOrder",
+    'description: "Cancel an existing order"',
+    "handled_by: Order",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "policies", "NotifyOnCancel.yml"), [
+    "name: NotifyOnCancel",
+    'description: "Notify customer when order is cancelled"',
+    "triggers:",
+    "  - OrderCancelled",
+    "emits:",
+    "  - SendNotification",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "aggregates", "Order.yml"), [
+    "name: Order",
+    'description: "Order aggregate root"',
+    "handles:",
+    "  commands:",
+    "    - PlaceOrder",
+    "    - CancelOrder",
+    "emits:",
+    "  events:",
+    "    - OrderPlaced",
+    "    - OrderCancelled",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "ordering", "read-models", "OrderSummary.yml"), [
+    "name: OrderSummary",
+    'description: "Summary view of all orders"',
+    "subscribes_to:",
+    "  - OrderPlaced",
+    "  - OrderCancelled",
+    "used_by:",
+    "  - Customer",
+  ].join("\n"));
 
-  // domain/contexts/shipping/context.yml
-  writeFileSync(
-    join(CONTEXTS, "shipping", "context.yml"),
-    [
-      "name: shipping",
-      'description: "Handles shipment tracking"',
-      "commands:",
-      "  - name: ShipOrder",
-      '    description: "Initiate shipment for an order"',
-      "    handled_by: Shipment",
-      "events:",
-      "  - name: ShipmentDispatched",
-      '    description: "Raised when a shipment is dispatched"',
-      "    raised_by: Shipment",
-      "read_models:",
-      "  - name: ShipmentStatus",
-      '    description: "Current status of a shipment"',
-      "    subscribes_to:",
-      "      - ShipmentDispatched",
-      "    used_by:",
-      "      - Customer",
-      "aggregates:",
-      "  - name: Shipment",
-      '    description: "Shipment aggregate"',
-      "    handles:",
-      "      - ShipOrder",
-      "    emits:",
-      "      - ShipmentDispatched",
-    ].join("\n"),
-  );
+  // domain/contexts/shipping/ — per-item directory
+  writeFileSync(join(CONTEXTS, "shipping", "context.yml"), [
+    "name: shipping",
+    'description: "Handles shipment tracking"',
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "shipping", "commands", "ShipOrder.yml"), [
+    "name: ShipOrder",
+    'description: "Initiate shipment for an order"',
+    "handled_by: Shipment",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "shipping", "events", "ShipmentDispatched.yml"), [
+    "name: ShipmentDispatched",
+    'description: "Raised when a shipment is dispatched"',
+    "raised_by: Shipment",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "shipping", "read-models", "ShipmentStatus.yml"), [
+    "name: ShipmentStatus",
+    'description: "Current status of a shipment"',
+    "subscribes_to:",
+    "  - ShipmentDispatched",
+    "used_by:",
+    "  - Customer",
+  ].join("\n"));
+  writeFileSync(join(CONTEXTS, "shipping", "aggregates", "Shipment.yml"), [
+    "name: Shipment",
+    'description: "Shipment aggregate"',
+    "handles:",
+    "  commands:",
+    "    - ShipOrder",
+    "emits:",
+    "  events:",
+    "    - ShipmentDispatched",
+  ].join("\n"));
 
   // docs/adr/0001-use-yaml.md
   writeFileSync(

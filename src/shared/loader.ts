@@ -4,15 +4,31 @@
  * Recursively walks `domain/` and `docs/adr/` to discover all YAML
  * definition files and ADR Markdown files, then assembles and returns
  * a fully-typed {@link DomainModel}.
+ *
+ * Context layout (per-item directory format):
+ *
+ *   domain/contexts/<name>/
+ *     context.yml          ← metadata: name, description, glossary
+ *     events/              ← one .yml file per DomainEvent
+ *     commands/            ← one .yml file per Command
+ *     policies/            ← one .yml file per Policy
+ *     aggregates/          ← one .yml file per Aggregate
+ *     read-models/         ← one .yml file per ReadModel
  */
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, basename, extname } from "node:path";
 import type {
   ActorsFile,
+  ContextMetaFile,
   DomainContext,
   DomainIndex,
   DomainModel,
   AdrRecord,
+  DomainEvent,
+  Command,
+  Policy,
+  Aggregate,
+  ReadModel,
 } from "./types/domain.js";
 import { parseYaml } from "./yaml.js";
 import { parseAdrFile } from "./adr-parser.js";
@@ -63,41 +79,65 @@ function listAdrFiles(dir: string): string[] {
 }
 
 /**
- * Discover context directories.
+ * Load a bounded context from a per-item directory.
  *
- * Each subdirectory of `domain/contexts/` that contains a YAML file
- * is considered a bounded-context directory. Single `.yml` files
- * directly under `domain/contexts/` are also accepted as flat contexts.
+ * Expects:
+ *   <ctxDir>/context.yml          — identity: name, description, glossary
+ *   <ctxDir>/events/*.yml         — one file per DomainEvent
+ *   <ctxDir>/commands/*.yml       — one file per Command
+ *   <ctxDir>/policies/*.yml       — one file per Policy
+ *   <ctxDir>/aggregates/*.yml     — one file per Aggregate
+ *   <ctxDir>/read-models/*.yml    — one file per ReadModel
+ *
+ * Returns `null` if `context.yml` is absent or has no `name`.
  */
-function discoverContextPaths(ctxDir: string): string[] {
-  if (!existsSync(ctxDir)) return [];
+function loadPerItemContext(ctxDir: string): DomainContext | null {
+  const metaPath = join(ctxDir, "context.yml");
+  if (!existsSync(metaPath)) return null;
+
+  const meta = loadYaml<ContextMetaFile>(metaPath);
+  if (!meta.name) return null;
+
+  const events = listYamlFiles(join(ctxDir, "events")).map((f) => loadYaml<DomainEvent>(f));
+  const commands = listYamlFiles(join(ctxDir, "commands")).map((f) => loadYaml<Command>(f));
+  const policies = listYamlFiles(join(ctxDir, "policies")).map((f) => loadYaml<Policy>(f));
+  const aggregates = listYamlFiles(join(ctxDir, "aggregates")).map((f) => loadYaml<Aggregate>(f));
+  const readModels = listYamlFiles(join(ctxDir, "read-models")).map((f) => loadYaml<ReadModel>(f));
+
+  const ctx: DomainContext = {
+    name: meta.name,
+    description: meta.description,
+  };
+  if (meta.glossary?.length) ctx.glossary = meta.glossary;
+  if (events.length) ctx.events = events;
+  if (commands.length) ctx.commands = commands;
+  if (policies.length) ctx.policies = policies;
+  if (aggregates.length) ctx.aggregates = aggregates;
+  if (readModels.length) ctx.read_models = readModels;
+
+  return ctx;
+}
+
+/**
+ * Discover and load all bounded contexts from `domain/contexts/`.
+ *
+ * Each sub-directory that contains a `context.yml` is treated as a
+ * bounded context in the new per-item format.
+ */
+function loadAllContexts(ctxDir: string): Map<string, DomainContext> {
+  const contexts = new Map<string, DomainContext>();
+  if (!existsSync(ctxDir)) return contexts;
 
   const entries = readdirSync(ctxDir, { withFileTypes: true });
-  const paths: string[] = [];
-
   for (const entry of entries) {
     if (entry.name.startsWith(".")) continue;
+    if (!entry.isDirectory()) continue;
 
-    const fullPath = join(ctxDir, entry.name);
-
-    if (entry.isDirectory()) {
-      // Look for context.yml or <dir-name>.yml inside the directory
-      const contextYml = join(fullPath, "context.yml");
-      const namedYml = join(fullPath, `${entry.name}.yml`);
-      if (existsSync(contextYml)) {
-        paths.push(contextYml);
-      } else if (existsSync(namedYml)) {
-        paths.push(namedYml);
-      }
-    } else {
-      const ext = extname(entry.name).toLowerCase();
-      if (ext === ".yml" || ext === ".yaml") {
-        paths.push(fullPath);
-      }
-    }
+    const ctx = loadPerItemContext(join(ctxDir, entry.name));
+    if (ctx) contexts.set(ctx.name, ctx);
   }
 
-  return paths.sort();
+  return contexts;
 }
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -135,14 +175,7 @@ export function loadDomainModel(options: LoaderOptions = {}): DomainModel {
     : { actors: [] };
 
   // 3. Bounded contexts
-  const contexts = new Map<string, DomainContext>();
-  const ctxPaths = discoverContextPaths(contextsDir(root));
-  for (const ctxPath of ctxPaths) {
-    const ctx = loadYaml<DomainContext>(ctxPath);
-    if (ctx.name) {
-      contexts.set(ctx.name, ctx);
-    }
-  }
+  const contexts = loadAllContexts(contextsDir(root));
 
   // 4. ADRs
   const adrs = new Map<string, AdrRecord>();

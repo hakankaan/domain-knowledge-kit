@@ -163,9 +163,25 @@ export interface ReadModel {
   adr_refs?: AdrRef[];
 }
 
+// ── Context Meta File ─────────────────────────────────────────────────
+
+/**
+ * Context metadata file shape (domain/contexts/<name>/context.yml).
+ * Contains only identity and glossary; item arrays live in typed
+ * sub-directories (events/, commands/, policies/, aggregates/, read-models/).
+ */
+export interface ContextMetaFile {
+  /** Kebab-case context identifier (e.g. "ordering"). */
+  name: string;
+  /** What this bounded context is responsible for. */
+  description: string;
+  /** Ubiquitous-language terms scoped to this context. */
+  glossary?: GlossaryEntry[];
+}
+
 // ── Bounded Context ───────────────────────────────────────────────────
 
-/** A bounded context YAML file (domain/contexts/<name>.yml). */
+/** A bounded context assembled from per-item YAML files. */
 export interface DomainContext {
   /** Kebab-case context identifier (e.g. "ordering"). */
   name: string;

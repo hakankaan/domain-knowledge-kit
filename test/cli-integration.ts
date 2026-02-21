@@ -82,6 +82,29 @@ function writeYaml(root: string, relPath: string, content: string): void {
   writeFileSync(join(root, relPath), content, "utf-8");
 }
 
+/**
+ * Write a per-item context directory under domain/contexts/<name>/.
+ * - contextYaml: YAML for context.yml (name, description, optional glossary)
+ * - items: map of sub-dir → array of [filename, yamlContent] pairs
+ */
+function writeContextDir(
+  root: string,
+  contextYaml: string,
+  items: Record<string, Array<[string, string]>> = {},
+): void {
+  const nameMatch = contextYaml.match(/^name:\s*(\S+)/m);
+  const name = nameMatch![1];
+  const ctxDir = join(root, "domain", "contexts", name);
+  mkdirSync(ctxDir, { recursive: true });
+  writeFileSync(join(ctxDir, "context.yml"), contextYaml, "utf-8");
+  for (const [subDir, files] of Object.entries(items)) {
+    mkdirSync(join(ctxDir, subDir), { recursive: true });
+    for (const [filename, content] of files) {
+      writeFileSync(join(ctxDir, subDir, filename), content, "utf-8");
+    }
+  }
+}
+
 /** Write an ADR Markdown file. */
 function writeAdr(root: string, filename: string, frontmatter: string, body = "Content."): void {
   writeFileSync(
@@ -110,39 +133,44 @@ function makeValidDomain(suffix: string): string {
     '    description: "A paying customer"',
   ].join("\n"));
 
-  writeYaml(root, "domain/contexts/ordering.yml", [
+  writeContextDir(root, [
     "name: ordering",
     'description: "Handles the order lifecycle"',
-    "events:",
-    "  - name: OrderPlaced",
-    '    description: "Raised when an order is placed"',
-    "    fields:",
-    "      - name: orderId",
-    "        type: UUID",
-    "    raised_by: Order",
-    "commands:",
-    "  - name: PlaceOrder",
-    '    description: "Submit a new order"',
-    "    actor: Customer",
-    "    handled_by: Order",
-    "aggregates:",
-    "  - name: Order",
-    '    description: "Order aggregate root"',
-    "    handles:",
-    "      commands:",
-    "        - PlaceOrder",
-    "    emits:",
-    "      events:",
-    "        - OrderPlaced",
-    "policies:",
-    "  - name: NotifyOnOrder",
-    '    description: "Send email when order placed"',
-    "    triggers:",
-    "      - OrderPlaced",
     "glossary:",
     "  - term: SKU",
     '    definition: "Stock keeping unit identifier"',
-  ].join("\n"));
+  ].join("\n"), {
+    events: [["OrderPlaced.yml", [
+      "name: OrderPlaced",
+      'description: "Raised when an order is placed"',
+      "fields:",
+      "  - name: orderId",
+      "    type: UUID",
+      "raised_by: Order",
+    ].join("\n")]],
+    commands: [["PlaceOrder.yml", [
+      "name: PlaceOrder",
+      'description: "Submit a new order"',
+      "actor: Customer",
+      "handled_by: Order",
+    ].join("\n")]],
+    aggregates: [["Order.yml", [
+      "name: Order",
+      'description: "Order aggregate root"',
+      "handles:",
+      "  commands:",
+      "    - PlaceOrder",
+      "emits:",
+      "  events:",
+      "    - OrderPlaced",
+    ].join("\n")]],
+    policies: [["NotifyOnOrder.yml", [
+      "name: NotifyOnOrder",
+      'description: "Send email when order placed"',
+      "triggers:",
+      "  - OrderPlaced",
+    ].join("\n")]],
+  });
 
   return root;
 }
@@ -184,14 +212,13 @@ try {
     ].join("\n"));
     writeYaml(root, "domain/actors.yml", "actors: []\n");
     // Create a context that references a non-existent aggregate
-    writeYaml(root, "domain/contexts/ordering.yml", [
-      "name: ordering",
-      'description: "Handles the order lifecycle"',
-      "commands:",
-      "  - name: PlaceOrder",
-      '    description: "Submit a new order"',
-      "    handled_by: NonExistent",  // broken reference
-    ].join("\n"));
+    writeContextDir(root, "name: ordering\ndescription: \"Handles the order lifecycle\"", {
+      commands: [["PlaceOrder.yml", [
+        "name: PlaceOrder",
+        'description: "Submit a new order"',
+        "handled_by: NonExistent",
+      ].join("\n")]],
+    });
 
     const result = run(["validate"], { root });
     assert("validate exits 1 on errors", result.exitCode === 1);
