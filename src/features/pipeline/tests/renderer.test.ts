@@ -97,8 +97,8 @@ function buildModel(): DomainModel {
       {
         name: "SendConfirmation",
         description: "Sends an email after order placement",
-        triggers: ["OrderPlaced"],
-        emits: ["ConfirmationSent"],
+        when: { events: ["OrderPlaced"] },
+        then: { commands: ["ConfirmationSent"] },
       },
     ],
     aggregates: [

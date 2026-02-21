@@ -181,11 +181,11 @@ export class DomainGraph {
           }
           case "policy": {
             const pol = item as Policy;
-            for (const trigger of pol.triggers ?? []) {
+            for (const trigger of pol.when?.events ?? []) {
               const evtId = ensureNode(scopedId(ctxName, trigger), "event", trigger, ctxName);
               addEdge(evtId, id, "triggers");
             }
-            for (const emitted of pol.emits ?? []) {
+            for (const emitted of pol.then?.commands ?? []) {
               const cmdId = ensureNode(scopedId(ctxName, emitted), "command", emitted, ctxName);
               addEdge(id, cmdId, "emits");
             }

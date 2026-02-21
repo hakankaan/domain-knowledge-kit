@@ -83,9 +83,15 @@ expect("command: valid", "command.schema.json", {
 expect("policy: valid", "policy.schema.json", {
   name: "SendConfirmation",
   description: "Sends email after order",
+  when: { events: ["OrderPlaced"] },
+  then: { commands: ["SendEmail"] },
+}, true);
+expect("policy: flat triggers rejected", "policy.schema.json", {
+  name: "SendConfirmation",
+  description: "Sends email after order",
   triggers: ["OrderPlaced"],
   emits: ["SendEmail"],
-}, true);
+}, false);
 
 // ---- aggregate.schema.json ----
 expect("aggregate: valid", "aggregate.schema.json", {

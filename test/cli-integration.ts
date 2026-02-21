@@ -167,8 +167,9 @@ function makeValidDomain(suffix: string): string {
     policies: [["NotifyOnOrder.yml", [
       "name: NotifyOnOrder",
       'description: "Send email when order placed"',
-      "triggers:",
-      "  - OrderPlaced",
+      "when:",
+      "  events:",
+      "    - OrderPlaced",
     ].join("\n")]],
   });
 

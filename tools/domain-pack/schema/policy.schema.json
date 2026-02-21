@@ -15,17 +15,31 @@
       "minLength": 1,
       "description": "What this policy does in response to events"
     },
-    "triggers": {
-      "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true,
-      "description": "Event names that trigger this policy"
+    "when": {
+      "type": "object",
+      "description": "Conditions that activate this policy",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Event names that trigger this policy"
+        }
+      },
+      "additionalProperties": false
     },
-    "emits": {
-      "type": "array",
-      "items": { "type": "string", "minLength": 1 },
-      "uniqueItems": true,
-      "description": "Command names that this policy emits"
+    "then": {
+      "type": "object",
+      "description": "Actions taken by this policy",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Command names that this policy emits"
+        }
+      },
+      "additionalProperties": false
     },
     "adr_refs": {
       "type": "array",

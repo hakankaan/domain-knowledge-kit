@@ -121,10 +121,10 @@ export interface Policy {
   name: string;
   /** What this policy does in response to events. */
   description: string;
-  /** Event names that trigger this policy. */
-  triggers?: string[];
-  /** Command names that this policy emits. */
-  emits?: string[];
+  /** Conditions that activate this policy (nested: when.events). */
+  when?: { events?: string[] };
+  /** Actions taken by this policy (nested: then.commands). */
+  then?: { commands?: string[] };
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }

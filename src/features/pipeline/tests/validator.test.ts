@@ -273,10 +273,12 @@ function testBrokenIntraContextRefs() {
     policies: [["NotifyOnSale.yml", [
       "name: NotifyOnSale",
       'description: "Notify on sale"',
-      "triggers:",
-      "  - GhostEvent",
-      "emits:",
-      "  - GhostCommand",
+      "when:",
+      "  events:",
+      "    - GhostEvent",
+      "then:",
+      "  commands:",
+      "    - GhostCommand",
     ].join("\n")]],
     "read-models": [["SaleDashboard.yml", [
       "name: SaleDashboard",
@@ -296,8 +298,8 @@ function testBrokenIntraContextRefs() {
   assert("detects command actor unknown", hasError(result, "actor") && hasError(result, "GhostActor"));
   assert("detects aggregate handles unknown command", hasError(result, "NonExistentCommand"));
   assert("detects aggregate emits unknown event", hasError(result, "NonExistentEvent"));
-  assert("detects policy triggers unknown event", hasError(result, 'triggers on "GhostEvent"'));
-  assert("detects policy emits unknown command", hasError(result, 'emits "GhostCommand"'));
+  assert("detects policy triggers unknown event", hasError(result, 'when.events "GhostEvent"'));
+  assert("detects policy emits unknown command", hasError(result, 'then.commands "GhostCommand"'));
   assert("detects read_model subscribes_to unknown event", hasError(result, 'subscribes_to "GhostEvent"'));
   assert("detects read_model used_by unknown actor", hasError(result, 'used_by "GhostActor"'));
 

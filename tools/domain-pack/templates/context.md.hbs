@@ -46,7 +46,7 @@ _No commands._
 | Policy | Description | Triggers | Emits |
 |--------|-------------|----------|-------|
 {{#each policies}}
-| [{{name}}]({{name}}.md) | {{description}} | {{#if triggers}}{{join triggers ", "}}{{else}}—{{/if}} | {{#if emits}}{{join emits ", "}}{{else}}—{{/if}} |
+| [{{name}}]({{name}}.md) | {{description}} | {{#if when.events}}{{join when.events ", "}}{{else}}—{{/if}} | {{#if then.commands}}{{join then.commands ", "}}{{else}}—{{/if}} |
 {{/each}}
 {{else}}
 _No policies._

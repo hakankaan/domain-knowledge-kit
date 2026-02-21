@@ -108,10 +108,12 @@ function setup() {
   writeFileSync(join(CONTEXTS, "ordering", "policies", "NotifyOnCancel.yml"), [
     "name: NotifyOnCancel",
     'description: "Notify customer when order is cancelled"',
-    "triggers:",
-    "  - OrderCancelled",
-    "emits:",
-    "  - SendNotification",
+    "when:",
+    "  events:",
+    "    - OrderCancelled",
+    "then:",
+    "  commands:",
+    "    - SendNotification",
   ].join("\n"));
   writeFileSync(join(CONTEXTS, "ordering", "aggregates", "Order.yml"), [
     "name: Order",

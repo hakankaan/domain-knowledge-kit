@@ -7,7 +7,7 @@
  *    corresponding JSON Schema (via ajv).
  * 2. **Cross-reference validation** — All inter-item references are
  *    resolved: context names, adr_refs, domain_refs, handles/emits,
- *    triggers, subscribes_to, used_by, raised_by, handled_by, actor.
+ *    when/then (policy), subscribes_to, used_by, raised_by, handled_by, actor.
  *
  * Results are returned as arrays of errors (blocking, should exit 1)
  * and warnings (non-blocking, informational).
@@ -329,20 +329,20 @@ function validateCrossRefs(
         }
         case "policy": {
           const p = item as Policy;
-          for (const t of p.triggers ?? []) {
+          for (const t of p.when?.events ?? []) {
             if (!sets.events.has(t)) {
               err(
                 issues,
-                `Policy "${p.name}" triggers on "${t}" but no such event in context "${ctxName}"`,
+                `Policy "${p.name}" when.events "${t}" but no such event in context "${ctxName}"`,
                 path("policy", p.name),
               );
             }
           }
-          for (const e of p.emits ?? []) {
+          for (const e of p.then?.commands ?? []) {
             if (!sets.commands.has(e)) {
               err(
                 issues,
-                `Policy "${p.name}" emits "${e}" but no such command in context "${ctxName}"`,
+                `Policy "${p.name}" then.commands "${e}" but no such command in context "${ctxName}"`,
                 path("policy", p.name),
               );
             }

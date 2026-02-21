@@ -23,7 +23,7 @@ The domain model is stored as YAML files on disk:
 |------|-------------|------------|
 | **Event** | Something that happened in the domain | `name`, `description`, `fields`, `raised_by`, `adr_refs` |
 | **Command** | An instruction to change state | `name`, `description`, `fields`, `actor`, `handled_by`, `adr_refs` |
-| **Policy** | Reactive logic triggered by events | `name`, `description`, `triggers`, `emits`, `adr_refs` |
+| **Policy** | Reactive logic triggered by events | `name`, `description`, `when`, `then`, `adr_refs` |
 | **Aggregate** | Consistency boundary handling commands | `name`, `description`, `handles`, `emits`, `adr_refs` |
 | **Read Model** | Query-optimized projection | `name`, `description`, `subscribes_to`, `used_by`, `adr_refs` |
 | **Glossary** | Ubiquitous language term | `term`, `definition`, `aliases`, `adr_refs` |

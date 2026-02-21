@@ -238,8 +238,8 @@ function collectRows(model: DomainModel): IndexRow[] {
         case "policy": {
           const pol = item as Policy;
           const relIds: string[] = [];
-          for (const t of pol.triggers ?? []) relIds.push(`${ctxName}.${t}`);
-          for (const e of pol.emits ?? []) relIds.push(`${ctxName}.${e}`);
+          for (const t of pol.when?.events ?? []) relIds.push(`${ctxName}.${t}`);
+          for (const e of pol.then?.commands ?? []) relIds.push(`${ctxName}.${e}`);
           rows.push({
             id,
             type: "policy",

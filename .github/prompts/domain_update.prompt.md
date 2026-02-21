@@ -84,10 +84,12 @@ commands:
 policies:
   - name: SendConfirmationEmail
     description: Sends email when order is placed.
-    triggers:
-      - OrderPlaced
-    emits:
-      - NotifyCustomer
+    when:
+      events:
+        - OrderPlaced
+    then:
+      commands:
+        - NotifyCustomer
 aggregates:
   - name: Order
     description: Manages order state and invariants.

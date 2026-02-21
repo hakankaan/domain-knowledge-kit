@@ -164,9 +164,10 @@ function buildItemData(
     // command-specific
     actor?: string;
     handled_by?: string;
-    // policy-specific (emits is a flat string array for policies)
-    triggers?: string[];
-    emits?: string[] | { events?: string[] };
+    // policy-specific (nested when/then)
+    when?: { events?: string[] };
+    then?: { commands?: string[] };
+    emits?: { events?: string[] };
     // aggregate-specific (nested after schema refactor)
     handles?: string[] | { commands?: string[] };
     // read-model-specific
@@ -192,7 +193,7 @@ function buildItemData(
   if (item.handled_by) {
     relationships.push({ label: "Handled by", target: item.handled_by });
   }
-  for (const t of item.triggers ?? []) {
+  for (const t of item.when?.events ?? []) {
     relationships.push({ label: "Triggered by", target: t });
   }
   if (itemType === "Aggregate") {
@@ -204,9 +205,14 @@ function buildItemData(
     for (const e of agg.emits?.events ?? []) {
       relationships.push({ label: "Emits", target: e });
     }
+  } else if (itemType === "Policy") {
+    // Policy uses nested then.commands
+    for (const e of item.then?.commands ?? []) {
+      relationships.push({ label: "Emits", target: e });
+    }
   } else {
-    // Policy (and any other types): emits is still a flat string array
-    for (const e of (item.emits as string[] | undefined) ?? []) {
+    // Other types: emits/handles are flat string arrays (legacy)
+    for (const e of (item.emits as unknown as string[] | undefined) ?? []) {
       relationships.push({ label: "Emits", target: e });
     }
     for (const h of (item.handles as string[] | undefined) ?? []) {
