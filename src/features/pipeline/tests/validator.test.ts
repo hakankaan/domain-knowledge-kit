@@ -15,7 +15,7 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/domain-pack/schema");
+const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/dkk/schema");
 
 let passed = 0;
 let failed = 0;
@@ -42,7 +42,7 @@ function hasWarning(result: ValidationResult, substring: string): boolean {
 function makeTempRoot(suffix: string): string {
   const root = join(tmpdir(), `dkk-validator-${suffix}-${Date.now()}`);
   mkdirSync(join(root, "domain", "contexts"), { recursive: true });
-  mkdirSync(join(root, ".domain-pack", "adr"), { recursive: true });
+  mkdirSync(join(root, ".dkk", "adr"), { recursive: true });
   return root;
 }
 
@@ -151,7 +151,7 @@ function testValidModel() {
   });
 
   writeAdr(
-    join(root, ".domain-pack", "adr"),
+    join(root, ".dkk", "adr"),
     "0001-use-yaml.md",
     [
       "id: adr-0001",
@@ -216,7 +216,7 @@ function testBrokenDomainRefs() {
   writeYaml(join(root, "domain", "index.yml"), "contexts: []\n");
   writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
   writeAdr(
-    join(root, ".domain-pack", "adr"),
+    join(root, ".dkk", "adr"),
     "0001-test.md",
     [
       "id: adr-0001",
@@ -412,7 +412,7 @@ function testBrokenSupersededBy() {
   writeYaml(join(root, "domain", "index.yml"), "contexts: []\n");
   writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
   writeAdr(
-    join(root, ".domain-pack", "adr"),
+    join(root, ".dkk", "adr"),
     "0001-old.md",
     [
       "id: adr-0001",

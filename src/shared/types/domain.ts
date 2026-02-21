@@ -1,6 +1,6 @@
 /**
  * TypeScript interfaces for all domain item types.
- * These align with the JSON Schemas under tools/domain-pack/schema/.
+ * These align with the JSON Schemas under tools/dkk/schema/.
  */
 
 // ── Shared ────────────────────────────────────────────────────────────

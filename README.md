@@ -54,7 +54,7 @@ dkk search "order"
 
 ## Adding an ADR and Linking It
 
-1. Create a Markdown file in `.domain-pack/adr/` following the naming convention `adr-NNNN.md` (e.g. `adr-0002.md`):
+1. Create a Markdown file in `.dkk/adr/` following the naming convention `adr-NNNN.md` (e.g. `adr-0002.md`):
 
    ```markdown
    ---
@@ -241,7 +241,7 @@ domain/
   contexts/
     <name>.yml           # Bounded context definition
 
-.domain-pack/
+.dkk/
   adr/                   # Architecture Decision Records (Markdown + YAML frontmatter)
   docs/                  # Generated documentation (do not edit by hand)
 
@@ -274,7 +274,7 @@ src/
     tests/               #   Co-located unit tests
 
 tools/
-  domain-pack/
+  dkk/
     schema/              # JSON Schemas for domain YAML validation
     templates/           # Handlebars templates for doc generation
 

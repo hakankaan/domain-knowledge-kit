@@ -126,7 +126,7 @@ export function search(
   options: SearcherOptions = {},
 ): SearchResult[] {
   const root = options.root ?? repoRoot();
-  const dbPath = options.dbPath ?? join(root, ".domain-pack", "index.db");
+  const dbPath = options.dbPath ?? join(root, ".dkk", "index.db");
   const limit = options.limit ?? 20;
   const expandTopN = options.expandTopN ?? 5;
   const expandDepth = options.expandDepth ?? 1;

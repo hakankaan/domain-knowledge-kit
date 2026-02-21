@@ -1,11 +1,11 @@
 /**
  * Domain documentation renderer.
  *
- * Compiles Handlebars templates from `tools/domain-pack/templates/`
- * and renders Markdown documentation to `.domain-pack/docs/`.
+ * Compiles Handlebars templates from `tools/dkk/templates/`
+ * and renders Markdown documentation to `.dkk/docs/`.
  *
  * Output structure:
- *   .domain-pack/docs/
+ *   .dkk/docs/
  *     index.md                      ← top-level domain overview
  *     <context>/
  *       index.md                    ← per-context overview
@@ -273,9 +273,9 @@ function writeOutput(
  * Render the full domain model as Markdown documentation.
  *
  * 1. Compiles Handlebars templates
- * 2. Renders `.domain-pack/docs/index.md`
- * 3. For each bounded context renders `.domain-pack/docs/<ctx>/index.md`
- * 4. For each item in a context renders `.domain-pack/docs/<ctx>/<Item>.md`
+ * 2. Renders `.dkk/docs/index.md`
+ * 3. For each bounded context renders `.dkk/docs/<ctx>/index.md`
+ * 4. For each item in a context renders `.dkk/docs/<ctx>/<Item>.md`
  *
  * @returns A {@link RenderResult} with file count and paths.
  */

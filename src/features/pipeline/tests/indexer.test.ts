@@ -15,8 +15,8 @@ import { buildIndex } from "../indexer.js";
 const TMP = join(tmpdir(), `dkk-search-test-${Date.now()}`);
 const DOMAIN = join(TMP, "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
-const ADR_DIR = join(TMP, ".domain-pack", "adr");
-const DB_PATH = join(TMP, ".domain-pack", "index.db");
+const ADR_DIR = join(TMP, ".dkk", "adr");
+const DB_PATH = join(TMP, ".dkk", "index.db");
 
 function setup() {
   mkdirSync(join(CONTEXTS, "ordering", "events"), { recursive: true });

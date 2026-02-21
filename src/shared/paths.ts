@@ -41,24 +41,24 @@ export function indexFile(root?: string): string {
   return join(domainDir(root), "index.yml");
 }
 
-/** Absolute path to `.domain-pack/adr/`. */
+/** Absolute path to `.dkk/adr/`. */
 export function adrDir(root?: string): string {
-  return join(repoRoot(root), ".domain-pack", "adr");
+  return join(repoRoot(root), ".dkk", "adr");
 }
 
-/** Absolute path to `.domain-pack/docs/` (rendered output). */
+/** Absolute path to `.dkk/docs/` (rendered output). */
 export function docsDir(root?: string): string {
-  return join(repoRoot(root), ".domain-pack", "docs");
+  return join(repoRoot(root), ".dkk", "docs");
 }
 
-/** Absolute path to `tools/domain-pack/templates/`. */
+/** Absolute path to `tools/dkk/templates/`. */
 export function templatesDir(root?: string): string {
-  return join(repoRoot(root), "tools", "domain-pack", "templates");
+  return join(repoRoot(root), "tools", "dkk", "templates");
 }
 
-/** Absolute path to `tools/domain-pack/schema/`. */
+/** Absolute path to `tools/dkk/schema/`. */
 export function schemaDir(root?: string): string {
-  return join(repoRoot(root), "tools", "domain-pack", "schema");
+  return join(repoRoot(root), "tools", "dkk", "schema");
 }
 
 /**

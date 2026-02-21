@@ -8,8 +8,8 @@
   },
   "files": [
     "dist/",
-    "tools/domain-pack/schema/",
-    "tools/domain-pack/templates/",
+    "tools/dkk/schema/",
+    "tools/dkk/templates/",
     "LICENSE",
     "README.md"
   ],

@@ -40,7 +40,7 @@ function assertContains(label: string, content: string, expected: string): void 
 const TMP = join(tmpdir(), `dkk-renderer-test-${Date.now()}`);
 const OUT_DIR = join(TMP, "output");
 const TPL_DIR = join(TMP, "templates");
-const REAL_TPL_DIR = join(import.meta.dirname, "../../../..", "tools", "domain-pack", "templates");
+const REAL_TPL_DIR = join(import.meta.dirname, "../../../..", "tools", "dkk", "templates");
 
 function buildModel(): DomainModel {
   const index: DomainIndex = {

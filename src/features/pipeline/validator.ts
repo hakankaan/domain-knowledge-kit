@@ -60,7 +60,7 @@ export interface ValidationResult {
 export interface ValidatorOptions {
   /**
    * Absolute path to the schema directory.
-   * Defaults to `<repoRoot>/tools/domain-pack/schema`.
+   * Defaults to `<repoRoot>/tools/dkk/schema`.
    */
   schemaDir?: string;
 
@@ -414,7 +414,7 @@ function validateCrossRefs(
  * Works both from source (`src/core/`) and compiled (`dist/core/`).
  */
 function defaultSchemaDir(): string {
-  return join(import.meta.dirname, "../../../tools/domain-pack/schema");
+  return join(import.meta.dirname, "../../../tools/dkk/schema");
 }
 
 /**

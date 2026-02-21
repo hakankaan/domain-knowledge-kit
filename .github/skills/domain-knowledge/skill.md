@@ -15,7 +15,7 @@ The domain model is stored as YAML files on disk:
 | `domain/index.yml` | Registered bounded contexts and cross-context flows |
 | `domain/actors.yml` | Global actors (human, system, external) |
 | `domain/contexts/<name>.yml` | Bounded context: events, commands, policies, aggregates, read models, glossary |
-| `.domain-pack/adr/adr-NNNN.md` | Architecture Decision Records with YAML frontmatter linking to domain items |
+| `.dkk/adr/adr-NNNN.md` | Architecture Decision Records with YAML frontmatter linking to domain items |
 
 ### Item Types
 
@@ -56,7 +56,7 @@ When modifying the domain model:
 
 1. **Edit YAML files directly** — never generate domain items from application code.
 2. **Maintain referential integrity:**
-   - `adr_refs` must point to existing ADRs in `.domain-pack/adr/`.
+   - `adr_refs` must point to existing ADRs in `.dkk/adr/`.
    - `domain_refs` in ADR frontmatter must point to existing domain items.
    - Cross-references (`handles`, `emits`, `triggers`, `subscribes_to`, `used_by`, `raised_by`, `handled_by`, `actor`) must resolve within the same context or to global actors.
 3. **Follow naming conventions:**
@@ -73,16 +73,16 @@ When modifying the domain model:
 ## Validation
 
 The validator checks:
-- **Schema conformance** — Each YAML file is validated against its JSON Schema (`tools/domain-pack/schema/`).
+- **Schema conformance** — Each YAML file is validated against its JSON Schema (`tools/dkk/schema/`).
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
 - **Context registration** — Every context file in `domain/contexts/` is registered in `domain/index.yml`.
 
 ## Generated Documentation
 
 Running `npx tsx src/cli.ts render` produces:
-- `.domain-pack/docs/index.md` — Top-level domain overview.
-- `.domain-pack/docs/<context>/index.md` — Per-context overview.
-- `.domain-pack/docs/<context>/<ItemName>.md` — Per-item detail page.
+- `.dkk/docs/index.md` — Top-level domain overview.
+- `.dkk/docs/<context>/index.md` — Per-context overview.
+- `.dkk/docs/<context>/<ItemName>.md` — Per-item detail page.
 - SQLite FTS5 search index for the `search` command.
 
-Do not edit files under `.domain-pack/docs/` by hand; they are regenerated on each render.
+Do not edit files under `.dkk/docs/` by hand; they are regenerated on each render.

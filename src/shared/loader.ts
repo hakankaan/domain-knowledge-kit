@@ -1,7 +1,7 @@
 /**
  * Domain model loader.
  *
- * Recursively walks `domain/` and `.domain-pack/adr/` to discover all YAML
+ * Recursively walks `domain/` and `.dkk/adr/` to discover all YAML
  * definition files and ADR Markdown files, then assembles and returns
  * a fully-typed {@link DomainModel}.
  *
@@ -155,7 +155,7 @@ export interface LoaderOptions {
  * 2. Parses `domain/actors.yml`
  * 3. Discovers and parses every bounded-context YAML file
  *    under `domain/contexts/`
- * 4. Discovers and parses ADR frontmatter from `.domain-pack/adr/*.md`
+ * 4. Discovers and parses ADR frontmatter from `.dkk/adr/*.md`
  *
  * @returns A fully-populated {@link DomainModel}.
  */

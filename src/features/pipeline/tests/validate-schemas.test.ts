@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const Ajv = require("ajv").default as typeof import("ajv").default;
 const addFormats = require("ajv-formats").default as typeof import("ajv-formats").default;
 
-const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/domain-pack/schema");
+const SCHEMA_DIR = join(import.meta.dirname, "../../../../tools/dkk/schema");
 const files = readdirSync(SCHEMA_DIR).filter((f) => f.endsWith(".schema.json"));
 
 // ---- Load all schemas into ajv ----

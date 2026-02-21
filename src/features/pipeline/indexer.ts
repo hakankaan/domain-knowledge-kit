@@ -1,7 +1,7 @@
 /**
  * SQLite FTS5 indexer for domain items.
  *
- * Creates / rebuilds an SQLite database at `.domain-pack/index.db`
+ * Creates / rebuilds an SQLite database at `.dkk/index.db`
  * with an FTS5 virtual table `domain_fts` for full-text search across
  * all items in the loaded {@link DomainModel}.
  *
@@ -49,7 +49,7 @@ export interface IndexRow {
 export interface IndexerOptions {
   /** Override repository root. */
   root?: string;
-  /** Override output path (default: `<root>/.domain-pack/index.db`). */
+  /** Override output path (default: `<root>/.dkk/index.db`). */
   dbPath?: string;
 }
 
@@ -77,7 +77,7 @@ function fieldsText(fields?: { name: string; type: string; description?: string 
  */
 export function buildIndex(model: DomainModel, options: IndexerOptions = {}): string {
   const root = options.root ?? repoRoot();
-  const dbPath = options.dbPath ?? join(root, ".domain-pack", "index.db");
+  const dbPath = options.dbPath ?? join(root, ".dkk", "index.db");
 
   // Ensure the parent directory exists.
   const dir = dirname(dbPath);

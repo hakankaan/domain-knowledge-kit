@@ -15,7 +15,7 @@ import { DomainGraph } from "../graph.js";
 const TMP = join(tmpdir(), `dkk-graph-test-${Date.now()}`);
 const DOMAIN = join(TMP, "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
-const ADR_DIR = join(TMP, ".domain-pack", "adr");
+const ADR_DIR = join(TMP, ".dkk", "adr");
 
 function setup() {
   mkdirSync(join(CONTEXTS, "ordering", "events"), { recursive: true });
