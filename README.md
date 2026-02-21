@@ -159,6 +159,18 @@ Validate → render Handlebars Markdown docs → rebuild FTS5 SQLite search inde
 | `--json` | — | Output as JSON |
 | `-r, --root <path>` | repo root | Override repository root |
 
+### `init`
+
+Create or update `AGENTS.md` with a DKK onboarding section. The section is delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers, making the operation idempotent — re-running replaces the section in place.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `prime`
+
+Output comprehensive DKK agent context to stdout. Designed for AI agent consumption — covers project overview, core principles, domain structure, retrieval workflow, change workflow, ID conventions, CLI reference, and file conventions.
+
 ### `adr show <id>`
 
 Display ADR frontmatter as YAML.
@@ -186,7 +198,19 @@ Show bidirectional ADR ↔ domain links. Given an ADR id, lists domain items tha
 | Flow         | `flow.<Name>`              | `flow.OrderFulfillment`  |
 | Context      | `context.<name>`           | `context.ordering`       |
 
-## Copilot Integration
+## Agent Onboarding
+
+Domain Knowledge Kit includes built-in support for AI agent onboarding:
+
+```bash
+# Add a DKK section to AGENTS.md (idempotent)
+dkk init
+
+# Output full agent context to stdout
+dkk prime
+```
+
+`dkk init` creates or updates `AGENTS.md` with a delimited section pointing agents to `dkk prime`. `dkk prime` outputs a comprehensive context document covering the domain model structure, CLI commands, and workflows.
 
 [.github/copilot-instructions.md](.github/copilot-instructions.md) configures GitHub Copilot to understand the domain model structure and use domain-first retrieval (search → show → related → adr related).
 
@@ -229,6 +253,8 @@ src/
       searcher.ts        #   FTS5 search logic
       tests/             #   Co-located unit tests
     adr/                 # ADR show & related commands
+      commands/          #   CLI command handlers
+    agent/               # Agent onboarding (init, prime)
       commands/          #   CLI command handlers
     pipeline/            # Validate, render, index pipeline
       commands/          #   CLI command handlers
