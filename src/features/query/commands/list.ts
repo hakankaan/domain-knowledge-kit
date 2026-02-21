@@ -6,7 +6,6 @@
  */
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
-import type { DomainContext, Actor } from "../../../shared/types/domain.js";
 import { forEachItem, itemDescription } from "../../../shared/item-visitor.js";
 
 /** A row in the list output table. */

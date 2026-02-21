@@ -17,9 +17,6 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type {
   DomainModel,
-  DomainContext,
-  AdrRecord,
-  Actor,
   DomainEvent,
   Command,
   Policy,
@@ -27,7 +24,7 @@ import type {
   ReadModel,
 } from "../../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
-import type { ItemType, AnyDomainItem } from "../../shared/item-visitor.js";
+import type { ItemType } from "../../shared/item-visitor.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
 // under both tsc (Node16 resolution) and tsx (ESM runtime).

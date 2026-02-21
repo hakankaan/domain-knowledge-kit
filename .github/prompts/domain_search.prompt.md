@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: agent
 description: Search the domain model for relevant items, returning IDs, excerpts, and linked ADRs.
 ---
 

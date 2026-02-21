@@ -83,6 +83,8 @@ export interface DomainEvent {
   raised_by?: string;
   /** Given/when/then usage scenarios. */
   examples?: Example[];
+  /** Business invariants / rules that must hold when this event is raised. */
+  invariants?: string[];
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }

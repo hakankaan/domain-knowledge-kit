@@ -4,7 +4,7 @@
  * Builds a DomainModel in a temp directory, indexes it, then runs
  * search queries and verifies results.
  */
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadDomainModel } from "../../../shared/loader.js";
@@ -234,7 +234,7 @@ try {
   const graph = DomainGraph.from(model);
 
   // Build index (setup for search tests)
-  const dbPath = buildIndex(model, { root: TMP, dbPath: DB_PATH });
+  buildIndex(model, { root: TMP, dbPath: DB_PATH });
 
   // ── Basic FTS search ──────────────────────────────────────────────
 

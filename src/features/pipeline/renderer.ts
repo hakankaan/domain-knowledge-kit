@@ -23,7 +23,6 @@ import type {
   Example,
 } from "../../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
-import type { AnyDomainItem } from "../../shared/item-visitor.js";
 import { docsDir, templatesDir } from "../../shared/paths.js";
 
 // ── Types ─────────────────────────────────────────────────────────────

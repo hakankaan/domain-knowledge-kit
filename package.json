@@ -15,6 +15,10 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check": "npm run typecheck && npm run lint",
     "test": "tsx src/features/pipeline/tests/validate-schemas.test.ts && tsx src/shared/tests/loader.test.ts && tsx src/features/pipeline/tests/validator.test.ts && tsx src/shared/tests/graph.test.ts && tsx src/features/pipeline/tests/indexer.test.ts && tsx src/features/query/tests/searcher.test.ts && tsx src/features/pipeline/tests/renderer.test.ts && tsx src/shared/tests/verify-collision-fix.test.ts && tsx test/cli-integration.ts"
   },
   "engines": {
@@ -25,8 +29,10 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
+    "eslint": "^10.0.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.56.0"
   },
   "dependencies": {
     "ajv": "^8.12.0",

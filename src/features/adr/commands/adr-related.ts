@@ -11,7 +11,7 @@
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
 import type { AdrRef, DomainModel } from "../../../shared/types/domain.js";
-import { forEachItem, itemAdrRefs, itemName } from "../../../shared/item-visitor.js";
+import { forEachItem, itemAdrRefs } from "../../../shared/item-visitor.js";
 
 /** Collect domain item IDs that reference a specific ADR. */
 function domainItemsReferencingAdr(model: DomainModel, adrId: AdrRef): string[] {

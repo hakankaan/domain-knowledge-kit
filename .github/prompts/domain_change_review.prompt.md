@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: agent
 description: Review a change summary to identify impacted domain items, invariants, and ADRs.
 ---
 

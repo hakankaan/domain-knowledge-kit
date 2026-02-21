@@ -1,5 +1,5 @@
 ---
-mode: agent
+agent: agent
 description: Apply a domain model change — generate YAML patches, suggest ADR updates, and run quality gates.
 ---
 

@@ -8,7 +8,6 @@
 import type {
   AdrRef,
   DomainRef,
-  FlowStepType,
 } from "./domain.js";
 
 /** The kind of domain item stored in a search index record. */
