@@ -993,6 +993,152 @@ try {
     assert("new --help lists adr", result.stdout.includes("adr"));
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // 19. add — scaffold individual domain items
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== add event: creates event YAML file ===");
+  {
+    const root = makeValidDomain("add-event");
+    tempRoots.push(root);
+    const result = run(["add", "event", "OrderShipped", "--context", "ordering", "--description", "Raised when order ships"], { root });
+    assert("add event exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "events", "OrderShipped.yml");
+    assert("add event creates file", existsSync(filePath));
+    const content = readFileSync(filePath, "utf-8");
+    assert("add event has name", content.includes("name: OrderShipped"));
+    assert("add event has description", content.includes("description: Raised when order ships"));
+  }
+
+  console.log("\n=== add command: creates command YAML file ===");
+  {
+    const root = makeValidDomain("add-command");
+    tempRoots.push(root);
+    const result = run(["add", "command", "CancelOrder", "--context", "ordering", "--description", "Cancel an existing order"], { root });
+    assert("add command exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "commands", "CancelOrder.yml");
+    assert("add command creates file", existsSync(filePath));
+    const content = readFileSync(filePath, "utf-8");
+    assert("add command has name", content.includes("name: CancelOrder"));
+    assert("add command has description", content.includes("description: Cancel an existing order"));
+  }
+
+  console.log("\n=== add aggregate: creates aggregate YAML file ===");
+  {
+    const root = makeValidDomain("add-aggregate");
+    tempRoots.push(root);
+    const result = run(["add", "aggregate", "Shipment", "--context", "ordering", "--description", "Shipment aggregate root"], { root });
+    assert("add aggregate exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "aggregates", "Shipment.yml");
+    assert("add aggregate creates file", existsSync(filePath));
+    const content = readFileSync(filePath, "utf-8");
+    assert("add aggregate has name", content.includes("name: Shipment"));
+    assert("add aggregate has handles", content.includes("handles:"));
+    assert("add aggregate has emits", content.includes("emits:"));
+  }
+
+  console.log("\n=== add policy: creates policy YAML file ===");
+  {
+    const root = makeValidDomain("add-policy");
+    tempRoots.push(root);
+    const result = run(["add", "policy", "SendShipmentNotice", "--context", "ordering", "--description", "Notify on shipment"], { root });
+    assert("add policy exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "policies", "SendShipmentNotice.yml");
+    assert("add policy creates file", existsSync(filePath));
+    const content = readFileSync(filePath, "utf-8");
+    assert("add policy has name", content.includes("name: SendShipmentNotice"));
+  }
+
+  console.log("\n=== add read-model: creates read-model YAML file ===");
+  {
+    const root = makeValidDomain("add-readmodel");
+    tempRoots.push(root);
+    const result = run(["add", "read-model", "OrderSummary", "--context", "ordering", "--description", "Summary view of orders"], { root });
+    assert("add read-model exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "read-models", "OrderSummary.yml");
+    assert("add read-model creates file", existsSync(filePath));
+    const content = readFileSync(filePath, "utf-8");
+    assert("add read-model has name", content.includes("name: OrderSummary"));
+  }
+
+  console.log("\n=== add glossary: appends entry to context.yml ===");
+  {
+    const root = makeValidDomain("add-glossary");
+    tempRoots.push(root);
+    const result = run(["add", "glossary", "Fulfillment", "--context", "ordering", "--description", "Process of completing an order"], { root });
+    assert("add glossary exits 0", result.exitCode === 0);
+    const contextYml = readFileSync(join(root, ".dkk", "domain", "contexts", "ordering", "context.yml"), "utf-8");
+    assert("add glossary has term", contextYml.includes("Fulfillment"));
+    assert("add glossary has definition", contextYml.includes("Process of completing an order"));
+  }
+
+  console.log("\n=== add: errors when context does not exist ===");
+  {
+    const root = makeValidDomain("add-no-context");
+    tempRoots.push(root);
+    const result = run(["add", "event", "SomeEvent", "--context", "nonexistent"], { root });
+    assert("add missing context exits 1", result.exitCode === 1);
+    assert("add missing context has error", result.stderr.includes("does not exist"));
+  }
+
+  console.log("\n=== add: errors when item already exists ===");
+  {
+    const root = makeValidDomain("add-duplicate");
+    tempRoots.push(root);
+    // OrderPlaced already exists in the valid domain
+    const result = run(["add", "event", "OrderPlaced", "--context", "ordering"], { root });
+    assert("add duplicate exits 1", result.exitCode === 1);
+    assert("add duplicate has error", result.stderr.includes("already exists"));
+  }
+
+  console.log("\n=== add: errors on invalid item type ===");
+  {
+    const root = makeValidDomain("add-bad-type");
+    tempRoots.push(root);
+    const result = run(["add", "widget", "Foo", "--context", "ordering"], { root });
+    assert("add bad type exits 1", result.exitCode === 1);
+    assert("add bad type has error", result.stderr.includes("Unknown item type"));
+  }
+
+  console.log("\n=== add: errors on invalid name ===");
+  {
+    const root = makeValidDomain("add-bad-name");
+    tempRoots.push(root);
+    const result = run(["add", "event", "order-placed", "--context", "ordering"], { root });
+    assert("add bad name exits 1", result.exitCode === 1);
+    assert("add bad name has error", result.stderr.includes("invalid"));
+  }
+
+  console.log("\n=== add: default description when --description omitted ===");
+  {
+    const root = makeValidDomain("add-default-desc");
+    tempRoots.push(root);
+    const result = run(["add", "event", "OrderCancelled", "--context", "ordering"], { root });
+    assert("add default desc exits 0", result.exitCode === 0);
+    const filePath = join(root, ".dkk", "domain", "contexts", "ordering", "events", "OrderCancelled.yml");
+    const content = readFileSync(filePath, "utf-8");
+    assert("add default desc has TODO", content.includes("TODO: describe OrderCancelled"));
+  }
+
+  console.log("\n=== add: glossary duplicate errors ===");
+  {
+    const root = makeValidDomain("add-glossary-dup");
+    tempRoots.push(root);
+    // SKU already exists in the valid domain glossary
+    const result = run(["add", "glossary", "SKU", "--context", "ordering"], { root });
+    assert("add glossary dup exits 1", result.exitCode === 1);
+    assert("add glossary dup has error", result.stderr.includes("already exists"));
+  }
+
+  console.log("\n=== add: creates type subdirectory if missing ===");
+  {
+    const root = makeValidDomain("add-creates-dir");
+    tempRoots.push(root);
+    // read-models directory might not exist in valid domain; let's add a read-model
+    const result = run(["add", "read-model", "InventoryView", "--context", "ordering"], { root });
+    assert("add creates dir exits 0", result.exitCode === 0);
+    assert("add creates dir file exists", existsSync(join(root, ".dkk", "domain", "contexts", "ordering", "read-models", "InventoryView.yml")));
+  }
+
 } finally {
   cleanup();
 }

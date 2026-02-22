@@ -13,6 +13,7 @@ import { registerPrime } from "./features/agent/commands/prime.js";
 import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
 import { registerNewContext } from "./features/scaffold/commands/new-context.js";
 import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
+import { registerAddItem } from "./features/scaffold/commands/add-item.js";
 import { formatCliError } from "./shared/errors.js";
 
 /** Whether to show full stack traces (set DEBUG=1 in env). */
@@ -53,6 +54,9 @@ const newCmd = program
 registerNewDomain(newCmd);
 registerNewContext(newCmd);
 registerNewAdr(newCmd);
+
+// Top-level "add" command for individual domain items
+registerAddItem(program);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(`Error: ${formatCliError(err)}`);
