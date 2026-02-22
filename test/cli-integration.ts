@@ -8,7 +8,7 @@
  * Uses temporary directories with the --root flag to isolate each test.
  */
 import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
-import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -715,7 +715,92 @@ try {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 13. Smoke test: all commands registered in --help output
+  // 13. cwd-based path resolution (no --root flag)
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== cwd resolution: validate works from project cwd without --root ===");
+  {
+    const root = makeValidDomain("cwd-validate");
+    tempRoots.push(root);
+    // Run CLI with cwd set to the temp root, NO --root flag
+    const execOpts: ExecFileSyncOptions = {
+      encoding: "utf-8",
+      timeout: 30_000,
+      cwd: root,
+      env: { ...process.env, NO_COLOR: "1" },
+    };
+    let result: RunResult;
+    try {
+      const stdout = execFileSync(TSX, [...TSX_ARGS, "validate"], {
+        ...execOpts,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as unknown as string;
+      result = { stdout, stderr: "", exitCode: 0 };
+    } catch (err: unknown) {
+      const e = err as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
+      result = { stdout: String(e.stdout ?? ""), stderr: String(e.stderr ?? ""), exitCode: e.status ?? 1 };
+    }
+    assert("cwd validate exits 0", result.exitCode === 0);
+    assert("cwd validate stdout mentions passed", result.stdout.includes("Validation passed"));
+  }
+
+  console.log("\n=== cwd resolution: list works from project cwd without --root ===");
+  {
+    const root = makeValidDomain("cwd-list");
+    tempRoots.push(root);
+    const execOpts: ExecFileSyncOptions = {
+      encoding: "utf-8",
+      timeout: 30_000,
+      cwd: root,
+      env: { ...process.env, NO_COLOR: "1" },
+    };
+    let result: RunResult;
+    try {
+      const stdout = execFileSync(TSX, [...TSX_ARGS, "list"], {
+        ...execOpts,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as unknown as string;
+      result = { stdout, stderr: "", exitCode: 0 };
+    } catch (err: unknown) {
+      const e = err as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
+      result = { stdout: String(e.stdout ?? ""), stderr: String(e.stderr ?? ""), exitCode: e.status ?? 1 };
+    }
+    assert("cwd list exits 0", result.exitCode === 0);
+    assert("cwd list shows OrderPlaced", result.stdout.includes("OrderPlaced"));
+    assert("cwd list shows Customer", result.stdout.includes("Customer"));
+  }
+
+  console.log("\n=== cwd resolution: render works from project cwd without --root ===");
+  {
+    const root = makeValidDomain("cwd-render");
+    tempRoots.push(root);
+    const execOpts: ExecFileSyncOptions = {
+      encoding: "utf-8",
+      timeout: 30_000,
+      cwd: root,
+      env: { ...process.env, NO_COLOR: "1" },
+    };
+    let result: RunResult;
+    try {
+      const stdout = execFileSync(TSX, [...TSX_ARGS, "render"], {
+        ...execOpts,
+        stdio: ["pipe", "pipe", "pipe"],
+      }) as unknown as string;
+      result = { stdout, stderr: "", exitCode: 0 };
+    } catch (err: unknown) {
+      const e = err as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
+      result = { stdout: String(e.stdout ?? ""), stderr: String(e.stderr ?? ""), exitCode: e.status ?? 1 };
+    }
+    assert("cwd render exits 0", result.exitCode === 0);
+    // Verify docs were written into the cwd-based root
+    const docsExist = existsSync(join(root, ".dkk", "docs", "index.md"));
+    assert("cwd render creates docs in project dir", docsExist);
+    // Verify search index was written into the cwd-based root
+    const indexExists = existsSync(join(root, ".dkk", "index.db"));
+    assert("cwd render creates search index in project dir", indexExists);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 14. Smoke test: all commands registered in --help output
   // ═══════════════════════════════════════════════════════════════════
   console.log("\n=== smoke: all commands registered in --help ===");
   {

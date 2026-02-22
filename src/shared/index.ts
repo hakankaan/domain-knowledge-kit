@@ -30,6 +30,7 @@ export { DomainGraph, type NodeKind, type GraphNode, type GraphEdge } from "./gr
 // ── Path helpers ──────────────────────────────────────────────────────
 export {
   repoRoot,
+  packageRoot,
   domainDir,
   contextsDir,
   actorsFile,

@@ -284,7 +284,7 @@ export function renderDocs(
   options: RendererOptions = {},
 ): RenderResult {
   const outDir = options.outputDir ?? docsDir(options.root);
-  const tplDir = options.templateDir ?? templatesDir(options.root);
+  const tplDir = options.templateDir ?? templatesDir();
   const written: string[] = [];
 
   // Register helpers and compile templates
