@@ -30,7 +30,13 @@ After setup, your project will have this layout:
     index.yml              # Registered contexts + cross-context flows
     actors.yml             # Global actors (human | system | external)
     contexts/
-      <name>.yml           # One file per bounded context
+      <name>/              # One directory per bounded context
+        context.yml        #   Context metadata (name, description, glossary)
+        events/            #   One .yml file per domain event
+        commands/          #   One .yml file per command
+        aggregates/        #   One .yml file per aggregate
+        policies/          #   One .yml file per policy
+        read-models/       #   One .yml file per read model
   adr/                     # Architecture Decision Records
   docs/                    # Generated documentation (do not edit)
 
@@ -42,18 +48,20 @@ tools/
 
 ## Step 1: Create a Bounded Context
 
-Create a new YAML file at `.dkk/domain/contexts/<name>.yml`. Here's a minimal example for an `ordering` context:
+Each bounded context is a directory under `.dkk/domain/contexts/`. Create the context directory and its metadata file:
+
+```bash
+mkdir -p .dkk/domain/contexts/ordering
+```
+
+Create `.dkk/domain/contexts/ordering/context.yml`:
 
 ```yaml
 name: ordering
 description: Handles customer order lifecycle.
-events: []
-commands: []
-policies: []
-aggregates: []
-read_models: []
-glossary: []
 ```
+
+The `context.yml` file contains only the context metadata (name, description, and optional glossary). Domain items go in typed subdirectories.
 
 ## Step 2: Register the Context
 
@@ -68,60 +76,82 @@ flows: []
 
 ## Step 3: Add Domain Items
 
-Now populate your context with events, commands, aggregates, and more. Here's an expanded example:
+Each domain item is a separate YAML file in a typed subdirectory. Create the subdirectories and add items:
+
+```bash
+mkdir -p .dkk/domain/contexts/ordering/{events,commands,aggregates,policies,read-models}
+```
+
+**Add a glossary** — update `.dkk/domain/contexts/ordering/context.yml`:
 
 ```yaml
 name: ordering
 description: Handles customer order lifecycle.
-
 glossary:
   - term: Order
     definition: A customer's request to purchase items.
+```
 
-events:
-  - name: OrderPlaced
-    description: Raised when a customer order is confirmed.
-    fields:
-      - name: orderId
-        type: UUID
-      - name: customerId
-        type: UUID
-    raised_by: Order
+**Add an event** — create `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`:
 
-commands:
-  - name: PlaceOrder
-    description: Submit a new customer order.
-    fields:
-      - name: items
-        type: "OrderItem[]"
-    actor: Customer
-    handled_by: Order
+```yaml
+name: OrderPlaced
+description: Raised when a customer order is confirmed.
+fields:
+  - name: orderId
+    type: UUID
+  - name: customerId
+    type: UUID
+raised_by: Order
+```
 
-policies:
-  - name: SendConfirmationEmail
-    description: Sends email when order is placed.
-    when:
-      events:
-        - OrderPlaced
-    then:
-      commands:
-        - NotifyCustomer
+**Add a command** — create `.dkk/domain/contexts/ordering/commands/PlaceOrder.yml`:
 
-aggregates:
-  - name: Order
-    description: Manages order state and invariants.
-    handles:
-      - PlaceOrder
-    emits:
-      - OrderPlaced
+```yaml
+name: PlaceOrder
+description: Submit a new customer order.
+fields:
+  - name: items
+    type: "OrderItem[]"
+actor: Customer
+handled_by: Order
+```
 
-read_models:
-  - name: OrderSummary
-    description: Read-optimized view of order details.
-    subscribes_to:
-      - OrderPlaced
-    used_by:
-      - Customer
+**Add a policy** — create `.dkk/domain/contexts/ordering/policies/SendConfirmationEmail.yml`:
+
+```yaml
+name: SendConfirmationEmail
+description: Sends email when order is placed.
+when:
+  events:
+    - OrderPlaced
+then:
+  commands:
+    - NotifyCustomer
+```
+
+**Add an aggregate** — create `.dkk/domain/contexts/ordering/aggregates/Order.yml`:
+
+```yaml
+name: Order
+description: Manages order state and invariants.
+handles:
+  commands:
+    - PlaceOrder
+emits:
+  events:
+    - OrderPlaced
+```
+
+**Add a read model** — create `.dkk/domain/contexts/ordering/read-models/OrderSummary.yml`:
+
+```yaml
+name: OrderSummary
+description: Read-optimized view of order details.
+subscribes_to:
+  - OrderPlaced
+used_by:
+  - Customer
 ```
 
 ## Step 4: Add Actors
@@ -198,14 +228,14 @@ Adopt event sourcing for the ordering aggregate...
 - Increased storage requirements
 ```
 
-Then link back from domain items by adding `adr_refs`:
+Then link back from domain items by adding `adr_refs` to the item file (e.g. `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`):
 
 ```yaml
-events:
-  - name: OrderPlaced
-    description: Raised when a customer order is confirmed.
-    adr_refs:
-      - adr-0001
+name: OrderPlaced
+description: Raised when a customer order is confirmed.
+raised_by: Order
+adr_refs:
+  - adr-0001
 ```
 
 Run `dkk validate` and `dkk render` to verify the bidirectional links.

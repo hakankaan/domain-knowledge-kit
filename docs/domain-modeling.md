@@ -16,20 +16,21 @@ Your domain model is organized into **bounded contexts** — self-contained area
 
 An **event** records something that happened in the domain — a fact that cannot be undone.
 
+File: `.dkk/domain/contexts/<context>/events/OrderPlaced.yml`
+
 ```yaml
-events:
-  - name: OrderPlaced
-    description: Raised when a customer order is confirmed.
-    fields:
-      - name: orderId
-        type: UUID
-      - name: customerId
-        type: UUID
-      - name: totalAmount
-        type: Money
-    raised_by: Order        # Which aggregate produces this event
-    adr_refs:
-      - adr-0001            # Link to relevant ADRs
+name: OrderPlaced
+description: Raised when a customer order is confirmed.
+fields:
+  - name: orderId
+    type: UUID
+  - name: customerId
+    type: UUID
+  - name: totalAmount
+    type: Money
+raised_by: Order        # Which aggregate produces this event
+adr_refs:
+  - adr-0001            # Link to relevant ADRs
 ```
 
 | Field | Required | Description |
@@ -44,18 +45,18 @@ events:
 
 A **command** is an instruction to change domain state — a request that may succeed or fail.
 
+File: `.dkk/domain/contexts/<context>/commands/PlaceOrder.yml`
+
 ```yaml
-commands:
-  - name: PlaceOrder
-    description: Submit a new customer order.
-    fields:
-      - name: items
-        type: "OrderItem[]"
-      - name: shippingAddress
-        type: Address
-    actor: Customer          # Who initiates this command
-    handled_by: Order        # Which aggregate processes it
-    adr_refs: []
+name: PlaceOrder
+description: Submit a new customer order.
+fields:
+  - name: items
+    type: "OrderItem[]"
+  - name: shippingAddress
+    type: Address
+actor: Customer          # Who initiates this command
+handled_by: Order        # Which aggregate processes it
 ```
 
 | Field | Required | Description |
@@ -71,43 +72,47 @@ commands:
 
 An **aggregate** is a consistency boundary — a cluster of domain objects treated as a unit for state changes.
 
+File: `.dkk/domain/contexts/<context>/aggregates/Order.yml`
+
 ```yaml
-aggregates:
-  - name: Order
-    description: Manages order state and invariants.
-    handles:
-      - PlaceOrder
-      - CancelOrder
-    emits:
-      - OrderPlaced
-      - OrderCancelled
-    adr_refs:
-      - adr-0001
+name: Order
+description: Manages order state and invariants.
+handles:
+  commands:
+    - PlaceOrder
+    - CancelOrder
+emits:
+  events:
+    - OrderPlaced
+    - OrderCancelled
+adr_refs:
+  - adr-0001
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | PascalCase noun (e.g. `Order`, `Account`) |
 | `description` | Yes | What this aggregate manages |
-| `handles` | No | Commands this aggregate processes |
-| `emits` | No | Events this aggregate produces |
+| `handles.commands` | No | Commands this aggregate processes |
+| `emits.events` | No | Events this aggregate produces |
+| `invariants` | No | Business invariants enforced by this aggregate |
 | `adr_refs` | No | List of ADR IDs |
 
 ### Policies
 
 A **policy** is reactive logic — "when X happens, do Y." Policies listen for events and trigger commands.
 
+File: `.dkk/domain/contexts/<context>/policies/SendConfirmationEmail.yml`
+
 ```yaml
-policies:
-  - name: SendConfirmationEmail
-    description: Sends email when order is placed.
-    when:
-      events:
-        - OrderPlaced
-    then:
-      commands:
-        - NotifyCustomer
-    adr_refs: []
+name: SendConfirmationEmail
+description: Sends email when order is placed.
+when:
+  events:
+    - OrderPlaced
+then:
+  commands:
+    - NotifyCustomer
 ```
 
 | Field | Required | Description |
@@ -122,17 +127,17 @@ policies:
 
 A **read model** is a query-optimized projection built from events — used for displaying data without going through aggregates.
 
+File: `.dkk/domain/contexts/<context>/read-models/OrderSummary.yml`
+
 ```yaml
-read_models:
-  - name: OrderSummary
-    description: Read-optimized view of order details.
-    subscribes_to:
-      - OrderPlaced
-      - OrderCancelled
-    used_by:
-      - Customer
-      - SupportAgent
-    adr_refs: []
+name: OrderSummary
+description: Read-optimized view of order details.
+subscribes_to:
+  - OrderPlaced
+  - OrderCancelled
+used_by:
+  - Customer
+  - SupportAgent
 ```
 
 | Field | Required | Description |
@@ -145,16 +150,19 @@ read_models:
 
 ### Glossary Terms
 
-**Glossary** terms define the ubiquitous language of your bounded context — ensuring everyone uses the same words to mean the same things.
+**Glossary** terms define the ubiquitous language of your bounded context — ensuring everyone uses the same words to mean the same things. Glossary entries are defined in `context.yml`.
+
+File: `.dkk/domain/contexts/<context>/context.yml` (glossary section)
 
 ```yaml
+name: ordering
+description: Handles customer order lifecycle.
 glossary:
   - term: Order
     definition: A customer's request to purchase one or more items.
     aliases:
       - Purchase
       - Transaction
-    adr_refs: []
 ```
 
 | Field | Required | Description |
@@ -218,8 +226,8 @@ Domain items connect to each other through explicit references. These references
 | `raised_by` | Events | Aggregate name (same context) |
 | `handled_by` | Commands | Aggregate name (same context) |
 | `actor` | Commands | Actor name (from `actors.yml`) |
-| `handles` | Aggregates | Command names (same context) |
-| `emits` | Aggregates | Event names (same context) |
+| `handles.commands` | Aggregates | Command names (same context) |
+| `emits.events` | Aggregates | Event names (same context) |
 | `when.events` | Policies | Event names (same context) |
 | `then.commands` | Policies | Command names (same context) |
 | `subscribes_to` | Read Models | Event names (same context) |
@@ -267,7 +275,7 @@ Every domain item has a unique ID used for lookups, cross-references, and CLI co
 | Item names | PascalCase | `OrderPlaced`, `PlaceOrder`, `Order` |
 | Context names | kebab-case | `ordering`, `inventory-management` |
 | ADR IDs | `adr-NNNN` (zero-padded) | `adr-0001`, `adr-0042` |
-| YAML files | `.yml` extension | `ordering.yml`, `actors.yml` |
+| YAML files | `.yml` extension | `context.yml`, `OrderPlaced.yml`, `actors.yml` |
 
 ## File Layout
 
@@ -275,7 +283,12 @@ Every domain item has a unique ID used for lookups, cross-references, and CLI co
 |------|---------|
 | `.dkk/domain/index.yml` | Register bounded contexts and define cross-context flows |
 | `.dkk/domain/actors.yml` | Define global actors |
-| `.dkk/domain/contexts/<name>.yml` | Define a bounded context with all its items |
+| `.dkk/domain/contexts/<name>/context.yml` | Context metadata (name, description, glossary) |
+| `.dkk/domain/contexts/<name>/events/*.yml` | One file per domain event |
+| `.dkk/domain/contexts/<name>/commands/*.yml` | One file per command |
+| `.dkk/domain/contexts/<name>/aggregates/*.yml` | One file per aggregate |
+| `.dkk/domain/contexts/<name>/policies/*.yml` | One file per policy |
+| `.dkk/domain/contexts/<name>/read-models/*.yml` | One file per read model |
 | `.dkk/adr/adr-NNNN.md` | Architecture Decision Records |
 | `.dkk/docs/` | Generated documentation (do not edit) |
 | `tools/dkk/schema/` | JSON Schemas for YAML validation |

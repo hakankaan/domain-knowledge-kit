@@ -107,7 +107,7 @@ dkk validate --json
 Checks performed:
 - **Schema conformance** — Each YAML file is validated against its JSON Schema in `tools/dkk/schema/`.
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
-- **Context registration** — Every context file in `.dkk/domain/contexts/` is registered in `.dkk/domain/index.yml`.
+- **Context registration** — Every context directory in `.dkk/domain/contexts/` is registered in `.dkk/domain/index.yml`.
 
 | Flag | Default | Description |
 |------|---------|-------------|

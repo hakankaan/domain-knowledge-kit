@@ -18,30 +18,41 @@ Domain Knowledge Kit (DKK) is a CLI tool for teams practicing Domain-Driven Desi
 # Install
 npm install -g domain-knowledge-kit
 
-# Create a bounded context
-cat > .dkk/domain/contexts/ordering.yml << 'EOF'
+# Create a bounded context (per-item directory format)
+mkdir -p .dkk/domain/contexts/ordering/{events,commands,aggregates}
+
+# Context metadata
+cat > .dkk/domain/contexts/ordering/context.yml << 'EOF'
 name: ordering
 description: Handles customer order lifecycle.
-events:
-  - name: OrderPlaced
-    description: Raised when a customer order is confirmed.
-    raised_by: Order
-commands:
-  - name: PlaceOrder
-    description: Submit a new customer order.
-    handled_by: Order
-aggregates:
-  - name: Order
-    description: Manages order state and invariants.
-    handles: [PlaceOrder]
-    emits: [OrderPlaced]
-policies: []
-read_models: []
-glossary: []
 EOF
 
-# Register it
-# Add "- name: ordering" to the contexts array in .dkk/domain/index.yml
+# One file per domain item
+cat > .dkk/domain/contexts/ordering/events/OrderPlaced.yml << 'EOF'
+name: OrderPlaced
+description: Raised when a customer order is confirmed.
+raised_by: Order
+EOF
+
+cat > .dkk/domain/contexts/ordering/commands/PlaceOrder.yml << 'EOF'
+name: PlaceOrder
+description: Submit a new customer order.
+handled_by: Order
+EOF
+
+cat > .dkk/domain/contexts/ordering/aggregates/Order.yml << 'EOF'
+name: Order
+description: Manages order state and invariants.
+handles:
+  commands:
+    - PlaceOrder
+emits:
+  events:
+    - OrderPlaced
+EOF
+
+# Register it in .dkk/domain/index.yml
+# Add "- name: ordering" to the contexts array
 
 # Validate and render
 dkk validate
@@ -100,7 +111,14 @@ Agents can then search, show, and traverse your domain model — making domain-a
   domain/                         #   Domain model (YAML)
     index.yml                     #     Contexts + flows
     actors.yml                    #     Global actors
-    contexts/<name>.yml           #     Bounded context definitions
+    contexts/                     #     Bounded contexts (one dir each)
+      <name>/                     #       Context directory
+        context.yml               #         Context metadata + glossary
+        events/                   #         One .yml file per event
+        commands/                 #         One .yml file per command
+        aggregates/               #         One .yml file per aggregate
+        policies/                 #         One .yml file per policy
+        read-models/              #         One .yml file per read model
   adr/                            #   Architecture Decision Records
   docs/                           #   Generated docs (do not edit)
 src/                            # Source code (vertical slices)

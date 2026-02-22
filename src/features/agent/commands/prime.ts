@@ -30,8 +30,13 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
     index.yml          # Top-level: registered contexts + cross-context flows
     actors.yml          # Global actors (human | system | external)
     contexts/
-      <name>.yml        # Bounded context with events, commands, policies,
-                        #   aggregates, read_models, glossary
+      <name>/            # One directory per bounded context
+        context.yml      #   Context metadata (name, description, glossary)
+        events/          #   One .yml file per domain event
+        commands/        #   One .yml file per command
+        aggregates/      #   One .yml file per aggregate
+        policies/        #   One .yml file per policy
+        read-models/     #   One .yml file per read model
   adr/
     adr-NNNN.md      # Architecture Decision Records (YAML frontmatter)
 \`\`\`
@@ -112,18 +117,18 @@ When modifying the domain model:
    dkk list --context <name>
    \`\`\`
 2. **Edit YAML files directly** — Apply changes to the appropriate files:
-   - **New context:** Create \`.dkk/domain/contexts/<name>.yml\` and register in \`.dkk/domain/index.yml\`.
-   - **New domain item:** Add to the correct array (\`events\`, \`commands\`, \`policies\`, \`aggregates\`, \`read_models\`, \`glossary\`) in \`.dkk/domain/contexts/<name>.yml\`.
+   - **New context:** Create \`.dkk/domain/contexts/<name>/context.yml\` with name/description/glossary, create subdirs (\`events/\`, \`commands/\`, etc.), and register in \`.dkk/domain/index.yml\`.
+   - **New domain item:** Create a new \`.yml\` file in the correct subdirectory (e.g. \`.dkk/domain/contexts/<name>/events/OrderPlaced.yml\`).
    - **New actor:** Add to \`.dkk/domain/actors.yml\` under \`actors\`.
    - **New flow:** Add to \`.dkk/domain/index.yml\` under \`flows\`.
-   - **Modified item:** Edit in place, preserving all existing fields.
+   - **Modified item:** Edit the item's \`.yml\` file in place, preserving all existing fields.
 3. **Maintain referential integrity:**
    - \`adr_refs\` must point to existing ADRs in \`.dkk/adr/\`.
    - \`domain_refs\` in ADR frontmatter must point to existing domain items.
    - Update cross-references (\`handles\`, \`emits\`, \`triggers\`, \`subscribes_to\`, \`used_by\`, \`raised_by\`, \`handled_by\`, \`actor\`) on related items to stay consistent.
    - Every new event should have \`raised_by\` pointing to its aggregate.
    - Every new command should have \`handled_by\` pointing to its aggregate.
-   - Update aggregate \`handles\` and \`emits\` arrays when adding commands/events.
+   - Update aggregate \`handles.commands\` and \`emits.events\` arrays when adding commands/events.
 4. **Follow naming conventions:**
    - Items: PascalCase (\`OrderPlaced\`, \`PlaceOrder\`).
    - Contexts: kebab-case (\`ordering\`, \`inventory-management\`).
@@ -141,7 +146,9 @@ When modifying the domain model:
 
 ### YAML Structure Reference
 
-**Context file** (\`.dkk/domain/contexts/<name>.yml\`):
+Each domain item is a separate YAML file in a typed subdirectory under the context directory.
+
+**Context metadata** (\`.dkk/domain/contexts/<name>/context.yml\`):
 
 \`\`\`yaml
 name: ordering
@@ -149,46 +156,68 @@ description: Handles customer order lifecycle.
 glossary:
   - term: Order
     definition: A customer's request to purchase items.
-events:
-  - name: OrderPlaced
-    description: Raised when a customer order is confirmed.
-    fields:
-      - name: orderId
-        type: UUID
-    raised_by: Order
-    adr_refs:
-      - adr-0001
-commands:
-  - name: PlaceOrder
-    description: Submit a new customer order.
-    fields:
-      - name: items
-        type: "OrderItem[]"
-    actor: Customer
-    handled_by: Order
-policies:
-  - name: SendConfirmationEmail
-    description: Sends email when order is placed.
-    when:
-      events:
-        - OrderPlaced
-    then:
-      commands:
-        - NotifyCustomer
-aggregates:
-  - name: Order
-    description: Manages order state and invariants.
-    handles:
-      - PlaceOrder
-    emits:
-      - OrderPlaced
-read_models:
-  - name: OrderSummary
-    description: Read-optimized view of order details.
-    subscribes_to:
-      - OrderPlaced
-    used_by:
-      - Customer
+\`\`\`
+
+**Event** (\`.dkk/domain/contexts/<name>/events/OrderPlaced.yml\`):
+
+\`\`\`yaml
+name: OrderPlaced
+description: Raised when a customer order is confirmed.
+fields:
+  - name: orderId
+    type: UUID
+raised_by: Order
+adr_refs:
+  - adr-0001
+\`\`\`
+
+**Command** (\`.dkk/domain/contexts/<name>/commands/PlaceOrder.yml\`):
+
+\`\`\`yaml
+name: PlaceOrder
+description: Submit a new customer order.
+fields:
+  - name: items
+    type: "OrderItem[]"
+actor: Customer
+handled_by: Order
+\`\`\`
+
+**Policy** (\`.dkk/domain/contexts/<name>/policies/SendConfirmationEmail.yml\`):
+
+\`\`\`yaml
+name: SendConfirmationEmail
+description: Sends email when order is placed.
+when:
+  events:
+    - OrderPlaced
+then:
+  commands:
+    - NotifyCustomer
+\`\`\`
+
+**Aggregate** (\`.dkk/domain/contexts/<name>/aggregates/Order.yml\`):
+
+\`\`\`yaml
+name: Order
+description: Manages order state and invariants.
+handles:
+  commands:
+    - PlaceOrder
+emits:
+  events:
+    - OrderPlaced
+\`\`\`
+
+**Read model** (\`.dkk/domain/contexts/<name>/read-models/OrderSummary.yml\`):
+
+\`\`\`yaml
+name: OrderSummary
+description: Read-optimized view of order details.
+subscribes_to:
+  - OrderPlaced
+used_by:
+  - Customer
 \`\`\`
 
 **Actors file** (\`.dkk/domain/actors.yml\`):
@@ -250,7 +279,7 @@ The validator checks:
 
 - **Schema conformance** — Each YAML file is validated against its JSON Schema.
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
-- **Context registration** — Every context file in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
+- **Context registration** — Every context directory in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
 
 ## Generated Documentation
 
