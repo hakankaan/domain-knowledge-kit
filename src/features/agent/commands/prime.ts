@@ -1,12 +1,20 @@
 /**
  * `dkk prime` command — output full agent context to stdout.
  *
- * Prints a comprehensive DKK usage guide for AI agent consumption.
+ * Prints a comprehensive DKK usage guide for AI agent consumption,
+ * followed by a dynamic "Current Domain Summary" section generated
+ * from the live domain model on disk.
+ *
  * Hardcoded template covering project overview, core principles,
  * domain structure, retrieval workflow, change workflow, ID conventions,
  * CLI reference, and file conventions.
  */
 import type { Command as Cmd } from "commander";
+import { existsSync } from "node:fs";
+import { loadDomainModel } from "../../../shared/loader.js";
+import { forEachItem, type ItemType } from "../../../shared/item-visitor.js";
+import { domainDir } from "../../../shared/paths.js";
+import type { DomainModel, Aggregate } from "../../../shared/types/domain.js";
 
 /** The full agent context document. */
 function primeContent(): string {
@@ -300,12 +308,148 @@ Do not edit files under \`.dkk/docs/\` by hand; they are regenerated on each ren
 `;
 }
 
+// ── Dynamic domain summary ───────────────────────────────────────────
+
+/**
+ * Build a dynamic "Current Domain Summary" section from the live domain
+ * model on disk.  Returns the Markdown string to append after the static
+ * instructions.
+ */
+function buildDomainSummary(root?: string): string {
+  // If there's no .dkk/domain/ directory at all, short-circuit.
+  if (!existsSync(domainDir(root))) {
+    return (
+      "\n## Current Domain Summary\n\n" +
+      "No domain model found. Run `dkk new domain` to get started.\n"
+    );
+  }
+
+  let model: DomainModel;
+  try {
+    model = loadDomainModel({ root });
+  } catch {
+    return (
+      "\n## Current Domain Summary\n\n" +
+      "No domain model found. Run `dkk new domain` to get started.\n"
+    );
+  }
+
+  // If there are zero contexts, actors, and ADRs the model is essentially empty.
+  if (model.contexts.size === 0 && model.actors.length === 0 && model.adrs.size === 0) {
+    return (
+      "\n## Current Domain Summary\n\n" +
+      "No domain model found. Run `dkk new domain` to get started.\n"
+    );
+  }
+
+  const lines: string[] = [];
+  lines.push("\n## Current Domain Summary\n");
+
+  // ── Global totals ────────────────────────────────────────────────
+  const totals: Record<ItemType, number> = {
+    event: 0,
+    command: 0,
+    policy: 0,
+    aggregate: 0,
+    read_model: 0,
+    glossary: 0,
+  };
+
+  for (const ctx of model.contexts.values()) {
+    forEachItem(ctx, (type) => {
+      totals[type]++;
+    });
+  }
+
+  const totalItems = Object.values(totals).reduce((a, b) => a + b, 0);
+  lines.push(
+    `**${model.contexts.size}** bounded context(s), ` +
+    `**${totalItems}** domain item(s), ` +
+    `**${model.actors.length}** actor(s), ` +
+    `**${model.adrs.size}** ADR(s)\n`,
+  );
+
+  // ── Contexts detail ──────────────────────────────────────────────
+  if (model.contexts.size > 0) {
+    lines.push("### Contexts\n");
+    for (const ctx of model.contexts.values()) {
+      const counts: Record<ItemType, number> = {
+        event: 0,
+        command: 0,
+        policy: 0,
+        aggregate: 0,
+        read_model: 0,
+        glossary: 0,
+      };
+      forEachItem(ctx, (type) => {
+        counts[type]++;
+      });
+      const parts: string[] = [];
+      if (counts.event) parts.push(`${counts.event} event(s)`);
+      if (counts.command) parts.push(`${counts.command} command(s)`);
+      if (counts.aggregate) parts.push(`${counts.aggregate} aggregate(s)`);
+      if (counts.policy) parts.push(`${counts.policy} policy/policies`);
+      if (counts.read_model) parts.push(`${counts.read_model} read model(s)`);
+      if (counts.glossary) parts.push(`${counts.glossary} glossary term(s)`);
+      const countStr = parts.length ? ` — ${parts.join(", ")}` : "";
+      lines.push(`- **${ctx.name}**: ${ctx.description}${countStr}`);
+    }
+    lines.push("");
+  }
+
+  // ── Actors ────────────────────────────────────────────────────────
+  if (model.actors.length > 0) {
+    lines.push("### Actors\n");
+    for (const actor of model.actors) {
+      lines.push(`- **${actor.name}** (${actor.type}): ${actor.description}`);
+    }
+    lines.push("");
+  }
+
+  // ── ADRs ──────────────────────────────────────────────────────────
+  if (model.adrs.size > 0) {
+    lines.push("### Architecture Decision Records\n");
+    for (const adr of model.adrs.values()) {
+      lines.push(`- **${adr.id}**: ${adr.title} [${adr.status}]`);
+    }
+    lines.push("");
+  }
+
+  // ── Key relationships (aggregates → commands / events) ────────────
+  const aggregates: Array<{ ctx: string; agg: Aggregate }> = [];
+  for (const ctx of model.contexts.values()) {
+    for (const agg of ctx.aggregates ?? []) {
+      aggregates.push({ ctx: ctx.name, agg });
+    }
+  }
+  if (aggregates.length > 0) {
+    lines.push("### Key Relationships\n");
+    for (const { ctx, agg } of aggregates) {
+      const cmds = agg.handles?.commands ?? [];
+      const evts = agg.emits?.events ?? [];
+      const cmdStr = cmds.length ? cmds.join(", ") : "none";
+      const evtStr = evts.length ? evts.join(", ") : "none";
+      lines.push(
+        `- **${ctx}.${agg.name}**: handles [${cmdStr}] → emits [${evtStr}]`,
+      );
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
 /** Register the `prime` subcommand. */
 export function registerPrime(program: Cmd): void {
   program
     .command("prime")
     .description("Output full DKK agent context to stdout")
-    .action(() => {
+    .option("-r, --root <path>", "Override repository root")
+    .option("--static-only", "Output only the static instructions (skip domain summary)")
+    .action((opts: { root?: string; staticOnly?: boolean }) => {
       process.stdout.write(primeContent());
+      if (!opts.staticOnly) {
+        process.stdout.write(buildDomainSummary(opts.root));
+      }
     });
 }

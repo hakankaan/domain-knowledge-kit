@@ -1139,6 +1139,80 @@ try {
     assert("add creates dir file exists", existsSync(join(root, ".dkk", "domain", "contexts", "ordering", "read-models", "InventoryView.yml")));
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // prime command — static + dynamic domain summary
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== prime: outputs static instructions and domain summary ===");
+  {
+    const root = makeValidDomain("prime-summary");
+    tempRoots.push(root);
+    writeAdr(root, "adr-0001.md", [
+      "id: adr-0001",
+      "title: Use YAML for domain models",
+      "status: accepted",
+      "date: 2025-01-15",
+    ].join("\n"));
+
+    const result = run(["prime"], { root });
+    assert("prime exits 0", result.exitCode === 0);
+    assert("prime has static header", result.stdout.includes("Domain Knowledge Kit — Agent Context"));
+    assert("prime has domain summary section", result.stdout.includes("Current Domain Summary"));
+    assert("prime shows context name", result.stdout.includes("ordering"));
+    assert("prime shows actor", result.stdout.includes("Customer"));
+    assert("prime shows ADR", result.stdout.includes("adr-0001"));
+    assert("prime shows ADR title", result.stdout.includes("Use YAML for domain models"));
+    assert("prime shows item counts", result.stdout.includes("event(s)"));
+    assert("prime shows aggregate relationship", result.stdout.includes("Order"));
+  }
+
+  console.log("\n=== prime: domain summary includes item counts ===");
+  {
+    const root = makeValidDomain("prime-counts");
+    tempRoots.push(root);
+    const result = run(["prime"], { root });
+    assert("prime counts exits 0", result.exitCode === 0);
+    // The valid domain has 1 event, 1 command, 1 aggregate, 1 policy
+    assert("prime counts bounded context(s)", result.stdout.includes("1** bounded context(s)"));
+    assert("prime counts domain item(s)", result.stdout.includes("domain item(s)"));
+    assert("prime counts actor(s)", result.stdout.includes("1** actor(s)"));
+  }
+
+  console.log("\n=== prime: --static-only skips domain summary ===");
+  {
+    const root = makeValidDomain("prime-static");
+    tempRoots.push(root);
+    const result = run(["prime", "--static-only"], { root });
+    assert("prime --static-only exits 0", result.exitCode === 0);
+    assert("prime --static-only has static header", result.stdout.includes("Domain Knowledge Kit — Agent Context"));
+    assert("prime --static-only no domain summary", !result.stdout.includes("Current Domain Summary"));
+  }
+
+  console.log("\n=== prime: empty project shows no-domain-found note ===");
+  {
+    const root = makeTempRoot("prime-empty");
+    tempRoots.push(root);
+    // Remove the .dkk directory entirely so no domain exists
+    rmSync(join(root, ".dkk"), { recursive: true, force: true });
+    const result = run(["prime"], { root });
+    assert("prime empty exits 0", result.exitCode === 0);
+    assert("prime empty has static header", result.stdout.includes("Domain Knowledge Kit — Agent Context"));
+    assert("prime empty shows no-domain note", result.stdout.includes("No domain model found"));
+    assert("prime empty shows scaffold hint", result.stdout.includes("dkk new domain"));
+  }
+
+  console.log("\n=== prime: key relationships show handled commands and emitted events ===");
+  {
+    const root = makeValidDomain("prime-relationships");
+    tempRoots.push(root);
+    const result = run(["prime"], { root });
+    assert("prime relationships exits 0", result.exitCode === 0);
+    assert("prime relationships section exists", result.stdout.includes("Key Relationships"));
+    assert("prime relationships shows PlaceOrder", result.stdout.includes("PlaceOrder"));
+    assert("prime relationships shows OrderPlaced", result.stdout.includes("OrderPlaced"));
+    assert("prime relationships shows handles/emits", result.stdout.includes("handles"));
+    assert("prime relationships shows emits", result.stdout.includes("emits"));
+  }
+
 } finally {
   cleanup();
 }
