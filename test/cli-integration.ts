@@ -7,7 +7,7 @@
  *
  * Uses temporary directories with the --root flag to isolate each test.
  */
-import { execFileSync, type ExecFileSyncOptions } from "node:child_process";
+import { execFileSync, spawnSync, type ExecFileSyncOptions } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -42,31 +42,23 @@ interface RunResult {
 
 /** Run the CLI with given arguments and return stdout, stderr, and exit code. */
 function run(args: string[], opts?: { root?: string }): RunResult {
-  const execOpts: ExecFileSyncOptions = {
-    encoding: "utf-8",
-    timeout: 30_000,
-    env: { ...process.env, NO_COLOR: "1" },
-  };
-
   const fullArgs = [...TSX_ARGS, ...args];
   if (opts?.root) {
     fullArgs.push("--root", opts.root);
   }
 
-  try {
-    const stdout = execFileSync(TSX, fullArgs, {
-      ...execOpts,
-      stdio: ["pipe", "pipe", "pipe"],
-    }) as unknown as string;
-    return { stdout, stderr: "", exitCode: 0 };
-  } catch (err: unknown) {
-    const e = err as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
-    return {
-      stdout: String(e.stdout ?? ""),
-      stderr: String(e.stderr ?? ""),
-      exitCode: e.status ?? 1,
-    };
-  }
+  const result = spawnSync(TSX, fullArgs, {
+    encoding: "utf-8",
+    timeout: 30_000,
+    env: { ...process.env, NO_COLOR: "1" },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  return {
+    stdout: String(result.stdout ?? ""),
+    stderr: String(result.stderr ?? ""),
+    exitCode: result.status ?? 1,
+  };
 }
 
 /** Create a minimal temp domain tree and return its root path. */
@@ -304,16 +296,27 @@ try {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // 3. search command — no index shows helpful error
+  // 3. search command — auto-builds index when missing
   // ═══════════════════════════════════════════════════════════════════
-  console.log("\n=== search: no index shows error ===");
+  console.log("\n=== search: auto-builds index when missing ===");
   {
-    const root = makeValidDomain("search-noindex");
+    const root = makeValidDomain("search-autoindex");
     tempRoots.push(root);
-    // No render has been run, so no index exists
+    // No render has been run, so no index exists — search should auto-build
     const result = run(["search", "order"], { root });
-    assert("search no-index exits 1", result.exitCode === 1);
-    assert("search no-index mentions render", result.stderr.includes("render") || result.stderr.includes("index"));
+    assert("search auto-build exits 0", result.exitCode === 0);
+    assert("search auto-build finds results", result.stdout.includes("result(s)") || result.stdout.includes("OrderPlaced"));
+    assert("search auto-build prints building message", result.stderr.includes("building"));
+  }
+
+  console.log("\n=== search: --no-auto-index fails on missing index ===");
+  {
+    const root = makeValidDomain("search-noauto");
+    tempRoots.push(root);
+    // With --no-auto-index, the old fail-fast behavior is preserved
+    const result = run(["search", "order", "--no-auto-index"], { root });
+    assert("search --no-auto-index exits 1", result.exitCode === 1);
+    assert("search --no-auto-index mentions index", result.stderr.includes("index") || result.stderr.includes("Search index not found"));
   }
 
   // ═══════════════════════════════════════════════════════════════════
