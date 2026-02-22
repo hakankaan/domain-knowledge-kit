@@ -810,7 +810,7 @@ try {
     const result = run(["--help"]);
     assert("--help exits 0", result.exitCode === 0);
     const helpText = result.stdout;
-    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "init", "prime", "adr"];
+    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "init", "prime", "adr", "new"];
     for (const cmd of topLevelCommands) {
       assert(`--help lists '${cmd}' command`, helpText.includes(cmd));
     }
@@ -823,6 +823,174 @@ try {
     for (const sub of adrSubCommands) {
       assert(`adr --help lists '${sub}' sub-command`, adrHelp.includes(sub));
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 15. new domain — scaffolds full .dkk/domain/ structure
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== new domain: scaffolds full domain structure ===");
+  {
+    const root = makeTempRoot("new-domain");
+    // Remove the pre-created domain structure so new domain can create fresh
+    rmSync(join(root, ".dkk"), { recursive: true, force: true });
+    tempRoots.push(root);
+    const result = run(["new", "domain"], { root });
+    assert("new domain exits 0", result.exitCode === 0);
+    assert("new domain creates index.yml", existsSync(join(root, ".dkk", "domain", "index.yml")));
+    assert("new domain creates actors.yml", existsSync(join(root, ".dkk", "domain", "actors.yml")));
+    assert("new domain creates context.yml", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
+    assert("new domain creates sample event", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "events", "SampleCreated.yml")));
+    assert("new domain creates sample command", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "commands", "CreateSample.yml")));
+    assert("new domain creates sample aggregate", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "aggregates", "Sample.yml")));
+    assert("new domain creates policies dir", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "policies")));
+    assert("new domain creates read-models dir", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "read-models")));
+    assert("new domain stdout mentions created", result.stdout.includes("Created"));
+  }
+
+  console.log("\n=== new domain: validates and renders successfully ===");
+  {
+    const root = makeTempRoot("new-domain-render");
+    rmSync(join(root, ".dkk"), { recursive: true, force: true });
+    tempRoots.push(root);
+    // Copy tools so render can find templates
+    cpSync(TOOLS_DIR, join(root, "tools"), { recursive: true });
+    const scaffoldResult = run(["new", "domain"], { root });
+    assert("new domain scaffold exits 0", scaffoldResult.exitCode === 0);
+    const renderResult = run(["render"], { root });
+    assert("new domain + render exits 0", renderResult.exitCode === 0);
+    assert("new domain + render creates docs", existsSync(join(root, ".dkk", "docs", "index.md")));
+  }
+
+  console.log("\n=== new domain: errors when domain already exists ===");
+  {
+    const root = makeValidDomain("new-domain-exists");
+    tempRoots.push(root);
+    const result = run(["new", "domain"], { root });
+    assert("new domain existing exits 1", result.exitCode === 1);
+    assert("new domain existing has error", result.stderr.includes("already exists"));
+  }
+
+  console.log("\n=== new domain: --force overwrites existing domain ===");
+  {
+    const root = makeValidDomain("new-domain-force");
+    tempRoots.push(root);
+    const result = run(["new", "domain", "--force"], { root });
+    assert("new domain --force exits 0", result.exitCode === 0);
+    assert("new domain --force creates sample context", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 16. new context — scaffolds context directory and registers in index
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== new context: creates directory and registers in index ===");
+  {
+    const root = makeValidDomain("new-context");
+    tempRoots.push(root);
+    const result = run(["new", "context", "shipping", "--description", "Shipping and delivery"], { root });
+    assert("new context exits 0", result.exitCode === 0);
+    assert("new context creates context.yml", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "context.yml")));
+    assert("new context creates events dir", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "events")));
+    assert("new context creates commands dir", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "commands")));
+    assert("new context creates aggregates dir", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "aggregates")));
+    assert("new context creates policies dir", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "policies")));
+    assert("new context creates read-models dir", existsSync(join(root, ".dkk", "domain", "contexts", "shipping", "read-models")));
+
+    // Verify context.yml content
+    const ctxContent = readFileSync(join(root, ".dkk", "domain", "contexts", "shipping", "context.yml"), "utf-8");
+    assert("new context context.yml has name", ctxContent.includes("name: shipping"));
+    assert("new context context.yml has description", ctxContent.includes("Shipping and delivery"));
+
+    // Verify index.yml was updated
+    const indexContent = readFileSync(join(root, ".dkk", "domain", "index.yml"), "utf-8");
+    assert("new context registered in index", indexContent.includes("shipping"));
+  }
+
+  console.log("\n=== new context: errors when context already exists ===");
+  {
+    const root = makeValidDomain("new-context-exists");
+    tempRoots.push(root);
+    const result = run(["new", "context", "ordering"], { root });
+    assert("new context existing exits 1", result.exitCode === 1);
+    assert("new context existing has error", result.stderr.includes("already exists"));
+  }
+
+  console.log("\n=== new context: errors on invalid name ===");
+  {
+    const root = makeValidDomain("new-context-invalid");
+    tempRoots.push(root);
+    const result = run(["new", "context", "InvalidName"], { root });
+    assert("new context invalid name exits 1", result.exitCode === 1);
+    assert("new context invalid name has error", result.stderr.includes("invalid"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 17. new adr — scaffolds ADR file with correct numbering
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== new adr: creates first ADR file ===");
+  {
+    const root = makeTempRoot("new-adr");
+    // Remove pre-created adr dir to start fresh
+    rmSync(join(root, ".dkk", "adr"), { recursive: true, force: true });
+    tempRoots.push(root);
+    const result = run(["new", "adr", "Use Event Sourcing"], { root });
+    assert("new adr exits 0", result.exitCode === 0);
+    assert("new adr creates adr-0001.md", existsSync(join(root, ".dkk", "adr", "adr-0001.md")));
+
+    const content = readFileSync(join(root, ".dkk", "adr", "adr-0001.md"), "utf-8");
+    assert("new adr has frontmatter id", content.includes("id: adr-0001"));
+    assert("new adr has title", content.includes("title: Use Event Sourcing"));
+    assert("new adr default status is proposed", content.includes("status: proposed"));
+    assert("new adr has date", content.includes("date:"));
+  }
+
+  console.log("\n=== new adr: auto-increments number ===");
+  {
+    const root = makeTempRoot("new-adr-inc");
+    tempRoots.push(root);
+    // Create first ADR
+    writeAdr(root, "adr-0001.md", [
+      "id: adr-0001",
+      "title: First Decision",
+      "status: accepted",
+      "date: 2025-01-01",
+    ].join("\n"));
+
+    const result = run(["new", "adr", "Second Decision"], { root });
+    assert("new adr increment exits 0", result.exitCode === 0);
+    assert("new adr increment creates adr-0002.md", existsSync(join(root, ".dkk", "adr", "adr-0002.md")));
+    assert("new adr stdout mentions adr-0002", result.stdout.includes("adr-0002"));
+  }
+
+  console.log("\n=== new adr: --status flag ===");
+  {
+    const root = makeTempRoot("new-adr-status");
+    rmSync(join(root, ".dkk", "adr"), { recursive: true, force: true });
+    tempRoots.push(root);
+    const result = run(["new", "adr", "Accept CQRS", "--status", "accepted"], { root });
+    assert("new adr --status exits 0", result.exitCode === 0);
+    const content = readFileSync(join(root, ".dkk", "adr", "adr-0001.md"), "utf-8");
+    assert("new adr --status=accepted in frontmatter", content.includes("status: accepted"));
+  }
+
+  console.log("\n=== new adr: invalid status errors ===");
+  {
+    const root = makeTempRoot("new-adr-bad-status");
+    tempRoots.push(root);
+    const result = run(["new", "adr", "Bad Status", "--status", "invalid"], { root });
+    assert("new adr invalid status exits 1", result.exitCode === 1);
+    assert("new adr invalid status has error", result.stderr.includes("Invalid status"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 18. new --help — shows all subcommands
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== new --help: lists all subcommands ===");
+  {
+    const result = run(["new", "--help"]);
+    assert("new --help exits 0", result.exitCode === 0);
+    assert("new --help lists domain", result.stdout.includes("domain"));
+    assert("new --help lists context", result.stdout.includes("context"));
+    assert("new --help lists adr", result.stdout.includes("adr"));
   }
 
 } finally {

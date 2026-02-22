@@ -10,6 +10,9 @@ import { registerAdrShow } from "./features/adr/commands/adr-show.js";
 import { registerAdrRelated } from "./features/adr/commands/adr-related.js";
 import { registerInit } from "./features/agent/commands/init.js";
 import { registerPrime } from "./features/agent/commands/prime.js";
+import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
+import { registerNewContext } from "./features/scaffold/commands/new-context.js";
+import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
 import { formatCliError } from "./shared/errors.js";
 
 /** Whether to show full stack traces (set DEBUG=1 in env). */
@@ -41,6 +44,15 @@ const adrCmd = program
 
 registerAdrShow(adrCmd);
 registerAdrRelated(adrCmd);
+
+// "new" sub-command group
+const newCmd = program
+  .command("new")
+  .description("Scaffold new domain structures");
+
+registerNewDomain(newCmd);
+registerNewContext(newCmd);
+registerNewAdr(newCmd);
 
 program.parseAsync().catch((err: unknown) => {
   console.error(`Error: ${formatCliError(err)}`);
