@@ -152,8 +152,7 @@ Broken links produce validation errors.
 4. **Validate and render:**
 
    ```bash
-   dkk validate
-   dkk render
+   dkk render    # Validates → renders docs → rebuilds search index
    ```
 
 ## Querying ADRs

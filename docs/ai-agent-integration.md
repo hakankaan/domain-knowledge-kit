@@ -113,8 +113,7 @@ When AI agents modify domain YAML files, they should follow this workflow:
 4. **Update ADR links** — If the change affects an architectural decision, update `adr_refs` on domain items and `domain_refs` in ADR frontmatter.
 5. **Run quality gates:**
    ```bash
-   dkk validate
-   dkk render
+   dkk render    # Validates → renders docs → rebuilds search index
    ```
 
 ## What Agents Can Do

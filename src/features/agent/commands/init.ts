@@ -39,9 +39,10 @@ dkk render            # Validate, render docs, rebuild search index
 Before committing domain changes, run:
 
 \`\`\`bash
-dkk validate
-dkk render
+dkk render              # Validates → renders docs → rebuilds search index
 \`\`\`
+
+\`dkk validate\` is available as a quick dry-run check (no rendering).
 `.trimStart();
 }
 

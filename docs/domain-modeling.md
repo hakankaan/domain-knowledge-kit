@@ -299,11 +299,12 @@ Every domain item has a unique ID used for lookups, cross-references, and CLI co
 After every change to domain YAML files, run:
 
 ```bash
-dkk validate    # Schema + cross-reference checks
-dkk render      # Validate → render docs → rebuild search index
+dkk render      # Validates → renders docs → rebuilds search index
 ```
 
-Both must exit with code 0 before committing.
+Must exit with code 0 before committing. The `render` command validates the model automatically — no need to run `validate` separately.
+
+For a quick validation-only check (without rendering), use `dkk validate`.
 
 ## What's Next?
 

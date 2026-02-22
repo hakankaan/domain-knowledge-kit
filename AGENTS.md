@@ -67,14 +67,15 @@ npx tsx src/cli.ts adr related <id>        # Bidirectional ADR ↔ domain links
 
 ### Quality Gates
 
-**When domain files change**, you MUST run these before committing:
+**When domain files change**, run this before committing:
 
 ```bash
-npx tsx src/cli.ts validate
-npx tsx src/cli.ts render
+npx tsx src/cli.ts render    # Validates → renders docs → rebuilds search index
 ```
 
-Both must exit 0. The `render` command also rebuilds the search index.
+Must exit 0. The `render` command validates automatically — no need to run `validate` separately.
+
+For a quick validation-only check (no rendering), use `npx tsx src/cli.ts validate`.
 
 
 <!-- dkk:start -->
@@ -101,7 +102,8 @@ dkk render            # Validate, render docs, rebuild search index
 Before committing domain changes, run:
 
 ```bash
-dkk validate
-dkk render
+dkk render              # Validates → renders docs → rebuilds search index
 ```
+
+`dkk validate` is available as a quick dry-run check (no rendering).
 <!-- dkk:end -->

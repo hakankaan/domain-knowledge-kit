@@ -172,14 +172,13 @@ Actor types can be `human`, `system`, or `external`.
 Every change to domain files must pass validation before committing:
 
 ```bash
-# Validate schema + cross-references
-dkk validate
-
-# Validate → render docs → rebuild search index
+# Validates → renders docs → rebuilds search index (single quality gate command)
 dkk render
 ```
 
-Both commands must exit with code 0. The `render` command also generates Markdown documentation under `.dkk/docs/` and rebuilds the FTS5 search index.
+Must exit with code 0. The `render` command validates the model automatically, generates Markdown documentation under `.dkk/docs/`, and rebuilds the FTS5 search index.
+
+For a quick validation-only check (without rendering), use `dkk validate`.
 
 ## Step 6: Search and Explore
 
@@ -238,7 +237,7 @@ adr_refs:
   - adr-0001
 ```
 
-Run `dkk validate` and `dkk render` to verify the bidirectional links.
+Run `dkk render` to verify the bidirectional links.
 
 → See [ADR Guide](adr-guide.md) for the full ADR workflow.
 

@@ -20,7 +20,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`.dkk/domain/\`.
 2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
-3. **Every change to domain files must pass quality gates:** run \`dkk validate\` then \`dkk render\` before committing.
+3. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.
 
 ## Domain Model Structure
 
@@ -140,8 +140,7 @@ When modifying the domain model:
    - Consider creating a new ADR if the change introduces a significant decision.
 6. **Run quality gates:**
    \`\`\`bash
-   dkk validate
-   dkk render
+   dkk render    # Validates → renders docs → rebuilds search index
    \`\`\`
 
 ### YAML Structure Reference

@@ -69,7 +69,7 @@ src/
 
 The `.dkk/domain/` directory in this repo contains a sample domain model used for testing the CLI. When editing domain YAML:
 
-- Run `npx tsx src/cli.ts validate` then `npx tsx src/cli.ts render` to verify changes.
+- Run `npx tsx src/cli.ts render` to verify changes (validates automatically, then renders docs and rebuilds search index).
 - YAML files use `.yml` extension.
 - Item names are PascalCase; context names and ADR ids are kebab-case.
 - Generated docs go to `.dkk/docs/` — never edit by hand.
