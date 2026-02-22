@@ -166,7 +166,7 @@ glossary:
 
 ### Actors
 
-**Actors** are people, systems, or external services that interact with your domain. They are defined globally in `domain/actors.yml`.
+**Actors** are people, systems, or external services that interact with your domain. They are defined globally in `.dkk/domain/actors.yml`.
 
 ```yaml
 actors:
@@ -207,7 +207,7 @@ flows:
         type: event
 ```
 
-Flows are defined in `domain/index.yml` alongside context registrations.
+Flows are defined in `.dkk/domain/index.yml` alongside context registrations.
 
 ## Cross-References
 
@@ -273,9 +273,9 @@ Every domain item has a unique ID used for lookups, cross-references, and CLI co
 
 | File | Purpose |
 |------|---------|
-| `domain/index.yml` | Register bounded contexts and define cross-context flows |
-| `domain/actors.yml` | Define global actors |
-| `domain/contexts/<name>.yml` | Define a bounded context with all its items |
+| `.dkk/domain/index.yml` | Register bounded contexts and define cross-context flows |
+| `.dkk/domain/actors.yml` | Define global actors |
+| `.dkk/domain/contexts/<name>.yml` | Define a bounded context with all its items |
 | `.dkk/adr/adr-NNNN.md` | Architecture Decision Records |
 | `.dkk/docs/` | Generated documentation (do not edit) |
 | `tools/dkk/schema/` | JSON Schemas for YAML validation |

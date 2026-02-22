@@ -13,7 +13,7 @@ import { DomainGraph } from "../graph.js";
 // ── Fixture setup ─────────────────────────────────────────────────────
 
 const TMP = join(tmpdir(), `dkk-graph-test-${Date.now()}`);
-const DOMAIN = join(TMP, "domain");
+const DOMAIN = join(TMP, ".dkk", "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
 const ADR_DIR = join(TMP, ".dkk", "adr");
 
@@ -28,7 +28,7 @@ function setup() {
   mkdirSync(join(CONTEXTS, "shipping", "read-models"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
-  // domain/index.yml
+  // .dkk/domain/index.yml
   writeFileSync(
     join(DOMAIN, "index.yml"),
     [
@@ -50,7 +50,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/actors.yml
+  // .dkk/domain/actors.yml
   writeFileSync(
     join(DOMAIN, "actors.yml"),
     [
@@ -64,7 +64,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/ — per-item directory
+  // .dkk/domain/contexts/ordering/ — per-item directory
   writeFileSync(join(CONTEXTS, "ordering", "context.yml"), [
     "name: ordering",
     'description: "Handles the order lifecycle"',
@@ -121,7 +121,7 @@ function setup() {
     "    - OrderCancelled",
   ].join("\n"));
 
-  // domain/contexts/shipping/ — per-item directory
+  // .dkk/domain/contexts/shipping/ — per-item directory
   writeFileSync(join(CONTEXTS, "shipping", "context.yml"), [
     "name: shipping",
     'description: "Handles shipment tracking"',
@@ -355,10 +355,10 @@ try {
   // ── Empty model ───────────────────────────────────────────────────
   console.log("\n=== Empty model ===");
   const emptyTmp = join(tmpdir(), `dkk-graph-empty-${Date.now()}`);
-  mkdirSync(join(emptyTmp, "domain", "contexts"), { recursive: true });
-  mkdirSync(join(emptyTmp, "docs", "adr"), { recursive: true });
-  writeFileSync(join(emptyTmp, "domain", "index.yml"), "contexts: []\n");
-  writeFileSync(join(emptyTmp, "domain", "actors.yml"), "actors: []\n");
+  mkdirSync(join(emptyTmp, ".dkk", "domain", "contexts"), { recursive: true });
+  mkdirSync(join(emptyTmp, ".dkk", "adr"), { recursive: true });
+  writeFileSync(join(emptyTmp, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeFileSync(join(emptyTmp, ".dkk", "domain", "actors.yml"), "actors: []\n");
 
   const emptyModel = loadDomainModel({ root: emptyTmp });
   const emptyGraph = DomainGraph.from(emptyModel);

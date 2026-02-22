@@ -139,7 +139,7 @@ Broken links produce validation errors.
    - Eventual consistency between write and read models
    ```
 
-3. **Link domain items back.** Add `adr_refs` to each referenced item in `domain/contexts/inventory.yml`:
+3. **Link domain items back.** Add `adr_refs` to each referenced item in `.dkk/domain/contexts/inventory.yml`:
 
    ```yaml
    events:

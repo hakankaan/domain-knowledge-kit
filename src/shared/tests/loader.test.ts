@@ -3,14 +3,14 @@
  *
  * Uses a temporary directory tree that mirrors the real layout:
  *   tmp/
- *     domain/
- *       index.yml
- *       actors.yml
- *       contexts/
- *         ordering.yml          (flat context)
- *         shipping/
- *           context.yml         (directory context)
  *     .dkk/
+ *       domain/
+ *         index.yml
+ *         actors.yml
+ *         contexts/
+ *           ordering.yml          (flat context)
+ *           shipping/
+ *             context.yml         (directory context)
  *       adr/
  *         0001-use-yaml.md
  */
@@ -24,7 +24,7 @@ import { parseYaml, stringifyYaml } from "../yaml.js";
 // ── Test scaffolding fixtures ─────────────────────────────────────────
 
 const TMP = join(tmpdir(), `dkk-test-${Date.now()}`);
-const DOMAIN = join(TMP, "domain");
+const DOMAIN = join(TMP, ".dkk", "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
 const ADR_DIR = join(TMP, ".dkk", "adr");
 
@@ -37,7 +37,7 @@ function setup() {
   mkdirSync(join(CONTEXTS, "shipping", "read-models"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
-  // domain/index.yml
+  // .dkk/domain/index.yml
   writeFileSync(
     join(DOMAIN, "index.yml"),
     [
@@ -59,7 +59,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/actors.yml
+  // .dkk/domain/actors.yml
   writeFileSync(
     join(DOMAIN, "actors.yml"),
     [
@@ -73,7 +73,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/context.yml — identity + glossary
+  // .dkk/domain/contexts/ordering/context.yml — identity + glossary
   writeFileSync(
     join(CONTEXTS, "ordering", "context.yml"),
     [
@@ -85,7 +85,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/events/OrderPlaced.yml
+  // .dkk/domain/contexts/ordering/events/OrderPlaced.yml
   writeFileSync(
     join(CONTEXTS, "ordering", "events", "OrderPlaced.yml"),
     [
@@ -98,7 +98,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/commands/PlaceOrder.yml
+  // .dkk/domain/contexts/ordering/commands/PlaceOrder.yml
   writeFileSync(
     join(CONTEXTS, "ordering", "commands", "PlaceOrder.yml"),
     [
@@ -109,7 +109,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/aggregates/Order.yml
+  // .dkk/domain/contexts/ordering/aggregates/Order.yml
   writeFileSync(
     join(CONTEXTS, "ordering", "aggregates", "Order.yml"),
     [
@@ -124,7 +124,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/shipping/context.yml — identity only
+  // .dkk/domain/contexts/shipping/context.yml — identity only
   writeFileSync(
     join(CONTEXTS, "shipping", "context.yml"),
     [
@@ -133,7 +133,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/shipping/commands/ShipOrder.yml
+  // .dkk/domain/contexts/shipping/commands/ShipOrder.yml
   writeFileSync(
     join(CONTEXTS, "shipping", "commands", "ShipOrder.yml"),
     [
@@ -143,7 +143,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/shipping/read-models/ShipmentStatus.yml
+  // .dkk/domain/contexts/shipping/read-models/ShipmentStatus.yml
   writeFileSync(
     join(CONTEXTS, "shipping", "read-models", "ShipmentStatus.yml"),
     [
@@ -293,10 +293,10 @@ try {
   // Edge: load with empty domain
   console.log("\n=== loader.ts (empty domain) ===");
   const emptyTmp = join(tmpdir(), `dkk-empty-${Date.now()}`);
-  mkdirSync(join(emptyTmp, "domain", "contexts"), { recursive: true });
+  mkdirSync(join(emptyTmp, ".dkk", "domain", "contexts"), { recursive: true });
   mkdirSync(join(emptyTmp, ".dkk", "adr"), { recursive: true });
-  writeFileSync(join(emptyTmp, "domain", "index.yml"), "contexts: []\n");
-  writeFileSync(join(emptyTmp, "domain", "actors.yml"), "actors: []\n");
+  writeFileSync(join(emptyTmp, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeFileSync(join(emptyTmp, ".dkk", "domain", "actors.yml"), "actors: []\n");
 
   const emptyModel = loadDomainModel({ root: emptyTmp });
   assert("empty: contexts map is empty", emptyModel.contexts.size === 0);

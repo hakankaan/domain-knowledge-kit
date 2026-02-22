@@ -25,15 +25,14 @@ During local development of DKK itself, use `npx tsx src/cli.ts` instead of `dkk
 After setup, your project will have this layout:
 
 ```
-domain/
-  index.yml              # Registered contexts + cross-context flows
-  actors.yml             # Global actors (human | system | external)
-  contexts/
-    <name>.yml           # One file per bounded context
-
 .dkk/
-  adr/                   # Architecture Decision Records
-  docs/                  # Generated documentation (do not edit)
+  domain/
+    index.yml              # Registered contexts + cross-context flows
+    actors.yml             # Global actors (human | system | external)
+    contexts/
+      <name>.yml           # One file per bounded context
+  adr/                     # Architecture Decision Records
+  docs/                    # Generated documentation (do not edit)
 
 tools/
   dkk/
@@ -43,7 +42,7 @@ tools/
 
 ## Step 1: Create a Bounded Context
 
-Create a new YAML file at `domain/contexts/<name>.yml`. Here's a minimal example for an `ordering` context:
+Create a new YAML file at `.dkk/domain/contexts/<name>.yml`. Here's a minimal example for an `ordering` context:
 
 ```yaml
 name: ordering
@@ -58,7 +57,7 @@ glossary: []
 
 ## Step 2: Register the Context
 
-Add your new context to `domain/index.yml`:
+Add your new context to `.dkk/domain/index.yml`:
 
 ```yaml
 contexts:
@@ -127,7 +126,7 @@ read_models:
 
 ## Step 4: Add Actors
 
-Define the actors who interact with your domain in `domain/actors.yml`:
+Define the actors who interact with your domain in `.dkk/domain/actors.yml`:
 
 ```yaml
 actors:

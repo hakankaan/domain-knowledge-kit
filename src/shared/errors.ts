@@ -65,7 +65,7 @@ export function formatCliError(err: unknown): string {
     const filePath = err.path ? ` "${err.path}"` : "";
     switch (err.code) {
       case "ENOENT":
-        return `File not found:${filePath}. Check that the path exists and the domain/ directory is present.`;
+        return `File not found:${filePath}. Check that the path exists and the .dkk/domain/ directory is present.`;
       case "EACCES":
       case "EPERM":
         return `Permission denied:${filePath}. Check file permissions.`;

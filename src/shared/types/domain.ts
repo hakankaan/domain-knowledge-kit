@@ -64,7 +64,7 @@ export interface Actor {
   adr_refs?: AdrRef[];
 }
 
-/** Top-level actors definition file shape (domain/actors.yml). */
+/** Top-level actors definition file shape (.dkk/domain/actors.yml). */
 export interface ActorsFile {
   actors: Actor[];
 }
@@ -168,7 +168,7 @@ export interface ReadModel {
 // ── Context Meta File ─────────────────────────────────────────────────
 
 /**
- * Context metadata file shape (domain/contexts/<name>/context.yml).
+ * Context metadata file shape (.dkk/domain/contexts/<name>/context.yml).
  * Contains only identity and glossary; item arrays live in typed
  * sub-directories (events/, commands/, policies/, aggregates/, read-models/).
  */
@@ -232,7 +232,7 @@ export interface AdrRecord {
 
 /** A reference to a registered bounded context in the index. */
 export interface ContextEntry {
-  /** Context identifier matching a file under domain/contexts/. */
+  /** Context identifier matching a file under .dkk/domain/contexts/. */
   name: string;
   /** Short summary of the bounded context. */
   description?: string;
@@ -261,7 +261,7 @@ export interface Flow {
   steps: FlowStep[];
 }
 
-/** Top-level domain index file shape (domain/index.yml). */
+/** Top-level domain index file shape (.dkk/domain/index.yml). */
 export interface DomainIndex {
   /** Registered bounded contexts. */
   contexts: ContextEntry[];

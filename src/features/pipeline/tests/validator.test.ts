@@ -41,7 +41,7 @@ function hasWarning(result: ValidationResult, substring: string): boolean {
 /** Create a minimal temp domain tree and return its root path. */
 function makeTempRoot(suffix: string): string {
   const root = join(tmpdir(), `dkk-validator-${suffix}-${Date.now()}`);
-  mkdirSync(join(root, "domain", "contexts"), { recursive: true });
+  mkdirSync(join(root, ".dkk", "domain", "contexts"), { recursive: true });
   mkdirSync(join(root, ".dkk", "adr"), { recursive: true });
   return root;
 }
@@ -61,7 +61,7 @@ function writeAdr(dir: string, filename: string, frontmatter: string): void {
 }
 
 /**
- * Write a per-item context directory under domain/contexts/<name>/.
+ * Write a per-item context directory under .dkk/domain/contexts/<name>/.
  * - contextYaml: YAML for context.yml (contains name, description, optional glossary)
  * - items: map of sub-dir name → array of [filename, yamlContent] pairs
  */
@@ -72,7 +72,7 @@ function writeContextDir(
 ): void {
   const nameMatch = contextYaml.match(/^name:\s*(\S+)/m);
   const name = nameMatch![1];
-  const ctxDir = join(root, "domain", "contexts", name);
+  const ctxDir = join(root, ".dkk", "domain", "contexts", name);
   mkdirSync(ctxDir, { recursive: true });
   writeYaml(join(ctxDir, "context.yml"), contextYaml);
   for (const [subDir, files] of Object.entries(items)) {
@@ -90,7 +90,7 @@ function testValidModel() {
   const root = makeTempRoot("valid");
 
   writeYaml(
-    join(root, "domain", "index.yml"),
+    join(root, ".dkk", "domain", "index.yml"),
     [
       "contexts:",
       "  - name: ordering",
@@ -105,7 +105,7 @@ function testValidModel() {
   );
 
   writeYaml(
-    join(root, "domain", "actors.yml"),
+    join(root, ".dkk", "domain", "actors.yml"),
     [
       "actors:",
       "  - name: Customer",
@@ -179,11 +179,11 @@ function testBrokenAdrRefs() {
   const root = makeTempRoot("brokenadr");
 
   writeYaml(
-    join(root, "domain", "index.yml"),
+    join(root, ".dkk", "domain", "index.yml"),
     "contexts:\n  - name: ordering\n",
   );
   writeYaml(
-    join(root, "domain", "actors.yml"),
+    join(root, ".dkk", "domain", "actors.yml"),
     "actors: []\n",
   );
   writeContextDir(root, [
@@ -213,8 +213,8 @@ function testBrokenDomainRefs() {
   console.log("\n=== Broken ADR domain_refs ===");
   const root = makeTempRoot("brokendomainref");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts: []\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeAdr(
     join(root, ".dkk", "adr"),
     "0001-test.md",
@@ -243,9 +243,9 @@ function testBrokenIntraContextRefs() {
   console.log("\n=== Broken intra-context refs ===");
   const root = makeTempRoot("brokenintra");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: sales\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts:\n  - name: sales\n");
   writeYaml(
-    join(root, "domain", "actors.yml"),
+    join(root, ".dkk", "domain", "actors.yml"),
     "actors:\n  - name: Admin\n    type: human\n    description: Admin user\n",
   );
   writeContextDir(root, "name: sales\ndescription: \"Sales context\"", {
@@ -312,8 +312,8 @@ function testDuplicateNames() {
   console.log("\n=== Duplicate names ===");
   const root = makeTempRoot("dupes");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts:\n  - name: ctx\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeContextDir(root, "name: ctx\ndescription: \"Test context\"", {
     events: [["Clash.yml", "name: Clash\ndescription: \"Event\""]],
     commands: [["Clash.yml", "name: Clash\ndescription: \"Command\""]],
@@ -333,8 +333,8 @@ function testGlossaryAggregateCollision() {
   console.log("\n=== Glossary-aggregate collision ===");
   const root = makeTempRoot("glosscoll");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts:\n  - name: ctx\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeContextDir(root, [
     "name: ctx",
     'description: "Test context"',
@@ -363,10 +363,10 @@ function testMissingContextFile() {
   const root = makeTempRoot("missingctx");
 
   writeYaml(
-    join(root, "domain", "index.yml"),
+    join(root, ".dkk", "domain", "index.yml"),
     "contexts:\n  - name: phantom\n",
   );
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -383,7 +383,7 @@ function testBrokenFlowSteps() {
   const root = makeTempRoot("brokenflow");
 
   writeYaml(
-    join(root, "domain", "index.yml"),
+    join(root, ".dkk", "domain", "index.yml"),
     [
       "contexts: []",
       "flows:",
@@ -393,7 +393,7 @@ function testBrokenFlowSteps() {
       "        type: command",
     ].join("\n"),
   );
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
@@ -409,8 +409,8 @@ function testBrokenSupersededBy() {
   console.log("\n=== ADR superseded_by unresolved ===");
   const root = makeTempRoot("superseded");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts: []\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeAdr(
     join(root, ".dkk", "adr"),
     "0001-old.md",
@@ -437,8 +437,8 @@ function testWarnMissingFields() {
   console.log("\n=== warnMissingFields ===");
   const root = makeTempRoot("warnfields");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts:\n  - name: ctx\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts:\n  - name: ctx\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeContextDir(root, 'name: ctx\ndescription: "Test"', {
     events: [["NoFieldsEvent.yml", 'name: NoFieldsEvent\ndescription: "Event with no fields"']],
     commands: [["NoFieldsCommand.yml", 'name: NoFieldsCommand\ndescription: "Command with no fields"']],
@@ -465,8 +465,8 @@ function testEmptyModel() {
   console.log("\n=== Empty model ===");
   const root = makeTempRoot("empty");
 
-  writeYaml(join(root, "domain", "index.yml"), "contexts: []\n");
-  writeYaml(join(root, "domain", "actors.yml"), "actors: []\n");
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
 
   const model = loadDomainModel({ root });
   const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });

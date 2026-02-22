@@ -72,7 +72,7 @@ function run(args: string[], opts?: { root?: string }): RunResult {
 /** Create a minimal temp domain tree and return its root path. */
 function makeTempRoot(suffix: string): string {
   const root = join(tmpdir(), `dkk-cli-${suffix}-${Date.now()}`);
-  mkdirSync(join(root, "domain", "contexts"), { recursive: true });
+  mkdirSync(join(root, ".dkk", "domain", "contexts"), { recursive: true });
   mkdirSync(join(root, ".dkk", "adr"), { recursive: true });
   return root;
 }
@@ -94,7 +94,7 @@ function writeContextDir(
 ): void {
   const nameMatch = contextYaml.match(/^name:\s*(\S+)/m);
   const name = nameMatch![1];
-  const ctxDir = join(root, "domain", "contexts", name);
+  const ctxDir = join(root, ".dkk", "domain", "contexts", name);
   mkdirSync(ctxDir, { recursive: true });
   writeFileSync(join(ctxDir, "context.yml"), contextYaml, "utf-8");
   for (const [subDir, files] of Object.entries(items)) {
@@ -119,14 +119,14 @@ function makeValidDomain(suffix: string): string {
   const root = makeTempRoot(suffix);
   // Copy templates so render command can find them
   cpSync(TOOLS_DIR, join(root, "tools"), { recursive: true });
-  writeYaml(root, "domain/index.yml", [
+  writeYaml(root, ".dkk/domain/index.yml", [
     "contexts:",
     "  - name: ordering",
     '    description: "Order management"',
     "flows: []",
   ].join("\n"));
 
-  writeYaml(root, "domain/actors.yml", [
+  writeYaml(root, ".dkk/domain/actors.yml", [
     "actors:",
     "  - name: Customer",
     "    type: human",
@@ -205,13 +205,13 @@ try {
   {
     const root = makeTempRoot("validate-fail");
     tempRoots.push(root);
-    writeYaml(root, "domain/index.yml", [
+    writeYaml(root, ".dkk/domain/index.yml", [
       "contexts:",
       "  - name: ordering",
       '    description: "Order management"',
       "flows: []",
     ].join("\n"));
-    writeYaml(root, "domain/actors.yml", "actors: []\n");
+    writeYaml(root, ".dkk/domain/actors.yml", "actors: []\n");
     // Create a context that references a non-existent aggregate
     writeContextDir(root, "name: ordering\ndescription: \"Handles the order lifecycle\"", {
       commands: [["PlaceOrder.yml", [
@@ -632,8 +632,8 @@ try {
     const root = makeTempRoot("bad-yaml");
     tempRoots.push(root);
     // Write syntactically invalid YAML
-    writeYaml(root, "domain/index.yml", "contexts: [\n  - name: broken\n  bad_indent");
-    writeYaml(root, "domain/actors.yml", "actors: []\n");
+    writeYaml(root, ".dkk/domain/index.yml", "contexts: [\n  - name: broken\n  bad_indent");
+    writeYaml(root, ".dkk/domain/actors.yml", "actors: []\n");
     const result = run(["validate"], { root });
     assert("malformed YAML exits 1", result.exitCode === 1);
     assert("malformed YAML has error msg", result.stderr.length > 0);

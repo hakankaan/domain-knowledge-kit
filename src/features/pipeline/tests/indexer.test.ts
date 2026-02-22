@@ -13,7 +13,7 @@ import { buildIndex } from "../indexer.js";
 // ── Fixture setup ─────────────────────────────────────────────────────
 
 const TMP = join(tmpdir(), `dkk-search-test-${Date.now()}`);
-const DOMAIN = join(TMP, "domain");
+const DOMAIN = join(TMP, ".dkk", "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
 const ADR_DIR = join(TMP, ".dkk", "adr");
 const DB_PATH = join(TMP, ".dkk", "index.db");
@@ -30,7 +30,7 @@ function setup() {
   mkdirSync(join(CONTEXTS, "shipping", "read-models"), { recursive: true });
   mkdirSync(ADR_DIR, { recursive: true });
 
-  // domain/index.yml
+  // .dkk/domain/index.yml
   writeFileSync(
     join(DOMAIN, "index.yml"),
     [
@@ -52,7 +52,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/actors.yml
+  // .dkk/domain/actors.yml
   writeFileSync(
     join(DOMAIN, "actors.yml"),
     [
@@ -66,7 +66,7 @@ function setup() {
     ].join("\n"),
   );
 
-  // domain/contexts/ordering/ — per-item directory
+  // .dkk/domain/contexts/ordering/ — per-item directory
   writeFileSync(join(CONTEXTS, "ordering", "context.yml"), [
     "name: ordering",
     'description: "Handles the order lifecycle"',
@@ -135,7 +135,7 @@ function setup() {
     "  - Customer",
   ].join("\n"));
 
-  // domain/contexts/shipping/ — per-item directory
+  // .dkk/domain/contexts/shipping/ — per-item directory
   writeFileSync(join(CONTEXTS, "shipping", "context.yml"), [
     "name: shipping",
     'description: "Handles shipment tracking"',

@@ -19,7 +19,7 @@ Domain Knowledge Kit (DKK) is a CLI tool for teams practicing Domain-Driven Desi
 npm install -g domain-knowledge-kit
 
 # Create a bounded context
-cat > domain/contexts/ordering.yml << 'EOF'
+cat > .dkk/domain/contexts/ordering.yml << 'EOF'
 name: ordering
 description: Handles customer order lifecycle.
 events:
@@ -41,7 +41,7 @@ glossary: []
 EOF
 
 # Register it
-# Add "- name: ordering" to the contexts array in domain/index.yml
+# Add "- name: ordering" to the contexts array in .dkk/domain/index.yml
 
 # Validate and render
 dkk validate
@@ -96,13 +96,13 @@ Agents can then search, show, and traverse your domain model — making domain-a
 ## Directory Layout
 
 ```
-domain/                         # Domain model (YAML)
-  index.yml                     #   Contexts + flows
-  actors.yml                    #   Global actors
-  contexts/<name>.yml           #   Bounded context definitions
-.dkk/                           # Generated + managed
-  adr/                          #   Architecture Decision Records
-  docs/                         #   Generated docs (do not edit)
+.dkk/                           # Domain model + generated + managed
+  domain/                         #   Domain model (YAML)
+    index.yml                     #     Contexts + flows
+    actors.yml                    #     Global actors
+    contexts/<name>.yml           #     Bounded context definitions
+  adr/                            #   Architecture Decision Records
+  docs/                           #   Generated docs (do not edit)
 src/                            # Source code (vertical slices)
 tools/dkk/                      # Schemas + templates
   schema/                       #   JSON Schemas for validation

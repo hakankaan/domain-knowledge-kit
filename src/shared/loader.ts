@@ -1,13 +1,13 @@
 /**
  * Domain model loader.
  *
- * Recursively walks `domain/` and `.dkk/adr/` to discover all YAML
+ * Recursively walks `.dkk/domain/` and `.dkk/adr/` to discover all YAML
  * definition files and ADR Markdown files, then assembles and returns
  * a fully-typed {@link DomainModel}.
  *
  * Context layout (per-item directory format):
  *
- *   domain/contexts/<name>/
+ *   .dkk/domain/contexts/<name>/
  *     context.yml          ← metadata: name, description, glossary
  *     events/              ← one .yml file per DomainEvent
  *     commands/            ← one .yml file per Command

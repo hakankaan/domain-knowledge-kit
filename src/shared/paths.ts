@@ -21,22 +21,22 @@ export function repoRoot(override?: string): string {
   return resolve(import.meta.dirname, "../..");
 }
 
-/** Absolute path to the `domain/` directory. */
+/** Absolute path to the `.dkk/domain/` directory. */
 export function domainDir(root?: string): string {
-  return join(repoRoot(root), "domain");
+  return join(repoRoot(root), ".dkk", "domain");
 }
 
-/** Absolute path to `domain/contexts/`. */
+/** Absolute path to `.dkk/domain/contexts/`. */
 export function contextsDir(root?: string): string {
   return join(domainDir(root), "contexts");
 }
 
-/** Absolute path to `domain/actors.yml`. */
+/** Absolute path to `.dkk/domain/actors.yml`. */
 export function actorsFile(root?: string): string {
   return join(domainDir(root), "actors.yml");
 }
 
-/** Absolute path to `domain/index.yml`. */
+/** Absolute path to `.dkk/domain/index.yml`. */
 export function indexFile(root?: string): string {
   return join(domainDir(root), "index.yml");
 }

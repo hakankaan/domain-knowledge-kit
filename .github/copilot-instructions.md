@@ -67,7 +67,7 @@ src/
 
 ## Domain Model
 
-The `domain/` directory in this repo contains a sample domain model used for testing the CLI. When editing domain YAML:
+The `.dkk/domain/` directory in this repo contains a sample domain model used for testing the CLI. When editing domain YAML:
 
 - Run `npx tsx src/cli.ts validate` then `npx tsx src/cli.ts render` to verify changes.
 - YAML files use `.yml` extension.

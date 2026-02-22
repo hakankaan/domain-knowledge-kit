@@ -18,20 +18,20 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 ## Core Principles
 
-1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`domain/\`.
+1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`.dkk/domain/\`.
 2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
 3. **Every change to domain files must pass quality gates:** run \`dkk validate\` then \`dkk render\` before committing.
 
 ## Domain Model Structure
 
 \`\`\`
-domain/
-  index.yml          # Top-level: registered contexts + cross-context flows
-  actors.yml          # Global actors (human | system | external)
-  contexts/
-    <name>.yml        # Bounded context with events, commands, policies,
-                      #   aggregates, read_models, glossary
 .dkk/
+  domain/
+    index.yml          # Top-level: registered contexts + cross-context flows
+    actors.yml          # Global actors (human | system | external)
+    contexts/
+      <name>.yml        # Bounded context with events, commands, policies,
+                        #   aggregates, read_models, glossary
   adr/
     adr-NNNN.md      # Architecture Decision Records (YAML frontmatter)
 \`\`\`
@@ -112,10 +112,10 @@ When modifying the domain model:
    dkk list --context <name>
    \`\`\`
 2. **Edit YAML files directly** — Apply changes to the appropriate files:
-   - **New context:** Create \`domain/contexts/<name>.yml\` and register in \`domain/index.yml\`.
-   - **New domain item:** Add to the correct array (\`events\`, \`commands\`, \`policies\`, \`aggregates\`, \`read_models\`, \`glossary\`) in \`domain/contexts/<name>.yml\`.
-   - **New actor:** Add to \`domain/actors.yml\` under \`actors\`.
-   - **New flow:** Add to \`domain/index.yml\` under \`flows\`.
+   - **New context:** Create \`.dkk/domain/contexts/<name>.yml\` and register in \`.dkk/domain/index.yml\`.
+   - **New domain item:** Add to the correct array (\`events\`, \`commands\`, \`policies\`, \`aggregates\`, \`read_models\`, \`glossary\`) in \`.dkk/domain/contexts/<name>.yml\`.
+   - **New actor:** Add to \`.dkk/domain/actors.yml\` under \`actors\`.
+   - **New flow:** Add to \`.dkk/domain/index.yml\` under \`flows\`.
    - **Modified item:** Edit in place, preserving all existing fields.
 3. **Maintain referential integrity:**
    - \`adr_refs\` must point to existing ADRs in \`.dkk/adr/\`.
@@ -141,7 +141,7 @@ When modifying the domain model:
 
 ### YAML Structure Reference
 
-**Context file** (\`domain/contexts/<name>.yml\`):
+**Context file** (\`.dkk/domain/contexts/<name>.yml\`):
 
 \`\`\`yaml
 name: ordering
@@ -191,7 +191,7 @@ read_models:
       - Customer
 \`\`\`
 
-**Actors file** (\`domain/actors.yml\`):
+**Actors file** (\`.dkk/domain/actors.yml\`):
 
 \`\`\`yaml
 actors:
@@ -200,7 +200,7 @@ actors:
     description: End user who places and tracks orders.
 \`\`\`
 
-**Index file** (\`domain/index.yml\`):
+**Index file** (\`.dkk/domain/index.yml\`):
 
 \`\`\`yaml
 contexts:
@@ -250,7 +250,7 @@ The validator checks:
 
 - **Schema conformance** — Each YAML file is validated against its JSON Schema.
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
-- **Context registration** — Every context file in \`domain/contexts/\` is registered in \`domain/index.yml\`.
+- **Context registration** — Every context file in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
 
 ## Generated Documentation
 

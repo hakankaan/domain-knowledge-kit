@@ -9,7 +9,7 @@ import { loadDomainModel } from "../loader.js";
 import { DomainGraph } from "../graph.js";
 
 const TMP = join(tmpdir(), `dkk-collision-fix-${Date.now()}`);
-const DOMAIN = join(TMP, "domain");
+const DOMAIN = join(TMP, ".dkk", "domain");
 const CONTEXTS = join(DOMAIN, "contexts");
 const ADR_DIR = join(TMP, ".dkk", "adr");
 

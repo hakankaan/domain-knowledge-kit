@@ -40,7 +40,7 @@ bd sync               # Sync with git
 
 ## Domain Model
 
-**Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under `domain/`.
+**Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under `.dkk/domain/`.
 
 ### Key Conventions
 
