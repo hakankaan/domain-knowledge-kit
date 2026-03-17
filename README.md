@@ -72,19 +72,23 @@ dkk related ordering.Order
 |-------|-------------------|
 | **[Getting Started](docs/getting-started.md)** | Install, create your first context, run quality gates, search and explore |
 | **[Domain Modeling](docs/domain-modeling.md)** | All item types, YAML structure, cross-references, naming conventions, ID formats |
-| **[CLI Reference](docs/cli-reference.md)** | Every command and flag: `list`, `show`, `search`, `related`, `validate`, `render`, `init`, `prime`, `adr show`, `adr related` |
+| **[CLI Reference](docs/cli-reference.md)** | Every command and flag: `list`, `show`, `summary`, `search`, `related`, `validate`, `rename`, `rm`, `render`, `init`, `prime`, `adr show`, `adr related`, `add`, `new` |
 | **[ADR Guide](docs/adr-guide.md)** | Architecture Decision Records: format, bidirectional linking, querying, best practices |
-| **[AI Agent Integration](docs/ai-agent-integration.md)** | `dkk init`, `dkk prime`, Copilot integration, reusable prompts, portable skills |
+| **[AI Agent Integration](docs/ai-agent-integration.md)** | `dkk init`, `dkk prime`, `--json --minify` flags, context-efficient retrieval |
 
 ## Key Commands
 
 ```bash
 dkk validate              # Schema + cross-reference validation
+dkk validate ordering.Order  # Targeted validation for a single item
 dkk render                # Validate → render docs → rebuild search index
 dkk search "payment"      # Full-text search with ranking
+dkk summary ordering.Order  # Concise AI-optimized item overview
 dkk show ordering.Order   # Display full item definition
 dkk related ordering.Order  # Graph traversal of connected items
 dkk list --type event     # List all events across contexts
+dkk rename ordering.OldName ordering.NewName --diff  # Rename with diff output
+dkk rm ordering.OldEvent --diff   # Remove item with diff output
 dkk init                  # Set up AI agent onboarding
 dkk prime                 # Output agent context to stdout
 ```

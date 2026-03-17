@@ -80,10 +80,19 @@ glossary:
     definition: A customer's request to purchase items.
 ```
 
-**Add an event**:
+**Add an event** (with inline flags):
 
 ```bash
+# Basic scaffold
 dkk add event OrderPlaced --context ordering
+
+# With description and relationship in one shot
+dkk add event OrderPlaced --context ordering \
+  --description "Raised when a customer order is confirmed" \
+  --raised-by Order
+
+# Get JSON output (path + id) for scripting / AI agents
+dkk add event OrderPlaced --context ordering --json
 ```
 
 Update `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`:
@@ -99,10 +108,16 @@ fields:
 raised_by: Order
 ```
 
-**Add a command**:
+**Add a command** (with inline flags):
 
 ```bash
 dkk add command PlaceOrder --context ordering
+
+# With actor and handler set immediately
+dkk add command PlaceOrder --context ordering \
+  --description "Submit a new customer order" \
+  --actor Customer \
+  --handled-by Order
 ```
 
 Update `.dkk/domain/contexts/ordering/commands/PlaceOrder.yml`:
@@ -203,10 +218,13 @@ For a quick validation-only check (without rendering), use `dkk validate`.
 Once rendered, you can search and explore your domain:
 
 ```bash
+# Concise AI-optimised item overview (minimal token payload)
+dkk summary ordering.Order
+
 # Full-text search
 dkk search "order"
 
-# Show a specific item
+# Show a specific item's full YAML
 dkk show ordering.OrderPlaced
 
 # Explore related items via graph traversal
@@ -214,6 +232,14 @@ dkk related ordering.Order
 
 # List all items in a context
 dkk list --context ordering
+```
+
+All retrieval commands also accept `--json` and `--minify` for machine-readable,
+low-footprint output — useful when scripting or feeding results to an AI agent.
+
+```bash
+dkk summary ordering.Order --json --minify
+dkk show ordering.OrderPlaced --json --minify
 ```
 
 ## Step 7: Add an ADR (Optional)
