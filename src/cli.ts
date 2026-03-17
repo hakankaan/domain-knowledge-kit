@@ -4,6 +4,7 @@ import { registerList } from "./features/query/commands/list.js";
 import { registerShow } from "./features/query/commands/show.js";
 import { registerSearch } from "./features/query/commands/search.js";
 import { registerRelated } from "./features/query/commands/related.js";
+import { registerGraph } from "./features/query/commands/graph.js";
 import { registerValidate } from "./features/pipeline/commands/validate.js";
 import { registerRender } from "./features/pipeline/commands/render.js";
 import { registerAdrShow } from "./features/adr/commands/adr-show.js";
@@ -14,6 +15,9 @@ import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
 import { registerNewContext } from "./features/scaffold/commands/new-context.js";
 import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
 import { registerAddItem } from "./features/scaffold/commands/add-item.js";
+import { registerRename } from "./features/refactor/commands/rename.js";
+import { registerRm } from "./features/refactor/commands/rm.js";
+import { registerStats } from "./features/audit/commands/stats.js";
 import { formatCliError } from "./shared/errors.js";
 
 /** Whether to show full stack traces (set DEBUG=1 in env). */
@@ -33,10 +37,14 @@ registerList(program);
 registerShow(program);
 registerSearch(program);
 registerRelated(program);
+registerGraph(program);
 registerValidate(program);
 registerRender(program);
 registerInit(program);
 registerPrime(program);
+registerRename(program);
+registerRm(program);
+registerStats(program);
 
 // ADR sub-command group
 const adrCmd = program

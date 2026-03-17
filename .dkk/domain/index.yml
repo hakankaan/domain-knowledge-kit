@@ -1,2 +1,4 @@
-contexts: []
+contexts:
+  - name: my-test-ctx
+    description: The my-test-ctx bounded context
 flows: []

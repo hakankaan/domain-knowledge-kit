@@ -34,17 +34,17 @@ const SUPPORTED_TYPES = [...Object.keys(TYPE_DIR_MAP), "glossary"];
 // ── YAML generators ──────────────────────────────────────────────────
 
 function eventYaml(name: string, description: string): string {
-  return `name: ${name}\ndescription: ${description}\n`;
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
 function commandYaml(name: string, description: string): string {
-  return `name: ${name}\ndescription: ${description}\n`;
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
 function aggregateYaml(name: string, description: string): string {
   return [
     `name: ${name}`,
-    `description: ${description}`,
+    `description: "${description}"`,
     "handles:",
     "  commands: []",
     "emits:",
@@ -54,11 +54,11 @@ function aggregateYaml(name: string, description: string): string {
 }
 
 function policyYaml(name: string, description: string): string {
-  return `name: ${name}\ndescription: ${description}\n`;
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
 function readModelYaml(name: string, description: string): string {
-  return `name: ${name}\ndescription: ${description}\n`;
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
 /** Return YAML content for a file-based item type. */

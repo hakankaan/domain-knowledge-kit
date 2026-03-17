@@ -94,6 +94,67 @@ dkk related actor.Customer --json
 
 ---
 
+## `graph`
+
+Generate a Mermaid.js flowchart of the domain model, capturing all nodes and their interactions.
+
+```bash
+dkk graph
+dkk graph --output .dkk/docs/graph.md
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-o, --output <file>` | `.dkk/docs/graph.md` | Output file path |
+| `-d, --depth <n>` | `3` | Maximum traversal depth for large graphs |
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
+## `rename <old-id> <new-id>`
+
+Rename a domain item and automatically update all its references across other YAML items and Markdown ADRs.
+
+```bash
+dkk rename ordering.OrderPlaced ordering.OrderShipped
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
+## `rm <id>` (or `remove`, `delete`)
+
+Remove a domain item securely. The command validates the domain graph and blocks deletion if other items depend on it.
+
+```bash
+dkk rm ordering.OrderShipped
+dkk rm ordering.OrderShipped --force
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-f, --force` | — | Force removal even if there are dependents |
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
+## `stats`
+
+Print domain model statistics and summarize model health by identifying orphaned items (items with no connections).
+
+```bash
+dkk stats
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
 ## `validate`
 
 Run schema validation (JSON Schema) and cross-reference checks on the entire domain model.
