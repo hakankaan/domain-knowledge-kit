@@ -9,6 +9,7 @@ Domain Knowledge Kit is designed to work with AI coding agents — giving them s
 AI agents work better when they understand your business domain, not just your code. DKK provides:
 
 - **Structured context** — Agents can query events, commands, aggregates, and their relationships instead of parsing unstructured documentation.
+- **Context Optimization** — The `summary` command and `--minify` flag provide the minimal token-efficient payload needed for high-frequency reasoning tasks.
 - **Referential integrity** — The validated YAML model ensures agents get accurate, consistent information.
 - **Searchable knowledge** — Full-text search lets agents find relevant domain items quickly.
 - **Graph traversal** — Agents can explore how domain items connect, discovering blast radius and dependencies.
@@ -56,9 +57,17 @@ Agents that run `dkk prime` get everything they need to understand, query, modif
 
 ## Domain-First Retrieval
 
-AI agents should query the domain model rather than guessing about business logic. Here's the recommended workflow:
+AI agents should query the domain model rather than guessing about business logic. For maximum efficiency, use the `--json --minify` flags.
 
-### 1. Search
+### 1. Summary (Fast Overview)
+
+Get a high-level overview of an item and its immediate neighbors without reading the full YAML content. This is the most token-efficient way to get context:
+
+```bash
+dkk summary ordering.OrderPlaced --json --minify
+```
+
+### 2. Search
 
 Find relevant domain items by keyword:
 
@@ -100,7 +109,15 @@ Get an overview of what's defined:
 
 ```bash
 dkk list --context ordering
-dkk list --type event
+dkk list --type event --json --minify
+```
+
+## AI-Optimized JSON Output
+
+All retrieval and creation commands support the `--json` flag for machine readability and the `--minify` flag to strip whitespace and newlines, reducing the token count for AI context.
+
+```bash
+dkk show ordering.Order --json --minify
 ```
 
 ## Domain-Aware Changes

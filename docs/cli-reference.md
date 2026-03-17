@@ -31,6 +31,24 @@ dkk list --context ordering --type command --json
 | `-c, --context <name>` | — | Filter by bounded context |
 | `-t, --type <type>` | — | Filter by item type (see [Item Types](#item-types)) |
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output (AI-optimized) |
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
+## `summary <id>`
+
+Provide a concise overview of a domain item, including its ID, name, kind, context, and immediate graph neighbors (depth 1). Designed for minimal token consumption by AI agents.
+
+```bash
+dkk summary ordering.OrderPlaced
+dkk summary ordering.Order --json --minify
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -48,6 +66,7 @@ dkk show adr-0001 --json
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 → See [ID Conventions](domain-modeling.md#id-conventions) for the ID format.
@@ -72,6 +91,7 @@ dkk search "customer" --expand --limit 5
 | `--limit <n>` | `20` | Maximum number of results |
 | `--expand` | — | Expand top results with graph neighbours |
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -90,6 +110,7 @@ dkk related actor.Customer --json
 |------|---------|-------------|
 | `-d, --depth <n>` | `1` | Maximum BFS traversal depth |
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -121,6 +142,7 @@ dkk rename ordering.OrderPlaced ordering.OrderShipped
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--diff` | — | Output a unified diff of all resulting file changes |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -137,6 +159,7 @@ dkk rm ordering.OrderShipped --force
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-f, --force` | — | Force removal even if there are dependents |
+| `--diff` | — | Output a diff representation of the resulting changes |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -161,8 +184,8 @@ Run schema validation (JSON Schema) and cross-reference checks on the entire dom
 
 ```bash
 dkk validate
-dkk validate --warn-missing-fields
-dkk validate --json
+dkk validate ordering.OrderPlaced
+dkk validate --json --minify
 ```
 
 Checks performed:
@@ -174,6 +197,7 @@ Checks performed:
 |------|---------|-------------|
 | `--warn-missing-fields` | — | Warn about events/commands with no `fields` defined |
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -241,6 +265,7 @@ dkk adr show adr-0001 --json
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 → See [ADR Guide](adr-guide.md) for the full ADR workflow.
@@ -280,9 +305,9 @@ dkk new adr "<title>"
 
 | Sub-Command | Description | Flags |
 |-------------|-------------|-------|
-| `domain` | Scaffold `.dkk/domain` structure, schemas, and a base `actors.yml` and `index.yml`. | `-r, --root <path>` |
-| `context` | Scaffold a new bounded context with its metadata and subdirectories. | `-d, --description <text>`<br>`-r, --root <path>` |
-| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. | `-s, --status <status>`<br>`-r, --root <path>` |
+| `domain` | Scaffold `.dkk/domain` structure, schemas, and a base `actors.yml` and `index.yml`. | `--json`, `--minify`, `-r, --root <path>`, `--force` |
+| `context` | Scaffold a new bounded context with its metadata and subdirectories. | `--json`, `--minify`, `-d, --description <text>`, `-r, --root <path>` |
+| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `-s, --status <status>`, `-r, --root <path>` |
 
 ---
 
@@ -299,6 +324,17 @@ dkk add command PlaceOrder --context ordering
 |------|---------|-------------|
 | `-c, --context <name>` | — | Target bounded context (kebab-case) (required). |
 | `-d, --description <text>` | — | Brief description of the item. |
+| `--raised-by <id>` | — | (Event) Aggregate that raises this event. |
+| `--handled-by <id>` | — | (Command) Aggregate that handles this command. |
+| `--actor <id>` | — | (Command) Actor that initiates this command. |
+| `--triggers <ids>` | — | (Policy) Events that trigger this policy (comma-separated). |
+| `--emits <ids>` | — | Commands emitted by policy / events emitted by aggregate (comma-separated). |
+| `--handles <ids>` | — | (Aggregate) Commands handled by aggregate (comma-separated). |
+| `--subscribes-to <ids>` | — | (Read-model) Events subscribed to (comma-separated). |
+| `--used-by <ids>` | — | (Read-model) Actors that use this read-model (comma-separated). |
+| `--from <id>` | — | Clone structure and description from an existing item. |
+| `--json` | — | Output created item path and ID as JSON. |
+| `--minify` | — | Minify JSON output. |
 | `-r, --root <path>` | repo root | Override repository root |
 
 See below for the list of available Types.
@@ -331,6 +367,7 @@ These flags work on most commands:
 | Flag | Description |
 |------|-------------|
 | `--json` | Output as JSON instead of human-readable format |
+| `--minify` | Minify JSON output (remove whitespace/formatting) |
 | `-r, --root <path>` | Override the repository root path |
 | `--help` | Display help for a command |
 
