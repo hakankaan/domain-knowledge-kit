@@ -1,151 +1,42 @@
 # Domain Knowledge Kit
 
-Define, validate, search, and document your domain model — all from YAML.
+> *Humans design the domain. AI agents align the codebase.*
 
-## What Is This?
+## Philosophy
 
-Domain Knowledge Kit (DKK) is a CLI tool for teams practicing Domain-Driven Design. Instead of scattering domain knowledge across wikis, diagrams, and tribal memory, you define your **bounded contexts**, **events**, **commands**, **policies**, **aggregates**, **read models**, and **glossary** in structured YAML files. DKK then:
+### AI agents love structure
 
-- **Validates** schema conformance and referential integrity across your entire model
-- **Generates** browsable Markdown documentation from your YAML definitions
-- **Builds** a full-text search index (SQLite FTS5) for instant domain queries
-- **Links** Architecture Decision Records (ADRs) bidirectionally to domain items
-- **Integrates** with AI coding agents so they understand your domain, not just your code
+Large language models thrive with well-structured, unambiguous context. A flat codebase gives them syntax; a structured domain model gives them **meaning**. DKK makes your domain a first-class, machine-readable citizen of your repository.
 
-## Quick Start
+### Humans can define domain events easily
 
-```bash
-# Install
-npm install -g domain-knowledge-kit
+You don't need a diagram tool or a modeling session. Writing `OrderPlaced` in a YAML file — with a one-line description and a reference to the aggregate that emits it — is how humans naturally think in DDD. Defining events, commands, and policies in plain YAML reveals the bigger picture without drowning in implementation details.
 
-# Create a bounded context (per-item directory format)
-mkdir -p .dkk/domain/contexts/ordering/{events,commands,aggregates}
+### Reading domain models beats reading code
 
-# Context metadata
-cat > .dkk/domain/contexts/ordering/context.yml << 'EOF'
-name: ordering
-description: Handles customer order lifecycle.
-EOF
+Business logic spread across services, handlers, and database schemas is hard to reason about holistically. A domain model is a curated, intentional view of *what your system does and why* — not *how* it does it. DKK keeps that view always up-to-date and always searchable.
 
-# One file per domain item
-cat > .dkk/domain/contexts/ordering/events/OrderPlaced.yml << 'EOF'
-name: OrderPlaced
-description: Raised when a customer order is confirmed.
-raised_by: Order
-EOF
+### Keeping ADRs, even deprecated ones, preserves project memory
 
-cat > .dkk/domain/contexts/ordering/commands/PlaceOrder.yml << 'EOF'
-name: PlaceOrder
-description: Submit a new customer order.
-handled_by: Order
-EOF
+Architectural decisions aren't born in a vacuum. Understanding *why* a choice was made matters as much as knowing *what* the choice was. Deprecated ADRs aren't noise — they are the institutional memory that prevents teams (and AI agents) from relitigating past decisions.
 
-cat > .dkk/domain/contexts/ordering/aggregates/Order.yml << 'EOF'
-name: Order
-description: Manages order state and invariants.
-handles:
-  commands:
-    - PlaceOrder
-emits:
-  events:
-    - OrderPlaced
-EOF
+### Easy-to-reach, detailed, colocated knowledge for AI agents
 
-# Register it in .dkk/domain/index.yml
-# Add "- name: ordering" to the contexts array
+Knowledge that lives next to the code is knowledge that gets used. DKK colocates your domain model, ADRs, and generated docs inside the repository itself. AI agents can discover, query, and traverse this knowledge without leaving the codebase — making every interaction domain-aware.
 
-# Validate and render
-dkk validate
-dkk render
-
-# Explore
-dkk search "order"
-dkk show ordering.OrderPlaced
-dkk related ordering.Order
-```
-
-→ **[Full Getting Started Guide](docs/getting-started.md)** — step-by-step walkthrough with examples.
+---
 
 ## Documentation
 
-| Guide | What You'll Learn |
-|-------|-------------------|
-| **[Getting Started](docs/getting-started.md)** | Install, create your first context, run quality gates, search and explore |
-| **[Domain Modeling](docs/domain-modeling.md)** | All item types, YAML structure, cross-references, naming conventions, ID formats |
-| **[CLI Reference](docs/cli-reference.md)** | Every command and flag: `list`, `show`, `summary`, `search`, `related`, `validate`, `rename`, `rm`, `render`, `init`, `prime`, `adr show`, `adr related`, `add`, `new` |
-| **[ADR Guide](docs/adr-guide.md)** | Architecture Decision Records: format, bidirectional linking, querying, best practices |
-| **[AI Agent Integration](docs/ai-agent-integration.md)** | `dkk init`, `dkk prime`, `--json --minify` flags, context-efficient retrieval |
+All technical details, CLI references, and integration guides live in the [`docs/`](docs/) folder.
 
-## Key Commands
-
-```bash
-dkk validate              # Schema + cross-reference validation
-dkk validate ordering.Order  # Targeted validation for a single item
-dkk render                # Validate → render docs → rebuild search index
-dkk search "payment"      # Full-text search with ranking
-dkk summary ordering.Order  # Concise AI-optimized item overview
-dkk show ordering.Order   # Display full item definition
-dkk related ordering.Order  # Graph traversal of connected items
-dkk list --type event     # List all events across contexts
-dkk rename ordering.OldName ordering.NewName --diff  # Rename with diff output
-dkk rm ordering.OldEvent --diff   # Remove item with diff output
-dkk init                  # Set up AI agent onboarding
-dkk prime                 # Output agent context to stdout
-```
-
-→ **[Full CLI Reference](docs/cli-reference.md)**
-
-## AI Agent Integration
-
-DKK has first-class support for AI coding agents. Two commands get you set up:
-
-```bash
-dkk init    # Add a DKK section to AGENTS.md (idempotent)
-dkk prime   # Output full domain context for AI consumption
-```
-
-Agents can then search, show, and traverse your domain model — making domain-aware decisions when writing, reviewing, or refactoring code. DKK also ships with GitHub Copilot instructions, reusable agent prompts, and a portable agent skill.
-
-→ **[AI Agent Integration Guide](docs/ai-agent-integration.md)**
-
-## Directory Layout
-
-```
-.dkk/                           # Domain model + generated + managed
-  domain/                         #   Domain model (YAML)
-    index.yml                     #     Contexts + flows
-    actors.yml                    #     Global actors
-    contexts/                     #     Bounded contexts (one dir each)
-      <name>/                     #       Context directory
-        context.yml               #         Context metadata + glossary
-        events/                   #         One .yml file per event
-        commands/                 #         One .yml file per command
-        aggregates/               #         One .yml file per aggregate
-        policies/                 #         One .yml file per policy
-        read-models/              #         One .yml file per read model
-  adr/                            #   Architecture Decision Records
-  docs/                           #   Generated docs (do not edit)
-src/                            # Source code (vertical slices)
-tools/dkk/                      # Schemas + templates
-  schema/                       #   JSON Schemas for validation
-  templates/                    #   Handlebars templates for rendering
-```
-
-## Contributing / Local Development
-
-```bash
-npm install
-
-# Run directly via tsx (no build step needed)
-npm run dev -- validate
-npm run dev -- render
-
-# Or build first
-npm run build
-npx dkk validate
-```
-
-The source code uses **vertical feature slices** — each feature (`query`, `adr`, `pipeline`, `agent`) owns its commands, logic, and tests. Cross-cutting infrastructure lives in `shared/`.
+| Guide | What It Covers |
+|-------|----------------|
+| **[Getting Started](docs/getting-started.md)** | Installation, first context, quality gates |
+| **[Domain Modeling](docs/domain-modeling.md)** | YAML structure, item types, naming conventions |
+| **[CLI Reference](docs/cli-reference.md)** | Every command and flag |
+| **[ADR Guide](docs/adr-guide.md)** | Writing, linking, and querying ADRs |
+| **[AI Agent Integration](docs/ai-agent-integration.md)** | Onboarding agents, context-efficient retrieval |
 
 ## License
 
