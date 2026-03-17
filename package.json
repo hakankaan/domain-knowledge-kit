@@ -1,6 +1,6 @@
 {
   "name": "domain-knowledge-kit",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Domain Knowledge Pack — YAML + ADR links + deterministic search + generated docs",
   "type": "module",
   "repository": {
