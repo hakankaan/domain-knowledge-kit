@@ -30,7 +30,9 @@ export function registerNewContext(program: Cmd): void {
     .description("Scaffold a new bounded context directory and register it in index.yml")
     .option("-r, --root <path>", "Override repository root")
     .option("-d, --description <text>", "Description of the bounded context")
-    .action((name: string, opts: { root?: string; description?: string }) => {
+    .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON")
+    .action((name: string, opts: { root?: string; description?: string; json?: boolean; minify?: boolean }) => {
       // Validate name
       if (!isValidContextName(name)) {
         console.error(
@@ -81,6 +83,15 @@ description: ${description}
       if (!alreadyRegistered) {
         index.contexts.push({ name, description });
         writeFileSync(idxPath, stringifyYaml(index), "utf-8");
+      }
+
+      if (opts.json) {
+         console.log(JSON.stringify({
+             name,
+             path: ctxDir,
+             indexUpdated: !alreadyRegistered
+         }, null, opts.minify ? 0 : 2));
+         return;
       }
 
       console.log(`Created context "${name}":`);

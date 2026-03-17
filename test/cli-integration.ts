@@ -1006,7 +1006,7 @@ try {
     assert("add event creates file", existsSync(filePath));
     const content = readFileSync(filePath, "utf-8");
     assert("add event has name", content.includes("name: OrderShipped"));
-    assert("add event has description", content.includes("description: Raised when order ships"));
+    assert("add event has description", content.includes(`description: "Raised when order ships"`));
   }
 
   console.log("\n=== add command: creates command YAML file ===");
@@ -1019,7 +1019,7 @@ try {
     assert("add command creates file", existsSync(filePath));
     const content = readFileSync(filePath, "utf-8");
     assert("add command has name", content.includes("name: CancelOrder"));
-    assert("add command has description", content.includes("description: Cancel an existing order"));
+    assert("add command has description", content.includes(`description: "Cancel an existing order"`));
   }
 
   console.log("\n=== add aggregate: creates aggregate YAML file ===");

@@ -73,7 +73,9 @@ export function registerNewDomain(program: Cmd): void {
     .description("Scaffold a complete .dkk/domain/ structure with sample content")
     .option("-r, --root <path>", "Override repository root")
     .option("--force", "Overwrite existing .dkk/domain/ directory")
-    .action((opts: { root?: string; force?: boolean }) => {
+    .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON")
+    .action((opts: { root?: string; force?: boolean; json?: boolean; minify?: boolean }) => {
       const dir = domainDir(opts.root);
 
       // Guard: refuse to overwrite unless --force
@@ -98,6 +100,14 @@ export function registerNewDomain(program: Cmd): void {
       writeFileSync(join(contextsBase, "events", "SampleCreated.yml"), SAMPLE_EVENT, "utf-8");
       writeFileSync(join(contextsBase, "commands", "CreateSample.yml"), SAMPLE_COMMAND, "utf-8");
       writeFileSync(join(contextsBase, "aggregates", "Sample.yml"), SAMPLE_AGGREGATE, "utf-8");
+
+      if (opts.json) {
+         console.log(JSON.stringify({
+            path: dir,
+            success: true
+         }, null, opts.minify ? 0 : 2));
+         return;
+      }
 
       console.log("Created .dkk/domain/ with sample content:");
       console.log("  index.yml");

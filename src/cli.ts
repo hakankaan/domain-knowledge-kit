@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { registerList } from "./features/query/commands/list.js";
 import { registerShow } from "./features/query/commands/show.js";
+import { registerSummary } from "./features/query/commands/summary.js";
 import { registerSearch } from "./features/query/commands/search.js";
 import { registerRelated } from "./features/query/commands/related.js";
 import { registerGraph } from "./features/query/commands/graph.js";
@@ -35,6 +36,7 @@ program
 // Top-level commands
 registerList(program);
 registerShow(program);
+registerSummary(program);
 registerSearch(program);
 registerRelated(program);
 registerGraph(program);

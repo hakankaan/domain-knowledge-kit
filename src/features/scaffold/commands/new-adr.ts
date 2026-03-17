@@ -50,13 +50,21 @@ function slugify(title: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function parseCsv(val: string): string[] {
+  return val.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 export function registerNewAdr(program: Cmd): void {
   program
     .command("adr <title>")
     .description("Scaffold a new ADR file with frontmatter template")
     .option("-r, --root <path>", "Override repository root")
     .option("-s, --status <status>", "ADR status (proposed, accepted, deprecated)", "proposed")
-    .action((title: string, opts: { root?: string; status?: string }) => {
+    .option("--domain-refs <ids>", "Domain references (comma-separated)", parseCsv)
+    .option("--deciders <names>", "Deciders (comma-separated)", parseCsv)
+    .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON")
+    .action((title: string, opts: { root?: string; status?: string; domainRefs?: string[]; deciders?: string[]; json?: boolean; minify?: boolean }) => {
       const status = opts.status ?? "proposed";
       const validStatuses = ["proposed", "accepted", "deprecated", "superseded"];
       if (!validStatuses.includes(status)) {
@@ -81,13 +89,16 @@ export function registerNewAdr(program: Cmd): void {
       }
 
       const _slug = slugify(title);
+      const decidersStr = opts.deciders?.length ? opts.deciders.map(d => `\n  - "${d}"`).join('') : " []";
+      const domainRefsStr = opts.domainRefs?.length ? opts.domainRefs.map(r => `\n  - ${r}`).join('') : " []";
+
       const content = `---
 id: ${id}
 title: ${title}
 status: ${status}
 date: ${today()}
-deciders: []
-domain_refs: []
+deciders:${decidersStr}
+domain_refs:${domainRefsStr}
 ---
 
 # ${id.toUpperCase()} — ${title}
@@ -109,6 +120,16 @@ domain_refs: []
 `;
 
       writeFileSync(filePath, content, "utf-8");
+
+      if (opts.json) {
+         console.log(JSON.stringify({
+            id,
+            path: filePath,
+            title
+         }, null, opts.minify ? 0 : 2));
+         return;
+      }
+
       console.log(`Created ${filename}`);
       console.log(`  .dkk/adr/${filename}`);
     });

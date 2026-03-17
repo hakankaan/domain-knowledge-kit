@@ -5,7 +5,7 @@ import { loadDomainModel } from "../../../shared/loader.js";
 import { contextsDir, adrDir, indexFile } from "../../../shared/paths.js";
 import { DomainGraph } from "../../../shared/graph.js";
 
-function rewriteReferences(filePath: string, oldId: string, newId: string) {
+function rewriteReferences(filePath: string, oldId: string, newId: string, showDiff: boolean = false) {
   if (!existsSync(filePath)) return;
   const content = readFileSync(filePath, "utf-8");
   // Simple regex replace for the ID string. This handles most cases
@@ -16,6 +16,17 @@ function rewriteReferences(filePath: string, oldId: string, newId: string) {
   if (regex.test(content)) {
     const newContent = content.replace(regex, newId);
     writeFileSync(filePath, newContent, "utf-8");
+    if (showDiff) {
+      console.log(`\n--- a/${filePath}\n+++ b/${filePath}`);
+      const oLines = content.split('\n');
+      const nLines = newContent.split('\n');
+      for (let i = 0; i < oLines.length; i++) {
+        if (oLines[i] !== nLines[i]) {
+          console.log(`- ${oLines[i]}`);
+          console.log(`+ ${nLines[i]}`);
+        }
+      }
+    }
     return true;
   }
   return false;
@@ -25,12 +36,13 @@ export function registerRename(program: Cmd): void {
   program
     .command("rename <old-id> <new-id>")
     .description("Rename a domain item and update all references to it")
+    .option("--diff", "Output a diff representation of the resulting changes")
     .option("-r, --root <path>", "Override repository root")
     .action(
       (
         oldId: string,
         newId: string,
-        opts: { root?: string },
+        opts: { root?: string; diff?: boolean },
       ) => {
         // Validation format
         if (!oldId.includes(".") || !newId.includes(".")) {
@@ -84,12 +96,12 @@ export function registerRename(program: Cmd): void {
            const depNode = graph.nodes.get(depId)!;
            if (depNode.kind === "adr") {
              const adrPath = join(adrDir(opts.root), `${depNode.name}.md`);
-             if (rewriteReferences(adrPath, oldId, newId)) updatedFiles++;
+             if (rewriteReferences(adrPath, oldId, newId, opts.diff)) updatedFiles++;
              continue;
            }
            if (depNode.kind === "flow") {
               const domIdxPath = indexFile(opts.root);
-              if (rewriteReferences(domIdxPath, oldId, newId)) updatedFiles++;
+              if (rewriteReferences(domIdxPath, oldId, newId, opts.diff)) updatedFiles++;
               continue;
            }
            if (depNode.kind === "actor") {
@@ -110,10 +122,10 @@ export function registerRename(program: Cmd): void {
 
               if (depNode.kind === "glossary") {
                   const metaPath = join(ctxDir, "context.yml");
-                   if (rewriteReferences(metaPath, oldId, newId)) updatedFiles++;
+                   if (rewriteReferences(metaPath, oldId, newId, opts.diff)) updatedFiles++;
               } else if (kindToDir[depNode.kind]) {
                   const itemPath = join(ctxDir, kindToDir[depNode.kind], `${depNode.name}.yml`);
-                  if (rewriteReferences(itemPath, oldId, newId)) updatedFiles++;
+                  if (rewriteReferences(itemPath, oldId, newId, opts.diff)) updatedFiles++;
               }
            }
         }
@@ -127,7 +139,7 @@ export function registerRename(program: Cmd): void {
 
         if (node.kind === "glossary") {
              const metaPath = join(ctxDir, "context.yml");
-             if (rewriteReferences(metaPath, oldName, newName)) updatedFiles++;
+             if (rewriteReferences(metaPath, oldName, newName, opts.diff)) updatedFiles++;
         } else {
             const typeDir = kindToDir[node.kind];
             const oldPath = join(ctxDir, typeDir, `${oldName}.yml`);
@@ -137,6 +149,18 @@ export function registerRename(program: Cmd): void {
             const content = readFileSync(oldPath, "utf-8");
             const newContent = content.replace(/^name:\s*"?.*"?\s*$/m, `name: ${newName}`);
             writeFileSync(oldPath, newContent, "utf-8");
+
+            if (opts.diff) {
+              console.log(`\n--- a/${oldPath}\n+++ b/${newPath}`);
+              const oLines = content.split('\n');
+              const nLines = newContent.split('\n');
+              for (let i = 0; i < oLines.length; i++) {
+                if (oLines[i] !== nLines[i]) {
+                  console.log(`- ${oLines[i]}`);
+                  console.log(`+ ${nLines[i]}`);
+                }
+              }
+            }
 
             renameSync(oldPath, newPath);
             updatedFiles++;

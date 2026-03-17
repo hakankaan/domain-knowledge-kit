@@ -11,12 +11,13 @@ export function registerRm(program: Cmd): void {
     .alias("remove")
     .alias("delete")
     .description("Remove a domain item securely without dangling references")
+    .option("--diff", "Output a diff representation of the resulting changes")
     .option("-f, --force", "Force removal even if there are dependents")
     .option("-r, --root <path>", "Override repository root")
     .action(
       (
         id: string,
-        opts: { root?: string; force?: boolean },
+        opts: { root?: string; force?: boolean; diff?: boolean },
       ) => {
         // Validation format
         if (!id.includes(".")) {
@@ -83,11 +84,22 @@ export function registerRm(program: Cmd): void {
              const lines = content.split("\n");
              const newLines = lines.filter(line => !line.includes(`term: ${name}`));
              writeFileSync(metaPath, newLines.join("\n"), "utf-8");
+             
+             if (opts.diff) {
+                 console.log(`\n--- a/${metaPath}\n+++ b/${metaPath}`);
+                 for (const line of lines) {
+                     if (line.includes(`term: ${name}`)) console.log(`- ${line}`);
+                 }
+             }
         } else {
             const typeDir = kindToDir[node.kind];
             const itemPath = join(ctxDir, typeDir, `${name}.yml`);
             
             if (existsSync(itemPath)) {
+                if (opts.diff) {
+                    console.log(`\n--- a/${itemPath}\n+++ /dev/null`);
+                    console.log(`- (File deleted: ${itemPath})`);
+                }
                 rmSync(itemPath);
             }
         }
