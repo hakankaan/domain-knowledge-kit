@@ -46,41 +46,29 @@ tools/
     templates/           # Handlebars templates for doc generation
 ```
 
-## Step 1: Create a Bounded Context
+## Step 1: Initialize the Domain structure
 
-Each bounded context is a directory under `.dkk/domain/contexts/`. Create the context directory and its metadata file:
+Set up the base DKK directory structure:
 
 ```bash
-mkdir -p .dkk/domain/contexts/ordering
+dkk new domain
 ```
 
-Create `.dkk/domain/contexts/ordering/context.yml`:
+This will create `.dkk/domain/index.yml`, `.dkk/domain/actors.yml`, and initialize the `contexts/` directory.
 
-```yaml
-name: ordering
-description: Handles customer order lifecycle.
+## Step 2: Create a Bounded Context
+
+Use the CLI to scaffold a new bounded context. This will create the necessary directory structure and its metadata file, and also automatically register it in `index.yml`:
+
+```bash
+dkk new context ordering
 ```
 
-The `context.yml` file contains only the context metadata (name, description, and optional glossary). Domain items go in typed subdirectories.
-
-## Step 2: Register the Context
-
-Add your new context to `.dkk/domain/index.yml`:
-
-```yaml
-contexts:
-  - name: ordering
-    description: Handles customer order lifecycle.
-flows: []
-```
+This ensures `.dkk/domain/contexts/ordering/` exists with all empty subdirectories, and updates `index.yml` correctly.
 
 ## Step 3: Add Domain Items
 
-Each domain item is a separate YAML file in a typed subdirectory. Create the subdirectories and add items:
-
-```bash
-mkdir -p .dkk/domain/contexts/ordering/{events,commands,aggregates,policies,read-models}
-```
+Instead of creating YAML files manually, the `dkk add` command scaffolds them with the correct schema and boilerplates.
 
 **Add a glossary** — update `.dkk/domain/contexts/ordering/context.yml`:
 
@@ -92,7 +80,13 @@ glossary:
     definition: A customer's request to purchase items.
 ```
 
-**Add an event** — create `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`:
+**Add an event**:
+
+```bash
+dkk add event OrderPlaced --context ordering
+```
+
+Update `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`:
 
 ```yaml
 name: OrderPlaced
@@ -105,7 +99,13 @@ fields:
 raised_by: Order
 ```
 
-**Add a command** — create `.dkk/domain/contexts/ordering/commands/PlaceOrder.yml`:
+**Add a command**:
+
+```bash
+dkk add command PlaceOrder --context ordering
+```
+
+Update `.dkk/domain/contexts/ordering/commands/PlaceOrder.yml`:
 
 ```yaml
 name: PlaceOrder
@@ -117,7 +117,13 @@ actor: Customer
 handled_by: Order
 ```
 
-**Add a policy** — create `.dkk/domain/contexts/ordering/policies/SendConfirmationEmail.yml`:
+**Add a policy**:
+
+```bash
+dkk add policy SendConfirmationEmail --context ordering
+```
+
+Update `.dkk/domain/contexts/ordering/policies/SendConfirmationEmail.yml`:
 
 ```yaml
 name: SendConfirmationEmail
@@ -130,7 +136,13 @@ then:
     - NotifyCustomer
 ```
 
-**Add an aggregate** — create `.dkk/domain/contexts/ordering/aggregates/Order.yml`:
+**Add an aggregate**:
+
+```bash
+dkk add aggregate Order --context ordering
+```
+
+Update `.dkk/domain/contexts/ordering/aggregates/Order.yml`:
 
 ```yaml
 name: Order
@@ -143,7 +155,13 @@ emits:
     - OrderPlaced
 ```
 
-**Add a read model** — create `.dkk/domain/contexts/ordering/read-models/OrderSummary.yml`:
+**Add a read model**:
+
+```bash
+dkk add read-model OrderSummary --context ordering
+```
+
+Update `.dkk/domain/contexts/ordering/read-models/OrderSummary.yml`:
 
 ```yaml
 name: OrderSummary
@@ -200,7 +218,13 @@ dkk list --context ordering
 
 ## Step 7: Add an ADR (Optional)
 
-Architecture Decision Records document the *why* behind your domain design. Create `.dkk/adr/adr-0001.md`:
+Architecture Decision Records document the *why* behind your domain design. Scaffold a new ADR:
+
+```bash
+dkk new adr "Event Sourcing for Orders"
+```
+
+This will create an ADR template in `.dkk/adr/adr-0001.md`. Open it and add your details:
 
 ```markdown
 ---

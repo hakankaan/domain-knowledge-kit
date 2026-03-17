@@ -201,6 +201,49 @@ dkk adr related ordering.OrderPlaced
 
 ---
 
+## `new`
+
+Scaffold new domain structures. Automates creating standard directory layouts and boilerplate files.
+There are three sub-commands under `new`.
+
+```bash
+# Set up a complete .dkk/ structure in your repository:
+dkk new domain
+
+# Add a bounded context (registers in index.yml and creates structure):
+dkk new context <name>
+
+# Scaffold a new Architecture Decision Record:
+dkk new adr "<title>"
+```
+
+| Sub-Command | Description | Flags |
+|-------------|-------------|-------|
+| `domain` | Scaffold `.dkk/domain` structure, schemas, and a base `actors.yml` and `index.yml`. | `-r, --root <path>` |
+| `context` | Scaffold a new bounded context with its metadata and subdirectories. | `-d, --description <text>`<br>`-r, --root <path>` |
+| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. | `-s, --status <status>`<br>`-r, --root <path>` |
+
+---
+
+## `add <type> <name>`
+
+Scaffold a domain item. Creates the specific YAML file with correct basic schema structure within a bounded context.
+
+```bash
+dkk add event OrderPlaced --context ordering
+dkk add command PlaceOrder --context ordering
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-c, --context <name>` | — | Target bounded context (kebab-case) (required). |
+| `-d, --description <text>` | — | Brief description of the item. |
+| `-r, --root <path>` | repo root | Override repository root |
+
+See below for the list of available Types.
+
+---
+
 ## Item Types
 
 The `--type` flag on `list` and `search` accepts these values:

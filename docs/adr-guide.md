@@ -109,9 +109,15 @@ Broken links produce validation errors.
 
 ## Creating a New ADR
 
-1. **Choose the next number.** Look at existing files in `.dkk/adr/` and increment.
+1. **Scaffold the ADR.** Use the CLI to automatically generate the next ADR file with the correct frontmatter:
 
-2. **Create the file.** For example, `.dkk/adr/adr-0002.md`:
+   ```bash
+   dkk new adr "Use CQRS for Inventory"
+   ```
+
+   This will create a new file (e.g., `.dkk/adr/adr-0002.md`).
+
+2. **Fill in the details.** Open the newly created file and update the `domain_refs` and content:
 
    ```markdown
    ---
