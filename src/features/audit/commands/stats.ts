@@ -6,10 +6,12 @@ export function registerStats(program: Cmd): void {
   program
     .command("stats")
     .description("Print domain model statistics and potential orphaned items")
+    .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
     .action(
       (
-        opts: { root?: string },
+        opts: { json?: boolean; minify?: boolean; root?: string },
       ) => {
         const model = loadDomainModel({ root: opts.root });
         const graph = DomainGraph.from(model);
@@ -53,6 +55,28 @@ export function registerStats(program: Cmd): void {
                     stats.orphaned.push(id);
                 }
             }
+        }
+
+        if (opts.json) {
+          const payload = {
+            counts: {
+              contexts: stats.contexts,
+              events: stats.events,
+              commands: stats.commands,
+              aggregates: stats.aggregates,
+              policies: stats.policies,
+              readModels: stats.readModels,
+              actors: stats.actors,
+              flows: stats.flows,
+              adrs: stats.adrs,
+            },
+            health: {
+              orphanedCount: stats.orphaned.length,
+              orphaned: stats.orphaned,
+            },
+          };
+          console.log(JSON.stringify(payload, null, opts.minify ? 0 : 2));
+          return;
         }
 
         console.log(`\n📊 Domain Model Statistics\n`);

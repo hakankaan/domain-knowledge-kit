@@ -24,6 +24,7 @@ export function registerSearch(program: Cmd): void {
     .option("--limit <n>", "Maximum results to return", "20")
     .option("--expand", "Expand top results with graph neighbours")
     .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("--no-auto-index", "Fail instead of auto-building a missing search index")
     .option("-r, --root <path>", "Override repository root")
     .action((query: string, opts: {
@@ -33,6 +34,7 @@ export function registerSearch(program: Cmd): void {
       limit?: string;
       expand?: boolean;
       json?: boolean;
+      minify?: boolean;
       autoIndex?: boolean;
       root?: string;
     }) => {
@@ -79,7 +81,7 @@ export function registerSearch(program: Cmd): void {
       }
 
       if (opts.json) {
-        console.log(JSON.stringify(results, null, 2));
+        console.log(JSON.stringify(results, null, opts.minify ? 0 : 2));
         return;
       }
 

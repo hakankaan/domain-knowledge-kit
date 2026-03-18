@@ -15,15 +15,16 @@ export function registerRelated(program: Cmd): void {
     .description("Show items related to a domain item via graph traversal (BFS)")
     .option("-d, --depth <n>", "Maximum traversal depth", "1")
     .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string, opts: { depth?: string; json?: boolean; root?: string }) => {
+    .action((id: string, opts: { depth?: string; json?: boolean; minify?: boolean; root?: string }) => {
       const depth = parseInt(opts.depth ?? "1", 10);
       const model = loadDomainModel({ root: opts.root });
       const graph = DomainGraph.from(model);
 
       if (!graph.hasNode(id)) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: `Node "${id}" not found in the domain graph` }, null, 2));
+          console.log(JSON.stringify({ error: `Node "${id}" not found in the domain graph` }, null, opts.minify ? 0 : 2));
         } else {
           console.error(`Error: Node "${id}" not found in the domain graph.`);
         }
@@ -50,7 +51,7 @@ export function registerRelated(program: Cmd): void {
         for (const [kind, items] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
           result[kind] = items.sort((a, b) => a.id.localeCompare(b.id));
         }
-        console.log(JSON.stringify({ id, depth, related: result }, null, 2));
+        console.log(JSON.stringify({ id, depth, related: result }, null, opts.minify ? 0 : 2));
         return;
       }
 

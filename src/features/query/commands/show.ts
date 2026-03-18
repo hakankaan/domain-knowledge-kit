@@ -82,14 +82,15 @@ export function registerShow(program: Cmd): void {
     .command("show <id>")
     .description("Show full YAML for a domain item by ID (e.g. ordering.OrderPlaced, actor.Customer, adr-0001)")
     .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string, opts: { json?: boolean; root?: string }) => {
+    .action((id: string, opts: { json?: boolean; minify?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
       const result = resolveItem(model, id);
 
       if (!result.found || !result.data) {
         if (opts.json) {
-          console.log(JSON.stringify({ error: `Item "${id}" not found` }, null, 2));
+          console.log(JSON.stringify({ error: `Item "${id}" not found` }, null, opts.minify ? 0 : 2));
         } else {
           console.error(`Error: Item "${id}" not found.`);
         }
@@ -97,7 +98,7 @@ export function registerShow(program: Cmd): void {
       }
 
       if (opts.json) {
-        console.log(JSON.stringify({ id, label: result.label, data: result.data }, null, 2));
+        console.log(JSON.stringify({ id, label: result.label, data: result.data }, null, opts.minify ? 0 : 2));
         return;
       }
 

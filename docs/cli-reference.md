@@ -192,6 +192,8 @@ dkk stats
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output (AI-optimized) |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -239,6 +241,7 @@ Output:
 |------|---------|-------------|
 | `--skip-validation` | — | Skip the schema + cross-ref validation step |
 | `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output (AI-optimized) |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---
@@ -301,6 +304,8 @@ dkk adr related ordering.OrderPlaced
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--json` | — | Output as JSON |
+| `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 ---

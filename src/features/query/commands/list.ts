@@ -129,8 +129,9 @@ export function registerList(program: Cmd): void {
     .option("-c, --context <name>", "Filter by bounded context")
     .option("-t, --type <type>", "Filter by item type (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context)")
     .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { context?: string; type?: string; json?: boolean; root?: string }) => {
+    .action((opts: { context?: string; type?: string; json?: boolean; minify?: boolean; root?: string }) => {
       let rows = collectRows(opts.root);
 
       if (opts.context) {
@@ -143,7 +144,7 @@ export function registerList(program: Cmd): void {
       }
 
       if (opts.json) {
-        console.log(JSON.stringify(rows, null, 2));
+        console.log(JSON.stringify(rows, null, opts.minify ? 0 : 2));
         return;
       }
 

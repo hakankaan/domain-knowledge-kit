@@ -17,8 +17,9 @@ export function registerRender(program: Cmd): void {
     .description("Validate, render Markdown docs, and rebuild search index")
     .option("--skip-validation", "Skip schema + cross-ref validation")
     .option("--json", "Output as JSON")
+    .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { skipValidation?: boolean; json?: boolean; root?: string }) => {
+    .action((opts: { skipValidation?: boolean; json?: boolean; minify?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
 
       // 1. Validate (unless skipped)
@@ -43,7 +44,7 @@ export function registerRender(program: Cmd): void {
               success: false,
               error: "Validation failed",
               validationErrors: result.errors.map((e) => ({ message: e.message, path: e.path ?? null })),
-            }, null, 2));
+            }, null, opts.minify ? 0 : 2));
           } else {
             console.error(`\n\u2717 Validation failed with ${result.errors.length} error(s). Fix errors before rendering.\n`);
           }
@@ -68,7 +69,7 @@ export function registerRender(program: Cmd): void {
           rendered: renderResult.fileCount,
           files: renderResult.files,
           searchIndex: dbPath,
-        }, null, 2));
+        }, null, opts.minify ? 0 : 2));
       } else {
         console.log("Done.");
       }
