@@ -366,6 +366,25 @@ try {
   assert("empty graph has 0 edges", emptyGraph.edges.length === 0);
   rmSync(emptyTmp, { recursive: true, force: true });
 
+  // ── Duplicate edge deduplication ──────────────────────────────────
+  console.log("\n=== Duplicate edge deduplication ===");
+  // Model where aggregate declares both handles/emits AND the command/event
+  // also declare handled_by/raised_by — same relationship wired from both sides.
+  const dedupEdges = graph.edges.filter(
+    (e) => e.from === "ordering.Order" && e.to === "ordering.PlaceOrder" && e.label === "handles",
+  );
+  assert(
+    "no duplicate handles edge between Order and PlaceOrder",
+    dedupEdges.length === 1,
+  );
+  const dedupEmitEdges = graph.edges.filter(
+    (e) => e.from === "ordering.Order" && e.to === "ordering.OrderPlaced" && e.label === "emits",
+  );
+  assert(
+    "no duplicate emits edge between Order and OrderPlaced",
+    dedupEmitEdges.length === 1,
+  );
+
 } finally {
   teardown();
 }

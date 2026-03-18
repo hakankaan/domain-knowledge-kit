@@ -103,6 +103,7 @@ export class DomainGraph {
     const nodes = new Map<string, GraphNode>();
     const edges: GraphEdge[] = [];
     const adj = new Map<string, Set<string>>();
+    const edgeKeys = new Set<string>();
 
     /** Ensure a node exists and return its id. */
     function ensureNode(id: string, kind: NodeKind, name: string, context?: string): string {
@@ -120,6 +121,9 @@ export class DomainGraph {
 
     /** Add an undirected edge (both directions in the adjacency list). */
     function addEdge(from: string, to: string, label: string): void {
+      const key = `${from}\0${to}\0${label}`;
+      if (edgeKeys.has(key)) return;
+      edgeKeys.add(key);
       edges.push({ from, to, label });
       adj.get(from)?.add(to);
       adj.get(to)?.add(from);

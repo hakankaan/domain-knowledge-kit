@@ -223,12 +223,25 @@ function validateCrossRefs(
   }
 
   // ─ 2. Context references in index ──────────────────────────────────
+  const indexedContextNames = new Set(model.index.contexts.map((e) => e.name));
+
   for (const entry of model.index.contexts) {
     if (!contextNames.has(entry.name)) {
       err(
         issues,
         `Index references context "${entry.name}" but no context file was loaded`,
         "index",
+      );
+    }
+  }
+
+  // Reverse: context on disk but not registered in the index
+  for (const name of contextNames) {
+    if (!indexedContextNames.has(name)) {
+      err(
+        issues,
+        `Context "${name}" is present on disk but not registered in the domain index`,
+        `context:${name}`,
       );
     }
   }

@@ -10,7 +10,7 @@
  * Errors if `.dkk/domain/` already exists (use `--force` to overwrite).
  */
 import type { Command as Cmd } from "commander";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { domainDir } from "../../../shared/paths.js";
 
@@ -72,7 +72,10 @@ export function registerNewDomain(program: Cmd): void {
     .command("domain")
     .description("Scaffold a complete .dkk/domain/ structure with sample content")
     .option("-r, --root <path>", "Override repository root")
-    .option("--force", "Overwrite existing .dkk/domain/ directory")
+    .option(
+      "--force",
+      "Replace the existing .dkk/domain/ directory entirely (destructive — all existing content is deleted)",
+    )
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON")
     .action((opts: { root?: string; force?: boolean; json?: boolean; minify?: boolean }) => {
@@ -81,9 +84,15 @@ export function registerNewDomain(program: Cmd): void {
       // Guard: refuse to overwrite unless --force
       if (existsSync(dir) && !opts.force) {
         console.error(
-          `Error: ${dir} already exists. Use --force to overwrite.`,
+          `Error: ${dir} already exists. Use --force to replace it entirely.`,
         );
         process.exit(1);
+      }
+
+      // --force: remove the entire domain directory so the scaffold is applied
+      // to a clean slate (no silent merging of pre-existing content).
+      if (existsSync(dir) && opts.force) {
+        rmSync(dir, { recursive: true, force: true });
       }
 
       // Create directory structure

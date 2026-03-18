@@ -376,6 +376,27 @@ function testMissingContextFile() {
   rmSync(root, { recursive: true, force: true });
 }
 
+// ── Test: Context on disk but not in index ────────────────────────────
+
+function testUnindexedContext() {
+  console.log("\n=== Context on disk but not in index ===");
+  const root = makeTempRoot("unindexed");
+
+  // Index has NO contexts registered
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
+  // But a context directory exists on disk
+  writeContextDir(root, 'name: orphan\ndescription: "Unregistered context"');
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert("detects context on disk not in index", hasError(result, "orphan"));
+  assert("result is invalid", !result.valid);
+
+  rmSync(root, { recursive: true, force: true });
+}
+
 // ── Test: Broken flow step refs ───────────────────────────────────────
 
 function testBrokenFlowSteps() {
@@ -487,6 +508,7 @@ testBrokenIntraContextRefs();
 testDuplicateNames();
 testGlossaryAggregateCollision();
 testMissingContextFile();
+testUnindexedContext();
 testBrokenFlowSteps();
 testBrokenSupersededBy();
 testWarnMissingFields();
