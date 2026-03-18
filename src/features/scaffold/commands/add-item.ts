@@ -1,7 +1,7 @@
 /**
  * `dkk add <type> <name> --context <ctx>` command — scaffold individual domain items.
  *
- * Supported types: event, command, aggregate, policy, read-model, glossary
+ * Supported types: event, command, aggregate, policy, read-model, glossary, actor
  *
  * For file-based types (event, command, aggregate, policy, read-model):
  *   Creates `.dkk/domain/contexts/<ctx>/<type-plural>/<Name>.yml`
@@ -9,15 +9,19 @@
  * For glossary:
  *   Appends entry to `.dkk/domain/contexts/<ctx>/context.yml` glossary array
  *   (glossary entries are stored inline in context.yml, not as separate files).
+ *
+ * For actor:
+ *   Appends entry to `.dkk/domain/actors.yml` (global actors file).
  */
 import type { Command as Cmd } from "commander";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { contextsDir } from "../../../shared/paths.js";
+import { contextsDir, actorsFile } from "../../../shared/paths.js";
 import { parseYaml, stringifyYaml } from "../../../shared/yaml.js";
-import type { ContextMetaFile } from "../../../shared/types/domain.js";
+import type { ActorsFile, ContextMetaFile } from "../../../shared/types/domain.js";
 import { loadDomainModel } from "../../../shared/loader.js";
 import { DomainGraph } from "../../../shared/graph.js";
+import { wireNewItem } from "../wiring.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -30,8 +34,8 @@ const TYPE_DIR_MAP: Record<string, string> = {
   "read-model": "read-models",
 };
 
-/** All supported item types (including glossary which is handled differently). */
-const SUPPORTED_TYPES = [...Object.keys(TYPE_DIR_MAP), "glossary"];
+/** All supported item types (including glossary and actor which are handled differently). */
+const SUPPORTED_TYPES = [...Object.keys(TYPE_DIR_MAP), "glossary", "actor"];
 
 // ── YAML generators ──────────────────────────────────────────────────
 
@@ -150,6 +154,8 @@ export function registerAddItem(program: Cmd): void {
     .option("--subscribes-to <ids>", "Events subscribed to by read-model (comma-separated)", parseCsv)
     .option("--used-by <ids>", "Actors that use this read-model (comma-separated)", parseCsv)
     .option("--from <id>", "Clone structure from existing item ID")
+    .option("--actor-type <type>", "Actor type: human, system, external (only for actor)")
+    .option("--no-wire", "Skip automatic bidirectional relationship wiring")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output")
     .option("-r, --root <path>", "Override repository root")
@@ -159,7 +165,8 @@ export function registerAddItem(program: Cmd): void {
         name: string,
         opts: { 
           context: string; description?: string; root?: string; json?: boolean; minify?: boolean;
-          from?: string; raisedBy?: string; handledBy?: string; actor?: string; 
+          from?: string; raisedBy?: string; handledBy?: string; actor?: string;
+          actorType?: string; wire?: boolean;
           triggers?: string[]; emits?: string[]; handles?: string[]; subscribesTo?: string[]; usedBy?: string[];
         },
       ) => {
@@ -180,6 +187,45 @@ export function registerAddItem(program: Cmd): void {
         }
 
         const ctxBase = contextsDir(opts.root);
+
+        // ── Actor type — global actors.yml, no context required ───────────
+        if (type === "actor") {
+          const actorType = opts.actorType ?? "human";
+          const validActorTypes = ["human", "system", "external"];
+          if (!validActorTypes.includes(actorType)) {
+            console.error(`Error: Invalid actor type "${actorType}". Must be one of: ${validActorTypes.join(", ")}`);
+            process.exit(1);
+          }
+
+          const actorsPath = actorsFile(opts.root);
+          const raw = existsSync(actorsPath) ? readFileSync(actorsPath, "utf-8") : "actors: []\n";
+          const actorsObj = parseYaml<ActorsFile>(raw);
+          if (!actorsObj.actors) actorsObj.actors = [];
+
+          if (actorsObj.actors.some((a) => a.name === name)) {
+            if (opts.json) {
+              console.log(JSON.stringify({ error: `Actor "${name}" already exists` }, null, opts.minify ? 0 : 2));
+            } else {
+              console.error(`Error: Actor "${name}" already exists in actors.yml.`);
+            }
+            process.exit(1);
+          }
+
+          actorsObj.actors.push({
+            name,
+            type: actorType as "human" | "system" | "external",
+            description: opts.description ?? `TODO: describe ${name}`,
+          });
+          writeFileSync(actorsPath, stringifyYaml(actorsObj), "utf-8");
+
+          if (opts.json) {
+            console.log(JSON.stringify({ id: name, path: actorsPath, type: "actor", name }, null, opts.minify ? 0 : 2));
+          } else {
+            console.log(`Added actor "${name}" (${actorType}) to actors.yml.`);
+          }
+          return;
+        }
+
         const ctxDir = join(ctxBase, opts.context);
         const contextYmlPath = join(ctxDir, "context.yml");
 
@@ -277,18 +323,36 @@ export function registerAddItem(program: Cmd): void {
         const yaml = generateYaml(type, name, description, rel);
         writeFileSync(filePath, yaml, "utf-8");
 
+        // Bidirectional wiring (opt-out with --no-wire)
+        const wireResult = opts.wire !== false
+          ? wireNewItem({
+              type,
+              name,
+              context: opts.context,
+              raisedBy: opts.raisedBy,
+              handledBy: opts.handledBy,
+              handles: opts.handles,
+              emits: opts.emits,
+              root: opts.root,
+            })
+          : { wired: [], skipped: [] };
+
         if (opts.json) {
             console.log(JSON.stringify({
                 id: `${opts.context}.${name}`,
                 path: filePath,
                 type,
-                name
+                name,
+                wired: wireResult.wired,
             }, null, opts.minify ? 0 : 2));
             return;
         }
 
         console.log(`Created ${type} "${name}" in context "${opts.context}":`);
         console.log(`  ${filePath}`);
+        for (const w of wireResult.wired) {
+          console.log(`  Wired: ${w}`);
+        }
       },
     );
 }
