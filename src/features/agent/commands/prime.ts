@@ -16,7 +16,10 @@ import { forEachItem, type ItemType } from "../../../shared/item-visitor.js";
 import { domainDir } from "../../../shared/paths.js";
 import type { DomainModel, Aggregate } from "../../../shared/types/domain.js";
 
-/** The full agent context document. */
+/**
+ * The full agent context document.
+ * Keep the CLI Command Reference tables in sync with the Quick Reference block in init.ts#dkkSection.
+ */
 function primeContent(): string {
   return `# Domain Knowledge Kit — Agent Context
 
@@ -74,18 +77,59 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 ## CLI Command Reference
 
+### Query
+
 | Command                       | Purpose                                              |
 |-------------------------------|------------------------------------------------------|
 | \`dkk list\`                    | List all domain items (filterable by \`--context\`, \`--type\`) |
 | \`dkk show <id>\`               | Display full YAML of a domain item                   |
+| \`dkk summary <id>\`            | Concise item summary with direct relations (AI-optimized) |
 | \`dkk search <query>\`          | FTS5 full-text search with ranking                   |
 | \`dkk related <id>\`            | BFS graph traversal of related items                 |
+| \`dkk graph\`                   | Generate a Mermaid.js flowchart of the domain model  |
+
+### Pipeline
+
+| Command                       | Purpose                                              |
+|-------------------------------|------------------------------------------------------|
 | \`dkk validate\`                | Schema + cross-reference validation                  |
 | \`dkk render\`                  | Validate → render docs → rebuild search index        |
+
+### ADR
+
+| Command                       | Purpose                                              |
+|-------------------------------|------------------------------------------------------|
 | \`dkk adr show <id>\`           | Display ADR frontmatter                              |
 | \`dkk adr related <id>\`        | Show bidirectional ADR ↔ domain links                |
-| \`dkk init\`                    | Create/update AGENTS.md with DKK section             |
-| \`dkk prime\`                   | Output this agent context to stdout                  |
+
+### Scaffold
+
+| Command                                  | Purpose                                              |
+|------------------------------------------|------------------------------------------------------|
+| \`dkk new domain\`                        | Scaffold a complete \`.dkk/domain/\` structure         |
+| \`dkk new context <name>\`               | Scaffold a new bounded context and register it       |
+| \`dkk new adr <title>\`                  | Scaffold a new ADR file (auto-increments number)     |
+| \`dkk add <type> <name> --context <ctx>\` | Scaffold an individual domain item                   |
+
+### Refactor
+
+| Command                          | Purpose                                              |
+|----------------------------------|------------------------------------------------------|
+| \`dkk rename <old-id> <new-id>\` | Rename a domain item and update all references       |
+| \`dkk rm <id>\`                  | Remove a domain item safely (aliases: remove, delete) |
+
+### Audit
+
+| Command       | Purpose                                                  |
+|---------------|----------------------------------------------------------|
+| \`dkk stats\`  | Print domain model statistics and potential orphaned items |
+
+### Agent
+
+| Command       | Purpose                                              |
+|---------------|------------------------------------------------------|
+| \`dkk init\`   | Create/update AGENTS.md with DKK section             |
+| \`dkk prime\`  | Output this agent context to stdout                  |
 
 ## Domain Search Workflow
 

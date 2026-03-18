@@ -13,7 +13,10 @@ import { repoRoot } from "../../../shared/paths.js";
 const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
 
-/** The DKK section content (without markers). */
+/**
+ * The DKK section content (without markers).
+ * Keep the command list in sync with the CLI Reference tables in prime.ts#primeContent.
+ */
 function dkkSection(): string {
   return `
 ## Domain Knowledge Kit
@@ -25,13 +28,38 @@ Run \`dkk prime\` to get full agent context including domain structure, CLI comm
 ### Quick Reference
 
 \`\`\`bash
-dkk prime             # Output full agent context
-dkk list              # List all domain items
-dkk show <id>         # Display a domain item
-dkk search "<query>"  # Full-text search
-dkk related <id>      # Graph traversal of related items
-dkk validate          # Schema + cross-reference validation
-dkk render            # Validate, render docs, rebuild search index
+# Query
+dkk list                              # List all domain items (--context, --type filters)
+dkk show <id>                         # Display full YAML of a domain item
+dkk summary <id>                      # Concise item summary (AI-optimized)
+dkk search "<query>"                  # Full-text search
+dkk related <id>                      # Graph traversal of related items
+dkk graph                             # Generate Mermaid.js flowchart
+
+# Pipeline
+dkk validate                          # Schema + cross-reference validation
+dkk render                            # Validate, render docs, rebuild search index
+
+# ADR
+dkk adr show <id>                     # Display ADR frontmatter
+dkk adr related <id>                  # Bidirectional ADR ↔ domain links
+
+# Scaffold
+dkk new domain                        # Scaffold .dkk/domain/ structure
+dkk new context <name>                # Scaffold a new bounded context
+dkk new adr "<title>"                 # Scaffold a new ADR file
+dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
+
+# Refactor
+dkk rename <old-id> <new-id>          # Rename item and update all references
+dkk rm <id>                           # Remove item safely
+
+# Audit
+dkk stats                             # Domain statistics + orphaned items
+
+# Agent
+dkk init                              # Create/update AGENTS.md with DKK section
+dkk prime                             # Output full agent context
 \`\`\`
 
 ### Quality Gates

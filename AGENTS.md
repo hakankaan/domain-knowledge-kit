@@ -52,17 +52,41 @@ bd sync               # Sync with git
 
 ### Domain CLI Commands
 
-Use `npx tsx src/cli.ts` during development (or `domain-knowledge-kit` after build):
+Use `npx tsx src/cli.ts` during development (or `dkk` after build):
 
 ```bash
-npx tsx src/cli.ts list                    # List all domain items (--context, --type filters)
-npx tsx src/cli.ts show <id>               # Display full YAML of a domain item
-npx tsx src/cli.ts search "<query>"        # FTS5 full-text search with ranking
-npx tsx src/cli.ts related <id>            # BFS graph traversal of related items
-npx tsx src/cli.ts validate                # Schema + cross-reference validation
-npx tsx src/cli.ts render                  # Validate → render docs → rebuild search index
-npx tsx src/cli.ts adr show <id>           # Display ADR frontmatter
-npx tsx src/cli.ts adr related <id>        # Bidirectional ADR ↔ domain links
+# Query
+npx tsx src/cli.ts list                              # List all domain items (--context, --type filters)
+npx tsx src/cli.ts show <id>                         # Display full YAML of a domain item
+npx tsx src/cli.ts summary <id>                      # Concise item summary with direct relations (AI-optimized)
+npx tsx src/cli.ts search "<query>"                  # FTS5 full-text search with ranking
+npx tsx src/cli.ts related <id>                      # BFS graph traversal of related items
+npx tsx src/cli.ts graph                             # Generate Mermaid.js flowchart of domain model
+
+# Pipeline
+npx tsx src/cli.ts validate                          # Schema + cross-reference validation
+npx tsx src/cli.ts render                            # Validate → render docs → rebuild search index
+
+# ADR
+npx tsx src/cli.ts adr show <id>                     # Display ADR frontmatter
+npx tsx src/cli.ts adr related <id>                  # Bidirectional ADR ↔ domain links
+
+# Scaffold
+npx tsx src/cli.ts new domain                        # Scaffold a complete .dkk/domain/ structure
+npx tsx src/cli.ts new context <name>                # Scaffold a new bounded context
+npx tsx src/cli.ts new adr "<title>"                 # Scaffold a new ADR file (auto-increments number)
+npx tsx src/cli.ts add <type> <name> --context <ctx> # Scaffold an individual domain item
+
+# Refactor
+npx tsx src/cli.ts rename <old-id> <new-id>          # Rename item and update all references
+npx tsx src/cli.ts rm <id>                           # Remove item safely (aliases: remove, delete)
+
+# Audit
+npx tsx src/cli.ts stats                             # Domain model statistics + orphaned items
+
+# Agent
+npx tsx src/cli.ts init                              # Create/update AGENTS.md with DKK section
+npx tsx src/cli.ts prime                             # Output full agent context to stdout
 ```
 
 ### Quality Gates
@@ -88,13 +112,38 @@ Run `dkk prime` to get full agent context including domain structure, CLI comman
 ### Quick Reference
 
 ```bash
-dkk prime             # Output full agent context
-dkk list              # List all domain items
-dkk show <id>         # Display a domain item
-dkk search "<query>"  # Full-text search
-dkk related <id>      # Graph traversal of related items
-dkk validate          # Schema + cross-reference validation
-dkk render            # Validate, render docs, rebuild search index
+# Query
+dkk list                              # List all domain items (--context, --type filters)
+dkk show <id>                         # Display full YAML of a domain item
+dkk summary <id>                      # Concise item summary (AI-optimized)
+dkk search "<query>"                  # Full-text search
+dkk related <id>                      # Graph traversal of related items
+dkk graph                             # Generate Mermaid.js flowchart
+
+# Pipeline
+dkk validate                          # Schema + cross-reference validation
+dkk render                            # Validate, render docs, rebuild search index
+
+# ADR
+dkk adr show <id>                     # Display ADR frontmatter
+dkk adr related <id>                  # Bidirectional ADR ↔ domain links
+
+# Scaffold
+dkk new domain                        # Scaffold .dkk/domain/ structure
+dkk new context <name>                # Scaffold a new bounded context
+dkk new adr "<title>"                 # Scaffold a new ADR file
+dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
+
+# Refactor
+dkk rename <old-id> <new-id>          # Rename item and update all references
+dkk rm <id>                           # Remove item safely
+
+# Audit
+dkk stats                             # Domain statistics + orphaned items
+
+# Agent
+dkk init                              # Create/update AGENTS.md with DKK section
+dkk prime                             # Output full agent context
 ```
 
 ### Quality Gates
