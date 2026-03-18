@@ -39,6 +39,11 @@ function nodeShape(node: GraphNode): string {
 
 const SKIP_LABELS = new Set(["contains", "flow_next", "adr_ref", "domain_ref"]);
 
+const VALID_KINDS = new Set([
+  "event", "command", "aggregate", "policy", "read_model",
+  "actor", "flow", "adr", "glossary",
+]);
+
 function edgeArrow(label: string): string {
   if (label === "subscribes_to" || label === "used_by") return `-.->`;
   if (label === "handles") return `==>`;
@@ -54,9 +59,18 @@ export function registerGraph(program: Cmd): void {
     .option("-o, --output <file>", "Output file path (default: .dkk/docs/graph.md)")
     .option("-d, --depth <n>", "Max BFS depth from aggregates/actors (default: 3)", parseInt, 3)
     .option("-c, --context <name>", "Render only items from this bounded context")
+    .option("-l, --layout <dir>", "Flowchart direction: LR (left-to-right) or TD (top-down)", "LR")
+    .option("-n, --node-types <types>", "Comma-separated node kinds to include (e.g. event,command,aggregate)")
     .option("-r, --root <path>", "Override repository root")
     .action(
-      (opts: { root?: string; output?: string; depth: number; context?: string }) => {
+      (opts: {
+        root?: string;
+        output?: string;
+        depth: number;
+        context?: string;
+        layout: string;
+        nodeTypes?: string;
+      }) => {
         const model = loadDomainModel({ root: opts.root });
         const graph = DomainGraph.from(model);
 
@@ -105,6 +119,20 @@ export function registerGraph(program: Cmd): void {
           if (graph.nodes.get(id)?.kind === "context") visibleIds.delete(id);
         }
 
+        // Apply --node-types filter (BFS runs over all kinds; output is then narrowed).
+        if (opts.nodeTypes) {
+          const requested = opts.nodeTypes.split(",").map((s) => s.trim()).filter(Boolean);
+          const unknown = requested.filter((k) => !VALID_KINDS.has(k));
+          if (unknown.length > 0) {
+            process.stderr.write(`Warning: unknown node kind(s) ignored: ${unknown.join(", ")}\n`);
+          }
+          const kindFilter = new Set(requested.filter((k) => VALID_KINDS.has(k)));
+          for (const id of visibleIds) {
+            const kind = graph.nodes.get(id)?.kind;
+            if (kind && !kindFilter.has(kind)) visibleIds.delete(id);
+          }
+        }
+
         // ── 2. Collect visible edges (deduplicated) ──────────────────
         const seenEdges = new Set<string>();
         const visibleEdges: GraphEdge[] = [];
@@ -128,7 +156,8 @@ export function registerGraph(program: Cmd): void {
         }
 
         // ── 4. Render ────────────────────────────────────────────────
-        const lines: string[] = ["```mermaid", "flowchart TD"];
+        const direction = opts.layout.toUpperCase() === "TD" ? "TD" : "LR";
+        const lines: string[] = ["```mermaid", `flowchart ${direction}`];
 
         // Nodes inside subgraphs (bounded contexts)
         for (const [ctx, nodes] of byContext) {

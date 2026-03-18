@@ -86,7 +86,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 | \`dkk summary <id>\`            | Concise item summary with direct relations (AI-optimized) |
 | \`dkk search <query>\`          | FTS5 full-text search with ranking                   |
 | \`dkk related <id>\`            | BFS graph traversal of related items                 |
-| \`dkk graph\`                   | Generate a Mermaid.js flowchart of the domain model  |
+| \`dkk graph\`                   | Mermaid.js flowchart (--layout LR|TD, --node-types to filter kinds) |
 
 ### Pipeline
 

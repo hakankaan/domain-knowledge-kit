@@ -121,14 +121,32 @@ Generate a Mermaid.js flowchart of the domain model, capturing all nodes and the
 
 ```bash
 dkk graph
+dkk graph --layout TD
+dkk graph --context ordering --depth 2 --node-types event,command,aggregate
 dkk graph --output .dkk/docs/graph.md
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-o, --output <file>` | `.dkk/docs/graph.md` | Output file path |
-| `-d, --depth <n>` | `3` | Maximum traversal depth for large graphs |
+| `-d, --depth <n>` | `3` | Maximum traversal depth |
+| `-l, --layout <dir>` | `LR` | Flowchart direction: `LR` (left-to-right) or `TD` (top-down) |
+| `-n, --node-types <types>` | *(all)* | Comma-separated node kinds to include (e.g. `event,command,aggregate`) |
+| `-c, --context <name>` | — | Render only items from this bounded context |
 | `-r, --root <path>` | repo root | Override repository root |
+
+**Focused-view pattern:**
+
+```bash
+# Flow-focused: commands and events only, left-to-right
+dkk graph --node-types event,command,aggregate --layout LR
+
+# Context-scoped: everything in one bounded context, shallow depth
+dkk graph --context payments --depth 2
+
+# Structural overview: aggregates and actors only
+dkk graph --node-types aggregate,actor
+```
 
 ---
 

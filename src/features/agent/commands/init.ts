@@ -34,7 +34,7 @@ dkk show <id>                         # Display full YAML of a domain item
 dkk summary <id>                      # Concise item summary (AI-optimized)
 dkk search "<query>"                  # Full-text search
 dkk related <id>                      # Graph traversal of related items
-dkk graph                             # Generate Mermaid.js flowchart
+dkk graph                             # Mermaid.js flowchart (--layout LR|TD, --node-types ...)
 
 # Pipeline
 dkk validate                          # Schema + cross-reference validation
