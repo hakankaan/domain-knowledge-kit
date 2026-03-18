@@ -37,6 +37,7 @@ All technical details, CLI references, and integration guides live in the [`docs
 | **[CLI Reference](docs/cli-reference.md)** | Every command and flag |
 | **[ADR Guide](docs/adr-guide.md)** | Writing, linking, and querying ADRs |
 | **[AI Agent Integration](docs/ai-agent-integration.md)** | Onboarding agents, context-efficient retrieval |
+| **[Way of Working](docs/way-of-working.md)** | Team adoption practices, PR review, CI, governance |
 
 ## License
 
