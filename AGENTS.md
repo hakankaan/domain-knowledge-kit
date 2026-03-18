@@ -136,7 +136,8 @@ dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
 
 # Refactor
 dkk rename <old-id> <new-id>          # Rename item and update all references
-dkk rm <id>                           # Remove item safely
+dkk rm <id>                           # Remove item safely (actors, ADRs, flows, contexts, glossary)
+dkk move <id> <new-context>           # Move item to a different bounded context
 
 # Audit
 dkk stats                             # Domain statistics + orphaned items

@@ -18,6 +18,7 @@ import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
 import { registerAddItem } from "./features/scaffold/commands/add-item.js";
 import { registerRename } from "./features/refactor/commands/rename.js";
 import { registerRm } from "./features/refactor/commands/rm.js";
+import { registerMove } from "./features/refactor/commands/move.js";
 import { registerStats } from "./features/audit/commands/stats.js";
 import { formatCliError } from "./shared/errors.js";
 
@@ -46,6 +47,7 @@ registerInit(program);
 registerPrime(program);
 registerRename(program);
 registerRm(program);
+registerMove(program);
 registerStats(program);
 
 // ADR sub-command group
