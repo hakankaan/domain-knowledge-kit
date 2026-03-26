@@ -29,7 +29,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 ## Core Principles
 
-1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`.dkk/domain/\`.
+1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code. To update the domain model, ALWAYS use the DKK CLI commands (e.g. \`dkk add\`, \`dkk rename\`, \`dkk rm\`). Do not manually edit the underlying YAML files directly.
 2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
 3. **Prioritize ADRs in decision-making.** Before proposing architectural refactors, making tech choices, or modifying domain logic, consult existing decisions via \`dkk search "your topic"\` or \`dkk adr show <id>\`.
 4. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.

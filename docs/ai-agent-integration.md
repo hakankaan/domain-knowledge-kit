@@ -46,7 +46,7 @@ If `AGENTS.md` doesn't exist, it's created. If it already has a DKK section, it'
 - **Item types** — All 8 domain item types with their key fields
 - **Domain model structure** — File paths and conventions
 - **Search workflow** — Step-by-step domain search: parse → search → show → related → ADR links → compile results
-- **Update workflow** — Making domain changes: inspect → edit YAML → maintain referential integrity → update ADRs → quality gates, plus a full YAML structure reference
+- **Update workflow** — Making domain changes: inspect → use DKK CLI commands (e.g., `dkk add`, `dkk rename`, `dkk rm`) → maintain referential integrity → update ADRs → quality gates, plus a full YAML structure reference
 - **Change review workflow** — Reviewing for domain impact: identify affected items → trace blast radius → check invariants → find linked ADRs → compile analysis
 - **Validation checks** — Schema conformance, cross-references, context registration
 - **ID conventions** and naming rules
@@ -125,7 +125,7 @@ dkk show ordering.Order --json --minify
 When AI agents modify domain YAML files, they should follow this workflow:
 
 1. **Inspect current state** — Use `show` and `related` to understand what exists.
-2. **Edit YAML files directly** — Add or modify items in the appropriate files.
+2. **Use DKK CLI commands** — Add, rename, or remove items using `dkk add`, `dkk rename`, and `dkk rm`. Do not manually edit the underlying YAML files directly.
 3. **Maintain referential integrity** — Update cross-references (`handles`, `emits`, `raised_by`, `handled_by`, `actor`, `subscribes_to`, `used_by`).
 4. **Update ADR links** — If the change affects an architectural decision, update `adr_refs` on domain items and `domain_refs` in ADR frontmatter.
 5. **Run quality gates:**

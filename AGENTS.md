@@ -40,7 +40,7 @@ bd sync               # Sync with git
 
 ## Domain Model
 
-**Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under `.dkk/domain/`.
+**Domain YAML is the single source of truth.** Never generate domain knowledge from code. To update the domain model, ALWAYS use the DKK CLI commands (e.g. `dkk add`, `dkk rename`, `dkk rm`). Do not manually edit the underlying YAML files directly.
 
 ### Key Conventions
 
@@ -108,6 +108,10 @@ For a quick validation-only check (no rendering), use `npx tsx src/cli.ts valida
 This project uses a structured, YAML-based domain model managed by **dkk** (Domain Knowledge Kit).
 
 Run `dkk prime` to get full agent context including domain structure, CLI commands, and workflows.
+
+### 🚫 No Manual YAML Edits
+
+**Domain YAML is the single source of truth.** To update the domain model, ALWAYS use the DKK CLI commands (e.g. `dkk add`, `dkk rename`, `dkk rm`). Do not manually edit the underlying YAML files directly.
 
 ### 🏛️ Prioritize ADRs
 

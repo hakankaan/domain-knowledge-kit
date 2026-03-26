@@ -25,6 +25,10 @@ This project uses a structured, YAML-based domain model managed by **dkk** (Doma
 
 Run \`dkk prime\` to get full agent context including domain structure, CLI commands, and workflows.
 
+### 🚫 No Manual YAML Edits
+
+**Domain YAML is the single source of truth.** To update the domain model, ALWAYS use the DKK CLI commands (e.g. \`dkk add\`, \`dkk rename\`, \`dkk rm\`). Do not manually edit the underlying YAML files directly.
+
 ### 🏛️ Prioritize ADRs
 
 **Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use \`dkk search "your topic"\` or \`dkk adr show <id>\` to understand existing constraints and decisions.
