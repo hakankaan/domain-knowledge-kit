@@ -25,6 +25,7 @@ import type {
 } from "../../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
 import type { ItemType } from "../../shared/item-visitor.js";
+import { didYouMean } from "../../shared/similarity.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
 // under both tsc (Node16 resolution) and tsx (ESM runtime).
@@ -229,7 +230,7 @@ function validateCrossRefs(
     if (!contextNames.has(entry.name)) {
       err(
         issues,
-        `Index references context "${entry.name}" but no context file was loaded`,
+        `Index references context "${entry.name}" but no context file was loaded.${didYouMean(entry.name, contextNames)}`,
         "index",
       );
     }
@@ -251,7 +252,7 @@ function validateCrossRefs(
   function checkAdrRefs(refs: string[] | undefined, path: string): void {
     for (const ref of refs ?? []) {
       if (!adrIds.has(ref)) {
-        err(issues, `adr_ref "${ref}" does not resolve to any ADR`, path);
+        err(issues, `adr_ref "${ref}" does not resolve to any ADR.${didYouMean(ref, adrIds)}`, path);
       }
     }
   }
@@ -270,12 +271,12 @@ function validateCrossRefs(
   for (const [id, adr] of model.adrs) {
     for (const ref of adr.domain_refs ?? []) {
       if (!domainItemIds.has(ref)) {
-        err(issues, `ADR domain_ref "${ref}" does not resolve to any domain item`, `adr:${id}`);
+        err(issues, `ADR domain_ref "${ref}" does not resolve to any domain item.${didYouMean(ref, domainItemIds)}`, `adr:${id}`);
       }
     }
     // superseded_by must resolve
     if (adr.superseded_by && !adrIds.has(adr.superseded_by)) {
-      err(issues, `ADR superseded_by "${adr.superseded_by}" does not resolve to any ADR`, `adr:${id}`);
+      err(issues, `ADR superseded_by "${adr.superseded_by}" does not resolve to any ADR.${didYouMean(adr.superseded_by, adrIds)}`, `adr:${id}`);
     }
   }
 
@@ -291,7 +292,7 @@ function validateCrossRefs(
           if (e.raised_by && !sets.aggregates.has(e.raised_by)) {
             err(
               issues,
-              `Event "${e.name}" raised_by "${e.raised_by}" does not match any aggregate in context "${ctxName}"`,
+              `Event "${e.name}" raised_by "${e.raised_by}" does not match any aggregate in context "${ctxName}".${didYouMean(e.raised_by, sets.aggregates)}`,
               path("event", e.name),
             );
           }
@@ -302,14 +303,14 @@ function validateCrossRefs(
           if (c.handled_by && !sets.aggregates.has(c.handled_by)) {
             err(
               issues,
-              `Command "${c.name}" handled_by "${c.handled_by}" does not match any aggregate in context "${ctxName}"`,
+              `Command "${c.name}" handled_by "${c.handled_by}" does not match any aggregate in context "${ctxName}".${didYouMean(c.handled_by, sets.aggregates)}`,
               path("command", c.name),
             );
           }
           if (c.actor && !actorNames.has(c.actor)) {
             err(
               issues,
-              `Command "${c.name}" actor "${c.actor}" does not match any actor`,
+              `Command "${c.name}" actor "${c.actor}" does not match any actor.${didYouMean(c.actor, actorNames)}`,
               path("command", c.name),
             );
           }
@@ -321,7 +322,7 @@ function validateCrossRefs(
             if (!sets.commands.has(h)) {
               err(
                 issues,
-                `Aggregate "${a.name}" handles "${h}" but no such command in context "${ctxName}"`,
+                `Aggregate "${a.name}" handles "${h}" but no such command in context "${ctxName}".${didYouMean(h, sets.commands)}`,
                 path("aggregate", a.name),
               );
             }
@@ -330,7 +331,7 @@ function validateCrossRefs(
             if (!sets.events.has(e)) {
               err(
                 issues,
-                `Aggregate "${a.name}" emits "${e}" but no such event in context "${ctxName}"`,
+                `Aggregate "${a.name}" emits "${e}" but no such event in context "${ctxName}".${didYouMean(e, sets.events)}`,
                 path("aggregate", a.name),
               );
             }
@@ -343,7 +344,7 @@ function validateCrossRefs(
             if (!sets.events.has(t)) {
               err(
                 issues,
-                `Policy "${p.name}" when.events "${t}" but no such event in context "${ctxName}"`,
+                `Policy "${p.name}" when.events "${t}" but no such event in context "${ctxName}".${didYouMean(t, sets.events)}`,
                 path("policy", p.name),
               );
             }
@@ -352,7 +353,7 @@ function validateCrossRefs(
             if (!sets.commands.has(e)) {
               err(
                 issues,
-                `Policy "${p.name}" then.commands "${e}" but no such command in context "${ctxName}"`,
+                `Policy "${p.name}" then.commands "${e}" but no such command in context "${ctxName}".${didYouMean(e, sets.commands)}`,
                 path("policy", p.name),
               );
             }
@@ -365,7 +366,7 @@ function validateCrossRefs(
             if (!sets.events.has(s)) {
               err(
                 issues,
-                `ReadModel "${r.name}" subscribes_to "${s}" but no such event in context "${ctxName}"`,
+                `ReadModel "${r.name}" subscribes_to "${s}" but no such event in context "${ctxName}".${didYouMean(s, sets.events)}`,
                 path("read_model", r.name),
               );
             }
@@ -374,7 +375,7 @@ function validateCrossRefs(
             if (!actorNames.has(u)) {
               err(
                 issues,
-                `ReadModel "${r.name}" used_by "${u}" but no such actor`,
+                `ReadModel "${r.name}" used_by "${u}" but no such actor.${didYouMean(u, actorNames)}`,
                 path("read_model", r.name),
               );
             }
@@ -394,7 +395,7 @@ function validateCrossRefs(
       if (!domainItemIds.has(step.ref)) {
         err(
           issues,
-          `Flow "${flow.name}" step ref "${step.ref}" does not resolve to any domain item`,
+          `Flow "${flow.name}" step ref "${step.ref}" does not resolve to any domain item.${didYouMean(step.ref, domainItemIds)}`,
           `flow:${flow.name}`,
         );
       }
