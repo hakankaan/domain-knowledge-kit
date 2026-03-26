@@ -40,7 +40,10 @@ bd sync               # Sync with git
 
 ## Domain Model
 
-**Domain YAML is the single source of truth.** Never generate domain knowledge from code. To update the domain model, ALWAYS use the DKK CLI commands (e.g. `dkk add`, `dkk rename`, `dkk rm`). Do not manually edit the underlying YAML files directly.
+**Domain YAML is the single source of truth.** Never generate domain knowledge from code.
+
+- **For structural changes (creates, renames, deletes):** ALWAYS use the DKK CLI commands (e.g., `dkk add`, `dkk rename`, `dkk rm`).
+- **For content updates (descriptions, properties, references):** You MUST edit the YAML files directly, but you must respect the JSON Schemas (`tools/dkk/schema/`) and run `dkk render` immediately afterward to ensure cross-reference integrity and schema validation.
 
 ### Key Conventions
 
@@ -107,9 +110,16 @@ This project uses a structured, YAML-based domain model managed by **dkk** (Doma
 
 Run `dkk prime` to get full agent context including domain structure, CLI commands, and workflows.
 
-### 🚫 No Manual YAML Edits
+### ⚠️ Events vs Architecture
 
-**Domain YAML is the single source of truth.** To update the domain model, ALWAYS use the DKK CLI commands (e.g. `dkk add`, `dkk rename`, `dkk rm`). Do not manually edit the underlying YAML files directly.
+Events and Commands map business domain concepts. They **DO NOT** imply Event-Driven Architecture (EDA) or CQRS decisions.
+
+### 🏗️ Structural vs. Content Edits
+
+**Domain YAML is the single source of truth.** 
+
+- **For structural changes (creates, renames, deletes):** ALWAYS use the DKK CLI commands (e.g., `dkk add`, `dkk rename`, `dkk rm`).
+- **For content updates (descriptions, properties, references):** You MUST edit the YAML files directly, but you must respect the JSON Schemas (`tools/dkk/schema/`) and run `dkk render` immediately afterward to ensure cross-reference integrity and schema validation.
 
 ### 🏛️ Prioritize ADRs
 
@@ -131,8 +141,6 @@ dkk validate                          # Schema + cross-reference validation
 dkk render                            # Validate, render docs, rebuild search index
 
 # ADR
-dkk show <id>                     # Display ADR frontmatter
-dkk related <id>                  # Bidirectional ADR ↔ domain links
 
 # Scaffold
 dkk new domain                        # Scaffold .dkk/domain/ structure

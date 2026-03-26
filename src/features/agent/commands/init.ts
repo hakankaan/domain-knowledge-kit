@@ -29,9 +29,12 @@ Run \`dkk prime\` to get full agent context including domain structure, CLI comm
 
 Events and Commands map business domain concepts. They **DO NOT** imply Event-Driven Architecture (EDA) or CQRS decisions.
 
-### 🚫 No Manual YAML Edits
+### 🏗️ Structural vs. Content Edits
 
-**Domain YAML is the single source of truth.** To update the domain model, ALWAYS use the DKK CLI commands (e.g. \`dkk add\`, \`dkk rename\`, \`dkk rm\`). Do not manually edit the underlying YAML files directly.
+**Domain YAML is the single source of truth.** 
+
+- **For structural changes (creates, renames, deletes):** ALWAYS use the DKK CLI commands (e.g., \`dkk add\`, \`dkk rename\`, \`dkk rm\`).
+- **For content updates (descriptions, properties, references):** You MUST edit the YAML files directly, but you must respect the JSON Schemas (\`tools/dkk/schema/\`) and run \`dkk render\` immediately afterward to ensure cross-reference integrity and schema validation.
 
 ### 🏛️ Prioritize ADRs
 
