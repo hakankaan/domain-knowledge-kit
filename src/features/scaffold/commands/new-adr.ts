@@ -42,12 +42,7 @@ function today(): string {
   return `${year}-${month}-${day}`;
 }
 
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+
 
 function parseCsv(val: string): string[] {
   return val.split(',').map(s => s.trim()).filter(Boolean);
