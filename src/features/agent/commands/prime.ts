@@ -31,7 +31,8 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code; always read and edit the YAML files under \`.dkk/domain/\`.
 2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
-3. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.
+3. **Prioritize ADRs in decision-making.** Before proposing architectural refactors, making tech choices, or modifying domain logic, consult existing decisions via \`dkk search "your topic"\` or \`dkk adr show <id>\`.
+4. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.
 
 ## Domain Model Structure
 
@@ -160,37 +161,43 @@ When answering questions about the domain, always query the model — never gues
 
 ## Domain Update Workflow
 
-When modifying the domain model:
+When modifying the domain model or proposing architectural refactors:
 
-1. **Inspect current state** — Load current definitions and neighbours:
+1. **Consult ADRs First** — Before making decisions or structural changes, check existing constraints and decisions:
+   \`\`\`bash
+   dkk search "<topic>" --type adr
+   # or
+   dkk adr related <id>
+   \`\`\`
+2. **Inspect current state** — Load current definitions and neighbours:
    \`\`\`bash
    dkk show <id>
    dkk related <id>
    dkk list --context <name>
    \`\`\`
-2. **Edit YAML files directly** — Apply changes to the appropriate files:
+3. **Edit YAML files directly** — Apply changes to the appropriate files:
    - **New context:** Create \`.dkk/domain/contexts/<name>/context.yml\` with name/description/glossary, create subdirs (\`events/\`, \`commands/\`, etc.), and register in \`.dkk/domain/index.yml\`.
    - **New domain item:** Create a new \`.yml\` file in the correct subdirectory (e.g. \`.dkk/domain/contexts/<name>/events/OrderPlaced.yml\`).
    - **New actor:** Add to \`.dkk/domain/actors.yml\` under \`actors\`.
    - **New flow:** Add to \`.dkk/domain/index.yml\` under \`flows\`.
    - **Modified item:** Edit the item's \`.yml\` file in place, preserving all existing fields.
-3. **Maintain referential integrity:**
+4. **Maintain referential integrity:**
    - \`adr_refs\` must point to existing ADRs in \`.dkk/adr/\`.
    - \`domain_refs\` in ADR frontmatter must point to existing domain items.
    - Update cross-references (\`handles\`, \`emits\`, \`triggers\`, \`subscribes_to\`, \`used_by\`, \`raised_by\`, \`handled_by\`, \`actor\`) on related items to stay consistent.
    - Every new event should have \`raised_by\` pointing to its aggregate.
    - Every new command should have \`handled_by\` pointing to its aggregate.
    - Update aggregate \`handles.commands\` and \`emits.events\` arrays when adding commands/events.
-4. **Follow naming conventions:**
+5. **Follow naming conventions:**
    - Items: PascalCase (\`OrderPlaced\`, \`PlaceOrder\`).
    - Contexts: kebab-case (\`ordering\`, \`inventory-management\`).
    - ADR ids: \`adr-NNNN\` (zero-padded 4-digit number).
    - Actors: PascalCase (\`Customer\`, \`PaymentGateway\`).
-5. **Update ADRs** — If the change affects an architectural decision:
+6. **Update ADRs** — If the change affects an architectural decision:
    - Add \`domain_refs\` to the ADR frontmatter for new items.
    - Add \`adr_refs\` to new/modified domain items pointing to relevant ADRs.
    - Consider creating a new ADR if the change introduces a significant decision.
-6. **Run quality gates:**
+7. **Run quality gates:**
    \`\`\`bash
    dkk render    # Validates → renders docs → rebuilds search index
    \`\`\`

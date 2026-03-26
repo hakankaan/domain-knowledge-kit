@@ -109,6 +109,10 @@ This project uses a structured, YAML-based domain model managed by **dkk** (Doma
 
 Run `dkk prime` to get full agent context including domain structure, CLI commands, and workflows.
 
+### 🏛️ Prioritize ADRs
+
+**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use `dkk search "your topic"` or `dkk adr show <id>` to understand existing constraints and decisions.
+
 ### Quick Reference
 
 ```bash
@@ -136,8 +140,7 @@ dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
 
 # Refactor
 dkk rename <old-id> <new-id>          # Rename item and update all references
-dkk rm <id>                           # Remove item safely (actors, ADRs, flows, contexts, glossary)
-dkk move <id> <new-context>           # Move item to a different bounded context
+dkk rm <id>                           # Remove item safely
 
 # Audit
 dkk stats                             # Domain statistics + orphaned items
