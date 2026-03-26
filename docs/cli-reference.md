@@ -13,6 +13,32 @@ npm run dev -- <command> [options]
 npx tsx src/cli.ts <command> [options]
 ```
 
+
+## Agent Mode (Opt-In)
+
+DKK CLI includes an opt-in **Agent Mode** designed specifically for AI contexts.
+You can enable it by:
+- Passing the `--agent` global flag
+- Setting the environment variable `DKK_AGENT_MODE=1`
+
+**Behavior changes in Agent Mode:**
+- For commands that support it, `--json` and `--minify` are **enabled by default**.
+- Human-friendly tabular or formatted text outputs are skipped in favor of compact JSON.
+- If you need to override the agent mode default for a specific invocation, pass `--no-json` or `--no-minify`.
+
+
+## Agent Mode (Opt-In)
+
+DKK CLI includes an opt-in **Agent Mode** designed specifically for AI contexts.
+You can enable it by:
+- Passing the `--agent` global flag
+- Setting the environment variable `DKK_AGENT_MODE=1`
+
+**Behavior changes in Agent Mode:**
+- For commands that support it, `--json` and `--minify` are **enabled by default**.
+- Human-friendly tabular or formatted text outputs are skipped in favor of compact JSON.
+- If you need to override the agent mode default for a specific invocation, pass `--no-json` or `--no-minify`.
+
 ---
 
 ## `list`

@@ -74,6 +74,39 @@ registerNewAdr(newCmd);
 // Top-level "add" command for individual domain items
 registerAddItem(program);
 
+// ── Agent mode injection ─────────────────────────────────────────────
+program.option("--agent", "Enable agent mode (JSON + minify by default)");
+
+// Add --no-json to commands that have --json
+function injectAgentModeOpts(cmd: Command) {
+  if (cmd.options.some((o) => o.long === "--json")) {
+    cmd.option("--no-json", "Disable JSON output");
+  }
+  if (cmd.options.some((o) => o.long === "--minify")) {
+    cmd.option("--no-minify", "Disable minified output");
+  }
+  cmd.commands.forEach(injectAgentModeOpts);
+}
+injectAgentModeOpts(program);
+
+program.hook("preAction", (thisCmd, actionCmd) => {
+  const isAgent = thisCmd.opts().agent || process.env.DKK_AGENT_MODE === "1";
+  if (isAgent) {
+    if (
+      actionCmd.options.some((o) => o.long === "--json") &&
+      actionCmd.getOptionValue("json") === undefined
+    ) {
+      actionCmd.setOptionValue("json", true);
+    }
+    if (
+      actionCmd.options.some((o) => o.long === "--minify") &&
+      actionCmd.getOptionValue("minify") === undefined
+    ) {
+      actionCmd.setOptionValue("minify", true);
+    }
+  }
+});
+
 program.parseAsync().catch((err: unknown) => {
   console.error(`Error: ${formatCliError(err)}`);
   if (DEBUG && err instanceof Error && err.stack) {
