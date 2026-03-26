@@ -31,7 +31,7 @@ Run \`dkk prime\` to get full agent context including domain structure, CLI comm
 
 ### 🏛️ Prioritize ADRs
 
-**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use \`dkk search "your topic"\` or \`dkk adr show <id>\` to understand existing constraints and decisions.
+**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use \`dkk search "your topic"\` or \`dkk show <id>\` to understand existing constraints and decisions.
 
 ### Quick Reference
 
@@ -49,8 +49,6 @@ dkk validate                          # Schema + cross-reference validation
 dkk render                            # Validate, render docs, rebuild search index
 
 # ADR
-dkk adr show <id>                     # Display ADR frontmatter
-dkk adr related <id>                  # Bidirectional ADR ↔ domain links
 
 # Scaffold
 dkk new domain                        # Scaffold .dkk/domain/ structure

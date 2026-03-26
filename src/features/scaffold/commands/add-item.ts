@@ -19,9 +19,6 @@ import { join } from "node:path";
 import { contextsDir, actorsFile } from "../../../shared/paths.js";
 import { parseYaml, stringifyYaml } from "../../../shared/yaml.js";
 import type { ActorsFile, ContextMetaFile } from "../../../shared/types/domain.js";
-import { loadDomainModel } from "../../../shared/loader.js";
-import { DomainGraph } from "../../../shared/graph.js";
-import { wireNewItem } from "../wiring.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -39,86 +36,67 @@ const SUPPORTED_TYPES = [...Object.keys(TYPE_DIR_MAP), "glossary", "actor"];
 
 // ── YAML generators ──────────────────────────────────────────────────
 
-export interface AddItemRelations {
-  raisedBy?: string;
-  handledBy?: string;
-  actor?: string;
-  triggers?: string[];
-  emits?: string[];
-  handles?: string[];
-  subscribesTo?: string[];
-  usedBy?: string[];
-  fromObj?: Record<string, unknown>;
+function eventYaml(name: string, description: string): string {
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
-function eventYaml(name: string, description: string, rel: AddItemRelations): string {
-  let out = `name: ${name}\ndescription: "${description}"\n`;
-  if (rel.fromObj?.fields) out += `fields:\n${stringifyYaml(rel.fromObj.fields).trimEnd().split('\n').map(l => `  ${l}`).join('\n')}\n`;
-  if (rel.raisedBy) out += `raised_by: ${rel.raisedBy}\n`;
-  return out;
+function commandYaml(name: string, description: string): string {
+  return `name: ${name}\ndescription: "${description}"\n`;
 }
 
-function commandYaml(name: string, description: string, rel: AddItemRelations): string {
-  let out = `name: ${name}\ndescription: "${description}"\n`;
-  if (rel.fromObj?.fields) out += `fields:\n${stringifyYaml(rel.fromObj.fields).trimEnd().split('\n').map(l => `  ${l}`).join('\n')}\n`;
-  if (rel.actor) out += `actor: ${rel.actor}\n`;
-  if (rel.handledBy) out += `handled_by: ${rel.handledBy}\n`;
-  return out;
-}
-
-function aggregateYaml(name: string, description: string, rel: AddItemRelations): string {
-  const handles = rel.handles?.length ? rel.handles.map(h => `    - ${h}`).join('\n') : "    []";
-  const emits = rel.emits?.length ? rel.emits.map(e => `    - ${e}`).join('\n') : "    []";
+function aggregateYaml(name: string, description: string): string {
   return [
     `name: ${name}`,
     `description: "${description}"`,
     "handles:",
-    `  commands:\n${handles === "    []" ? "    []" : handles}`,
+    "  commands:",
+    "    []",
     "emits:",
-    `  events:\n${emits === "    []" ? "    []" : emits}`,
+    "  events:",
+    "    []",
     "",
   ].join("\n");
 }
 
-function policyYaml(name: string, description: string, rel: AddItemRelations): string {
-  const triggers = rel.triggers?.length ? rel.triggers.map(t => `    - ${t}`).join('\n') : "    []";
-  const emits = rel.emits?.length ? rel.emits.map(e => `    - ${e}`).join('\n') : "    []";
+function policyYaml(name: string, description: string): string {
   return [
     `name: ${name}`,
     `description: "${description}"`,
     "when:",
-    `  events:\n${triggers === "    []" ? "    []" : triggers}`,
+    "  events:",
+    "    []",
     "then:",
-    `  commands:\n${emits === "    []" ? "    []" : emits}`,
+    "  commands:",
+    "    []",
     "",
   ].join("\n");
 }
 
-function readModelYaml(name: string, description: string, rel: AddItemRelations): string {
-  const subs = rel.subscribesTo?.length ? rel.subscribesTo.map(s => `  - ${s}`).join('\n') : "  []";
-  const users = rel.usedBy?.length ? rel.usedBy.map(u => `  - ${u}`).join('\n') : "  []";
+function readModelYaml(name: string, description: string): string {
   return [
     `name: ${name}`,
     `description: "${description}"`,
-    `subscribes_to:\n${subs === "  []" ? "  []" : subs}`,
-    `used_by:\n${users === "  []" ? "  []" : users}`,
+    "subscribes_to:",
+    "  []",
+    "used_by:",
+    "  []",
     "",
   ].join("\n");
 }
 
 /** Return YAML content for a file-based item type. */
-function generateYaml(type: string, name: string, description: string, rel: AddItemRelations): string {
+function generateYaml(type: string, name: string, description: string): string {
   switch (type) {
     case "event":
-      return eventYaml(name, description, rel);
+      return eventYaml(name, description);
     case "command":
-      return commandYaml(name, description, rel);
+      return commandYaml(name, description);
     case "aggregate":
-      return aggregateYaml(name, description, rel);
+      return aggregateYaml(name, description);
     case "policy":
-      return policyYaml(name, description, rel);
+      return policyYaml(name, description);
     case "read_model":
-      return readModelYaml(name, description, rel);
+      return readModelYaml(name, description);
     default:
       throw new Error(`Unknown type: ${type}`);
   }
@@ -133,27 +111,13 @@ function isValidItemName(name: string): boolean {
 
 // ── Registration ──────────────────────────────────────────────────────
 
-function parseCsv(val: string): string[] {
-  return val.split(',').map(s => s.trim()).filter(Boolean);
-}
-
 export function registerAddItem(program: Cmd): void {
   program
     .command("add <type> <name>")
     .description("Scaffold a basic domain item")
     .requiredOption("-c, --context <ctx>", "Target bounded context (kebab-case)")
     .option("-d, --description <text>", "Description of the item")
-    .option("--raised-by <id>", "Aggregate that raises this event")
-    .option("--handled-by <id>", "Aggregate that handles this command")
-    .option("--actor <id>", "Actor that initiates this command")
-    .option("--triggers <ids>", "Events that trigger this policy (comma-separated)", parseCsv)
-    .option("--emits <ids>", "Commands emitted by policy / events emitted by aggregate (comma-separated)", parseCsv)
-    .option("--handles <ids>", "Commands handled by aggregate (comma-separated)", parseCsv)
-    .option("--subscribes-to <ids>", "Events subscribed to by read_model (comma-separated)", parseCsv)
-    .option("--used-by <ids>", "Actors that use this read_model (comma-separated)", parseCsv)
-    .option("--from <id>", "Clone structure from existing item ID")
     .option("--actor-type <type>", "Actor type: human, system, external (only for actor)")
-    .option("--no-wire", "Skip automatic bidirectional relationship wiring")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output")
     .option("-r, --root <path>", "Override repository root")
@@ -163,9 +127,7 @@ export function registerAddItem(program: Cmd): void {
         name: string,
         opts: { 
           context: string; description?: string; root?: string; json?: boolean; minify?: boolean;
-          from?: string; raisedBy?: string; handledBy?: string; actor?: string;
-          actorType?: string; wire?: boolean;
-          triggers?: string[]; emits?: string[]; handles?: string[]; subscribesTo?: string[]; usedBy?: string[];
+          actorType?: string;
         },
       ) => {
         // Alias read-model to read_model
@@ -265,31 +227,6 @@ export function registerAddItem(program: Cmd): void {
           return;
         }
 
-        // Handle --from templating
-        let fromObj: Record<string, unknown> | undefined = undefined;
-        if (opts.from) {
-            const model = loadDomainModel({ root: opts.root });
-            const graph = DomainGraph.from(model);
-            if (!graph.hasNode(opts.from)) {
-                console.error(`Error: --from target '${opts.from}' not found.`);
-                process.exit(1);
-            }
-            // For cloning fields, we need the actual Yaml representation
-            // We can re-use the load function but doing it manually is tedious.
-            // Since we know the context and name, we can just parse the file directly:
-            const [fromCtx, fromName] = opts.from.split('.');
-            const fromKind = graph.nodes.get(opts.from)?.kind ?? 'event';
-            if (TYPE_DIR_MAP[fromKind]) {
-               const fromPath = join(ctxBase, fromCtx, TYPE_DIR_MAP[fromKind], `${fromName}.yml`);
-               if (existsSync(fromPath)) {
-                   fromObj = parseYaml(readFileSync(fromPath, 'utf-8')) as Record<string, unknown>;
-                   if (!opts.description && fromObj.description) {
-                       description = fromObj.description as string;
-                   }
-               }
-            }
-        }
-
         // File-based types
         const dirName = TYPE_DIR_MAP[type];
         const typeDir = join(ctxDir, dirName);
@@ -308,35 +245,9 @@ export function registerAddItem(program: Cmd): void {
         // Create type subdirectory if needed
         mkdirSync(typeDir, { recursive: true });
 
-        const rel: AddItemRelations = {
-            raisedBy: opts.raisedBy,
-            handledBy: opts.handledBy,
-            actor: opts.actor,
-            triggers: opts.triggers,
-            emits: opts.emits,
-            handles: opts.handles,
-            subscribesTo: opts.subscribesTo,
-            usedBy: opts.usedBy,
-            fromObj: fromObj
-        };
-
         // Write YAML file
-        const yaml = generateYaml(type, name, description, rel);
+        const yaml = generateYaml(type, name, description);
         writeFileSync(filePath, yaml, "utf-8");
-
-        // Bidirectional wiring (opt-out with --no-wire)
-        const wireResult = opts.wire !== false
-          ? wireNewItem({
-              type,
-              name,
-              context: opts.context,
-              raisedBy: opts.raisedBy,
-              handledBy: opts.handledBy,
-              handles: opts.handles,
-              emits: opts.emits,
-              root: opts.root,
-            })
-          : { wired: [], skipped: [] };
 
         if (opts.json) {
             console.log(JSON.stringify({
@@ -344,16 +255,12 @@ export function registerAddItem(program: Cmd): void {
                 path: filePath,
                 type,
                 name,
-                wired: wireResult.wired,
             }, null, opts.minify ? 0 : 2));
             return;
         }
 
         console.log(`Created ${type} "${name}" in context "${opts.context}":`);
         console.log(`  ${filePath}`);
-        for (const w of wireResult.wired) {
-          console.log(`  Wired: ${w}`);
-        }
       },
     );
 }

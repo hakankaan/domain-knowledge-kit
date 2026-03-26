@@ -274,13 +274,13 @@ dkk prime
 
 ---
 
-## `adr show <id>`
+## `show <id>`
 
 Display the YAML frontmatter of an Architecture Decision Record.
 
 ```bash
-dkk adr show adr-0001
-dkk adr show adr-0001 --json
+dkk show adr-0001
+dkk show adr-0001 --json
 ```
 
 | Flag | Default | Description |
@@ -293,13 +293,13 @@ dkk adr show adr-0001 --json
 
 ---
 
-## `adr related <id>`
+## `related <id>`
 
 Show bidirectional ADR ↔ domain links. Given an ADR ID, lists domain items that reference it. Given a domain item ID, lists ADRs that reference it.
 
 ```bash
-dkk adr related adr-0001
-dkk adr related ordering.OrderPlaced
+dkk related adr-0001
+dkk related ordering.OrderPlaced
 ```
 
 | Flag | Default | Description |

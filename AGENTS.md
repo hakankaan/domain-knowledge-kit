@@ -68,8 +68,6 @@ npx tsx src/cli.ts validate                          # Schema + cross-reference 
 npx tsx src/cli.ts render                            # Validate → render docs → rebuild search index
 
 # ADR
-npx tsx src/cli.ts adr show <id>                     # Display ADR frontmatter
-npx tsx src/cli.ts adr related <id>                  # Bidirectional ADR ↔ domain links
 
 # Scaffold
 npx tsx src/cli.ts new domain                        # Scaffold a complete .dkk/domain/ structure
@@ -115,7 +113,7 @@ Run `dkk prime` to get full agent context including domain structure, CLI comman
 
 ### 🏛️ Prioritize ADRs
 
-**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use `dkk search "your topic"` or `dkk adr show <id>` to understand existing constraints and decisions.
+**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use `dkk search "your topic"` or `dkk show <id>` to understand existing constraints and decisions.
 
 ### Quick Reference
 
@@ -133,8 +131,8 @@ dkk validate                          # Schema + cross-reference validation
 dkk render                            # Validate, render docs, rebuild search index
 
 # ADR
-dkk adr show <id>                     # Display ADR frontmatter
-dkk adr related <id>                  # Bidirectional ADR ↔ domain links
+dkk show <id>                     # Display ADR frontmatter
+dkk related <id>                  # Bidirectional ADR ↔ domain links
 
 # Scaffold
 dkk new domain                        # Scaffold .dkk/domain/ structure

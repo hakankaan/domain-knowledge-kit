@@ -166,7 +166,7 @@ Broken links produce validation errors.
 ### Show ADR Details
 
 ```bash
-dkk adr show adr-0001
+dkk show adr-0001
 ```
 
 Outputs the ADR's YAML frontmatter (id, title, status, date, domain_refs).
@@ -175,10 +175,10 @@ Outputs the ADR's YAML frontmatter (id, title, status, date, domain_refs).
 
 ```bash
 # From an ADR: which domain items reference it?
-dkk adr related adr-0001
+dkk related adr-0001
 
 # From a domain item: which ADRs reference it?
-dkk adr related ordering.OrderPlaced
+dkk related ordering.OrderPlaced
 ```
 
 ### Search for ADRs
@@ -205,5 +205,5 @@ dkk list --type adr
 
 - **[Getting Started](getting-started.md)** — Set up your first project.
 - **[Domain Modeling Guide](domain-modeling.md)** — All item types and cross-referencing rules.
-- **[CLI Reference](cli-reference.md)** — Full command reference including `adr show` and `adr related`.
+- **[CLI Reference](cli-reference.md)** — Full command reference including `show` and `related`.
 - **[AI Agent Integration](ai-agent-integration.md)** — How AI agents use ADR links for domain-aware reasoning.

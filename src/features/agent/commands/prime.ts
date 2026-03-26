@@ -31,7 +31,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code. To update the domain model, ALWAYS use the DKK CLI commands (e.g. \`dkk add\`, \`dkk rename\`, \`dkk rm\`). Do not manually edit the underlying YAML files directly.
 2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
-3. **Prioritize ADRs in decision-making.** Before proposing architectural refactors, making tech choices, or modifying domain logic, consult existing decisions via \`dkk search "your topic"\` or \`dkk adr show <id>\`.
+3. **Prioritize ADRs in decision-making.** Before proposing architectural refactors, making tech choices, or modifying domain logic, consult existing decisions via \`dkk search "your topic"\` or \`dkk show <id>\`.
 4. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.
 
 ## Domain Model Structure
@@ -100,8 +100,8 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 | Command                       | Purpose                                              |
 |-------------------------------|------------------------------------------------------|
-| \`dkk adr show <id>\`           | Display ADR frontmatter                              |
-| \`dkk adr related <id>\`        | Show bidirectional ADR ↔ domain links                |
+| \`dkk show <id>\`           | Display ADR frontmatter                              |
+| \`dkk related <id>\`        | Show bidirectional ADR ↔ domain links                |
 
 ### Scaffold
 
@@ -152,7 +152,7 @@ When answering questions about the domain, always query the model — never gues
    \`\`\`
 5. **Check ADR links** — Find architecture decisions connected to results:
    \`\`\`bash
-   dkk adr related <id>
+   dkk related <id>
    \`\`\`
 6. **Compile the answer** — Present results as a structured summary including:
    - Relevant domain items with ID, type, context, name, and excerpt.
@@ -167,7 +167,7 @@ When modifying the domain model or proposing architectural refactors:
    \`\`\`bash
    dkk search "<topic>" --type adr
    # or
-   dkk adr related <id>
+   dkk related <id>
    \`\`\`
 2. **Inspect current state** — Load current definitions and neighbours:
    \`\`\`bash
@@ -327,7 +327,7 @@ When reviewing changes for domain impact:
    Watch for: broken \`adr_refs\`, broken \`domain_refs\` in ADRs, dangling cross-references, missing context registrations.
 6. **Find linked ADRs** — Identify decisions that may need updating:
    \`\`\`bash
-   dkk adr related <id>
+   dkk related <id>
    \`\`\`
 7. **Compile impact analysis** — Report impacted items, blast radius, invariant violations, affected ADRs, and recommendations.
 

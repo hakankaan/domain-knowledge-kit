@@ -8,8 +8,6 @@ import { registerRelated } from "./features/query/commands/related.js";
 import { registerGraph } from "./features/query/commands/graph.js";
 import { registerValidate } from "./features/pipeline/commands/validate.js";
 import { registerRender } from "./features/pipeline/commands/render.js";
-import { registerAdrShow } from "./features/adr/commands/adr-show.js";
-import { registerAdrRelated } from "./features/adr/commands/adr-related.js";
 import { registerInit } from "./features/agent/commands/init.js";
 import { registerPrime } from "./features/agent/commands/prime.js";
 import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
@@ -61,14 +59,6 @@ registerRename(program);
 registerRm(program);
 registerMove(program);
 registerStats(program);
-
-// ADR sub-command group
-const adrCmd = program
-  .command("adr")
-  .description("ADR-related commands");
-
-registerAdrShow(adrCmd);
-registerAdrRelated(adrCmd);
 
 // "new" sub-command group
 const newCmd = program

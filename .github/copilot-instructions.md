@@ -36,8 +36,6 @@ src/
       indexer.ts                  # FTS5 index builder
       commands/                   # validate.ts, render.ts
       tests/                      # validator.test.ts, renderer.test.ts, etc.
-    adr/                          # ADR sub-commands: adr show, adr related
-      commands/
     agent/                        # Agent integration: init, prime
       commands/
         init.ts                   # Creates/updates AGENTS.md with DKK section

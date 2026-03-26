@@ -11,7 +11,6 @@ import type { Command as Cmd } from "commander";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { adrDir } from "../../../shared/paths.js";
-import { wireAdrRefs } from "../wiring.js";
 
 /** Scan existing adr-NNNN.md files and return the next number. */
 function nextAdrNumber(dir: string): number {
@@ -43,7 +42,6 @@ function today(): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Convert a title to a kebab-case slug for the filename hint. */
 function slugify(title: string): string {
   return title
     .toLowerCase()
@@ -63,10 +61,9 @@ export function registerNewAdr(program: Cmd): void {
     .option("-s, --status <status>", "ADR status (proposed, accepted, deprecated)", "proposed")
     .option("--domain-refs <ids>", "Domain references (comma-separated)", parseCsv)
     .option("--deciders <names>", "Deciders (comma-separated)", parseCsv)
-    .option("--no-wire", "Skip automatic adr_refs wiring on referenced domain items")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON")
-    .action((title: string, opts: { root?: string; status?: string; domainRefs?: string[]; deciders?: string[]; wire?: boolean; json?: boolean; minify?: boolean }) => {
+    .action((title: string, opts: { root?: string; status?: string; domainRefs?: string[]; deciders?: string[]; json?: boolean; minify?: boolean }) => {
       const status = opts.status ?? "proposed";
       const validStatuses = ["proposed", "accepted", "deprecated", "superseded"];
       if (!validStatuses.includes(status)) {
@@ -84,13 +81,11 @@ export function registerNewAdr(program: Cmd): void {
       const filename = `${id}.md`;
       const filePath = join(dir, filename);
 
-      // Guard: should not happen with auto-numbering, but be safe
       if (existsSync(filePath)) {
         console.error(`Error: ${filePath} already exists.`);
         process.exit(1);
       }
 
-      const _slug = slugify(title);
       const decidersStr = opts.deciders?.length ? opts.deciders.map(d => `\n  - "${d}"`).join('') : " []";
       const domainRefsStr = opts.domainRefs?.length ? opts.domainRefs.map(r => `\n  - ${r}`).join('') : " []";
 
@@ -123,26 +118,16 @@ domain_refs:${domainRefsStr}
 
       writeFileSync(filePath, content, "utf-8");
 
-      // Bidirectional wiring: add `id` to each domain item's adr_refs (opt-out with --no-wire)
-      const wireResult =
-        opts.wire !== false && opts.domainRefs?.length
-          ? wireAdrRefs(id, opts.domainRefs, opts.root)
-          : { wired: [], skipped: [] };
-
       if (opts.json) {
          console.log(JSON.stringify({
             id,
             path: filePath,
-            title,
-            wired: wireResult.wired,
+            title
          }, null, opts.minify ? 0 : 2));
          return;
       }
 
       console.log(`Created ${filename}`);
       console.log(`  .dkk/adr/${filename}`);
-      for (const w of wireResult.wired) {
-        console.log(`  Wired: ${w}`);
-      }
     });
 }
