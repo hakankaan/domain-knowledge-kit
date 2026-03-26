@@ -5,7 +5,7 @@ import { DomainGraph } from "../../../shared/graph.js";
 export function registerStats(program: Cmd): void {
   program
     .command("stats")
-    .description("Print domain model statistics and potential orphaned items")
+    .description("Print domain model statistics and detect unreferenced items")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")

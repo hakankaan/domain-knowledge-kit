@@ -48,7 +48,7 @@ function resolveDescription(model: DomainModel, id: string): string | undefined 
 export function registerSummary(program: Cmd): void {
   program
     .command("summary <id>")
-    .description("Show a concise summary of a domain item (useful for AI context)")
+    .description("Show a concise summary of a domain item")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output")
     .option("-r, --root <path>", "Override repository root")

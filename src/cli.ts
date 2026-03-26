@@ -31,8 +31,20 @@ const program = new Command();
 
 program
   .name("dkk")
-  .description("Domain Knowledge Pack CLI")
-  .version("0.1.0");
+  .description("Domain Knowledge Kit CLI")
+  .version("0.1.0")
+  .configureHelp({ helpWidth: 100 })
+  .addHelpText(
+    "after",
+    `
+Domain Types:
+  aggregate, command, event, policy, read_model, actor, glossary, rule, context, adr, flow
+
+ID Formats:
+  PascalCase   (domain items: OrderPlaced, PlaceOrder, etc.)
+  kebab-case   (contexts, adrs: sales, adr-0001, etc.)
+`
+  );
 
 // Top-level commands
 registerList(program);

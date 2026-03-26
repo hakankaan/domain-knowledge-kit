@@ -1,9 +1,9 @@
 /**
  * `dkk add <type> <name> --context <ctx>` command — scaffold individual domain items.
  *
- * Supported types: event, command, aggregate, policy, read-model, glossary, actor
+ * Supported types: event, command, aggregate, policy, read_model, glossary, actor
  *
- * For file-based types (event, command, aggregate, policy, read-model):
+ * For file-based types (event, command, aggregate, policy, read_model):
  *   Creates `.dkk/domain/contexts/<ctx>/<type-plural>/<Name>.yml`
  *
  * For glossary:
@@ -31,7 +31,7 @@ const TYPE_DIR_MAP: Record<string, string> = {
   command: "commands",
   aggregate: "aggregates",
   policy: "policies",
-  "read-model": "read-models",
+  read_model: "read-models",
 };
 
 /** All supported item types (including glossary and actor which are handled differently). */
@@ -117,7 +117,7 @@ function generateYaml(type: string, name: string, description: string, rel: AddI
       return aggregateYaml(name, description, rel);
     case "policy":
       return policyYaml(name, description, rel);
-    case "read-model":
+    case "read_model":
       return readModelYaml(name, description, rel);
     default:
       throw new Error(`Unknown type: ${type}`);
@@ -140,9 +140,7 @@ function parseCsv(val: string): string[] {
 export function registerAddItem(program: Cmd): void {
   program
     .command("add <type> <name>")
-    .description(
-      `Scaffold a domain item. Types: ${SUPPORTED_TYPES.join(", ")}`,
-    )
+    .description("Scaffold a basic domain item")
     .requiredOption("-c, --context <ctx>", "Target bounded context (kebab-case)")
     .option("-d, --description <text>", "Description of the item")
     .option("--raised-by <id>", "Aggregate that raises this event")
@@ -151,8 +149,8 @@ export function registerAddItem(program: Cmd): void {
     .option("--triggers <ids>", "Events that trigger this policy (comma-separated)", parseCsv)
     .option("--emits <ids>", "Commands emitted by policy / events emitted by aggregate (comma-separated)", parseCsv)
     .option("--handles <ids>", "Commands handled by aggregate (comma-separated)", parseCsv)
-    .option("--subscribes-to <ids>", "Events subscribed to by read-model (comma-separated)", parseCsv)
-    .option("--used-by <ids>", "Actors that use this read-model (comma-separated)", parseCsv)
+    .option("--subscribes-to <ids>", "Events subscribed to by read_model (comma-separated)", parseCsv)
+    .option("--used-by <ids>", "Actors that use this read_model (comma-separated)", parseCsv)
     .option("--from <id>", "Clone structure from existing item ID")
     .option("--actor-type <type>", "Actor type: human, system, external (only for actor)")
     .option("--no-wire", "Skip automatic bidirectional relationship wiring")
@@ -170,6 +168,9 @@ export function registerAddItem(program: Cmd): void {
           triggers?: string[]; emits?: string[]; handles?: string[]; subscribesTo?: string[]; usedBy?: string[];
         },
       ) => {
+        // Alias read-model to read_model
+        if (type === "read-model") type = "read_model";
+
         // Validate type
         if (!SUPPORTED_TYPES.includes(type)) {
           console.error(

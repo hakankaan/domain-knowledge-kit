@@ -173,7 +173,7 @@ emits:
 **Add a read model**:
 
 ```bash
-dkk add read-model OrderSummary --context ordering
+dkk add read_model OrderSummary --context ordering
 ```
 
 Update `.dkk/domain/contexts/ordering/read-models/OrderSummary.yml`:

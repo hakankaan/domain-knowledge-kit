@@ -19,7 +19,7 @@ const TYPE_DIR_MAP: Record<string, string> = {
   command: "commands",
   aggregate: "aggregates",
   policy: "policies",
-  "read-model": "read-models",
+  read_model: "read-models",
 };
 
 function readYamlObj(filePath: string): Record<string, unknown> | null {

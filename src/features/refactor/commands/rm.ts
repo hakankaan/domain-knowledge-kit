@@ -400,9 +400,7 @@ export function registerRm(program: Cmd): void {
     .command("rm <id>")
     .alias("remove")
     .alias("delete")
-    .description(
-      "Remove a domain item, actor, ADR, flow, or context safely, without leaving dangling references",
-    )
+    .description("Remove an item safely, without leaving dangling references")
     .option("--diff", "Show a diff of changes made")
     .option(
       "-f, --force",

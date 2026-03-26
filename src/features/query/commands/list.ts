@@ -139,7 +139,8 @@ export function registerList(program: Cmd): void {
         rows = rows.filter((r) => r.context.toLowerCase() === ctx);
       }
       if (opts.type) {
-        const t = opts.type.toLowerCase();
+        let t = opts.type.toLowerCase();
+        if (t === "read-model") t = "read_model";
         rows = rows.filter((r) => r.type.toLowerCase() === t);
       }
 

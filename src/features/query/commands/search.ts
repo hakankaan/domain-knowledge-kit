@@ -17,7 +17,7 @@ import { buildIndex } from "../../pipeline/indexer.js";
 export function registerSearch(program: Cmd): void {
   program
     .command("search <query>")
-    .description("Full-text search across domain items (auto-builds index if needed)")
+    .description("Full-text search across domain items")
     .option("-c, --context <name>", "Filter results to a bounded context")
     .option("-t, --type <type>", "Filter results by item type")
     .option("--tag <tag>", "Filter results by tag/keyword")

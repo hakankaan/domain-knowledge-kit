@@ -12,7 +12,7 @@ import { DomainGraph } from "../../../shared/graph.js";
 export function registerRelated(program: Cmd): void {
   program
     .command("related <id>")
-    .description("Show items related to a domain item via graph traversal (BFS)")
+    .description("Show items related to a domain item via graph traversal")
     .option("-d, --depth <n>", "Maximum traversal depth", "1")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")

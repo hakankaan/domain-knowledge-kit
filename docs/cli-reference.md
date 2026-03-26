@@ -354,7 +354,7 @@ dkk add command PlaceOrder --context ordering
 | `--emits <ids>` | — | Commands emitted by policy / events emitted by aggregate (comma-separated). |
 | `--handles <ids>` | — | (Aggregate) Commands handled by aggregate (comma-separated). |
 | `--subscribes-to <ids>` | — | (Read-model) Events subscribed to (comma-separated). |
-| `--used-by <ids>` | — | (Read-model) Actors that use this read-model (comma-separated). |
+| `--used-by <ids>` | — | (Read-model) Actors that use this read_model (comma-separated). |
 | `--from <id>` | — | Clone structure and description from an existing item. |
 | `--json` | — | Output created item path and ID as JSON. |
 | `--minify` | — | Minify JSON output. |

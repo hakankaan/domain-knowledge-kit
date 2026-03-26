@@ -31,9 +31,7 @@ import {
 export function registerMove(program: Cmd): void {
   program
     .command("move <id> <destination>")
-    .description(
-      "Move a domain item to a different bounded context, updating all references",
-    )
+    .description("Move a domain item to a new context, updating all references")
     .option("--diff", "Show a diff of changes made")
     .option("-r, --root <path>", "Override repository root")
     .addHelpText(

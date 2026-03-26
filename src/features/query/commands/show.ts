@@ -80,7 +80,7 @@ function resolveItem(model: DomainModel, id: string): { found: boolean; data?: u
 export function registerShow(program: Cmd): void {
   program
     .command("show <id>")
-    .description("Show full YAML for a domain item by ID (e.g. ordering.OrderPlaced, actor.Customer, adr-0001)")
+    .description("Show full YAML for a domain item by ID")
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")

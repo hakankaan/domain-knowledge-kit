@@ -417,9 +417,7 @@ function renameDomainItem(
 export function registerRename(program: Cmd): void {
   program
     .command("rename <old-id> <new-id>")
-    .description(
-      "Rename a domain item, actor, ADR, flow, or context and update all references",
-    )
+    .description("Rename a domain item and update all references")
     .option("--diff", "Show a diff of changes made")
     .option("-r, --root <path>", "Override repository root")
     .addHelpText(
