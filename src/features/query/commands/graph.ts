@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadDomainModel } from "../../../shared/loader.js";
 import { DomainGraph } from "../../../shared/graph.js";
 import type { GraphNode, GraphEdge } from "../../../shared/graph.js";
+import type { Flow } from "../../../shared/types/domain.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -50,13 +51,78 @@ function edgeArrow(label: string): string {
   return `-->`;
 }
 
+/**
+ * Generates a Mermaid sequence diagram for a specific flow.
+ */
+export function generateFlowSequence(flow: Flow, graph: DomainGraph): string {
+  const lines: string[] = ["```mermaid", "sequenceDiagram"];
+  const participants = new Map<string, string>(); // safeId -> declaration
+  const steps: string[] = [];
+
+  function addParticipant(id: string, label: string): string {
+    const safeId = mermaidId(id);
+    if (!participants.has(safeId)) {
+      participants.set(safeId, `    participant ${safeId} as ${mermaidLabel(label)}`);
+    }
+    return safeId;
+  }
+
+  const defaultActorId = addParticipant("actor_User", "User");
+
+  for (const step of flow.steps) {
+    const node = graph.nodes.get(step.ref);
+    if (!node) {
+      steps.push(`    %% Missing node: ${step.ref}`);
+      continue;
+    }
+
+    const tCtx = node.context;
+    const targetId = tCtx 
+      ? addParticipant(`ctx_${tCtx}`, tCtx)
+      : addParticipant("System", "System");
+
+    if (node.kind === "command") {
+      let actorId = defaultActorId;
+      for (const edge of graph.edges) {
+        if (edge.to === node.id && edge.label === "initiates") {
+          const actorNode = graph.nodes.get(edge.from);
+          if (actorNode) {
+            actorId = addParticipant(actorNode.id, actorNode.name);
+            break;
+          }
+        }
+      }
+      steps.push(`    ${actorId}->>${targetId}: ${node.name}`);
+    } else if (node.kind === "event") {
+      steps.push(`    ${targetId}-->>${targetId}: ${node.name}`);
+    } else if (node.kind === "policy") {
+      steps.push(`    ${targetId}->>${targetId}: [Policy] ${node.name}`);
+    } else if (node.kind === "read_model") {
+      steps.push(`    ${targetId}-->>${targetId}: [Read] ${node.name}`);
+    } else {
+      steps.push(`    ${targetId}->>${targetId}: ${node.name}`);
+    }
+  }
+
+  for (const p of participants.values()) {
+    lines.push(p);
+  }
+  lines.push("");
+  for (const s of steps) {
+    lines.push(s);
+  }
+  lines.push("```");
+
+  return lines.join("\n");
+}
+
 // ── Registration ──────────────────────────────────────────────────────
 
 export function registerGraph(program: Cmd): void {
-  program
-    .command("graph")
-    .description("Generate a Mermaid.js flowchart of the domain model")
+  program    .command("graph")
+    .description("Generate a Mermaid.js diagram of the domain model")
     .option("-o, --output <file>", "Output file path (default: .dkk/docs/graph.md)")
+    .option("-t, --type <type>", "Type of diagram: flowchart or swimlane", "flowchart")
     .option("-d, --depth <n>", "Max BFS depth from aggregates/actors (default: 3)", parseInt, 3)
     .option("-c, --context <name>", "Render only items from this bounded context")
     .option("-l, --layout <dir>", "Flowchart direction: LR (left-to-right) or TD (top-down)", "LR")
@@ -66,6 +132,7 @@ export function registerGraph(program: Cmd): void {
       (opts: {
         root?: string;
         output?: string;
+        type: string;
         depth: number;
         context?: string;
         layout: string;
@@ -79,6 +146,25 @@ export function registerGraph(program: Cmd): void {
           (opts.root
             ? join(opts.root, ".dkk", "docs", "graph.md")
             : join(process.cwd(), ".dkk", "docs", "graph.md"));
+
+        if (opts.type === "swimlane") {
+          const flows = model.index.flows ?? [];
+          if (flows.length === 0) {
+            console.log("No flows defined in the domain model.");
+            process.exit(0);
+          }
+          const chunks = flows.map((f) => `## ${f.name}\n\n${generateFlowSequence(f, graph)}`);
+          const content = chunks.join("\n\n");
+          try {
+            writeFileSync(outPath, content, "utf-8");
+            console.log(`Generated Mermaid swimlane diagrams at ${outPath}`);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`Failed to write graph to ${outPath}:`, msg);
+            process.exit(1);
+          }
+          return;
+        }
 
         // ── 1. Determine visible node set ────────────────────────────
         let visibleIds: Set<string>;

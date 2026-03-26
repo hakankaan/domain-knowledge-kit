@@ -200,7 +200,7 @@ export function registerAddItem(program: Cmd): void {
           process.exit(1);
         }
 
-        let description = opts.description ?? `TODO: describe ${name}`;
+        const description = opts.description ?? `TODO: describe ${name}`;
 
         // Handle glossary separately — append to context.yml
         if (type === "glossary") {

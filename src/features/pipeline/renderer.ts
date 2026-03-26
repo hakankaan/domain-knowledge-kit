@@ -24,6 +24,8 @@ import type {
 } from "../../shared/types/domain.js";
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
 import { docsDir, templatesDir } from "../../shared/paths.js";
+import { DomainGraph } from "../../shared/graph.js";
+import { generateFlowSequence } from "../query/commands/graph.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -299,9 +301,12 @@ export function renderDocs(
 
   // ── 1. Render top-level index ─────────────────────────────────────
 
+  const graph = DomainGraph.from(model);
+
   const flowsData = (model.index.flows ?? []).map((f) => ({
     ...f,
     steps: f.steps.map((s, i) => ({ ...s, stepNumber: i + 1 })),
+    sequenceDiagram: generateFlowSequence(f, graph),
   }));
 
   const indexData = {
