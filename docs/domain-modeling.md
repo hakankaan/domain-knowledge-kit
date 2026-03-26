@@ -6,6 +6,8 @@ Domain Knowledge Kit uses a structured, YAML-based domain model rooted in Domain
 
 ## Core Concepts
 
+> **⚠️ IMPORTANT:** DKK uses terms like "Events" and "Commands" as ubiquitous language for mapping business domain concepts (akin to Event Storming). The presence of these concepts in your model **does not imply**, require, or dictate the use of an Event-Driven Architecture (EDA) or CQRS pattern in your software implementation.
+
 Your domain model is organized into **bounded contexts** — self-contained areas of business logic. Each context contains domain items (events, commands, policies, aggregates, read models, glossary terms) that describe what happens in that part of the system.
 
 **Actors** represent people or systems that interact with your domain. **Flows** describe cross-context sequences of steps. **ADRs** document the architectural decisions behind your design choices.
