@@ -1,3 +1,8 @@
+---
+name: domain-knowledge
+description: Portable Agent Skill for working with a Domain Knowledge Pack.
+---
+
 # Domain Knowledge Skill
 
 > Portable Agent Skill for working with a Domain Knowledge Pack.

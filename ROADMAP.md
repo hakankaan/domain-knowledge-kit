@@ -4,19 +4,11 @@ Future directions and requirements for the Domain Knowledge Kit. Records **what 
 
 ## Planned
 
-### AI-Assisted Flow Implementation
-
-**Goal:** Guide developers from user story creation to actual implementation using AI.
-
-**Why:** While `dkk story` generates domain-grounded stories, developers lack guidance during implementation. Access to the structured domain model (commands, events, aggregates) should allow an AI to accurately guide scaffolding, event listeners, and read models.
-
-**Open questions:**
-- New CLI (`dkk implement`), a Copilot skill, or both?
-- Prescribe (generate boilerplate) vs. Suggest (checklist)?
-- How to maintain framework-agnostic guidance?
-- Include implementation hints directly in `dkk story` output?
-
 ## Completed
+
+### AI-Assisted Flow Implementation (2026-03-27)
+
+Added a new Copilot skill (`flow-implementer`) to provide framework-agnostic implementation guidance checklists based on domain knowledge. Decided to focus on logical structured checks rather than generating boilerplate code. Users can invoke it to fetch contexts and prompt ADR constraint checks.
 
 ### Flow-Anchored Story Generation (2026-03-27)
 

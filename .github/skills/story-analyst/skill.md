@@ -1,3 +1,8 @@
+---
+name: story-analyst
+description: Portable Agent Skill for generating, splitting, and reshaping user stories from a Domain Knowledge Pack.
+---
+
 # Story Analyst Skill
 
 > Portable Agent Skill for generating, splitting, and reshaping user stories from a Domain Knowledge Pack.
