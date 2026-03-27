@@ -93,6 +93,16 @@ export function schemaDir(): string {
 }
 
 /**
+ * Absolute path to the `.github/skills/` directory bundled inside the
+ * DKK package installation.
+ *
+ * Used by `dkk init --skills` to copy skill files into a user's project.
+ */
+export function packageSkillsDir(): string {
+  return join(packageRoot(), ".github", "skills");
+}
+
+/**
  * Turn an absolute path into a repo-relative POSIX path
  * (forward slashes, no leading `./`).
  */

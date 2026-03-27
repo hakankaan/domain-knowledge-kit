@@ -77,7 +77,7 @@ export function generateFlowSequence(flow: Flow, graph: DomainGraph): string {
     }
 
     const tCtx = node.context;
-    const targetId = tCtx 
+    const targetId = tCtx
       ? addParticipant(`ctx_${tCtx}`, tCtx)
       : addParticipant("System", "System");
 
@@ -116,6 +116,56 @@ export function generateFlowSequence(flow: Flow, graph: DomainGraph): string {
   return lines.join("\n");
 }
 
+/**
+ * Generates a Mermaid swimlane diagram (flowchart with subgraphs) for a specific flow.
+ */
+export function generateFlowSwimlane(flow: Flow, graph: DomainGraph, layout: string = "LR"): string {
+  const lines: string[] = ["```mermaid", `flowchart ${layout}`];
+  const participants = new Map<string, string[]>(); // context -> node shapes
+  const edges: string[] = [];
+  
+  const ctxName = (n: GraphNode) => n.context || (n.kind === "actor" ? "Actors" : "System");
+  const safeId = (id: string) => mermaidId(id);
+
+  let prevTarget: string | null = null;
+
+  for (const step of flow.steps) {
+    const node = graph.nodes.get(step.ref);
+    if (!node) {
+      lines.push(`  %% Missing node: ${step.ref}`);
+      continue;
+    }
+
+    const tCtx = ctxName(node);
+    const sCtx = mermaidId(tCtx);
+
+    if (!participants.has(sCtx)) {
+      participants.set(sCtx, []);
+      participants.get(sCtx)!.push(`    subgraph ${sCtx}["${mermaidLabel(tCtx)}"]`);
+    }
+
+    const nodeId = safeId(node.id);
+    participants.get(sCtx)!.push(`      ${nodeId}${nodeShape(node)}`);
+
+    if (prevTarget) {
+      edges.push(`  ${prevTarget} --> ${nodeId}`);
+    }
+    prevTarget = nodeId;
+  }
+
+  for (const [, shapes] of participants.entries()) {
+    lines.push(...shapes);
+    lines.push(`    end`);
+  }
+
+  lines.push("");
+  lines.push(...edges);
+  lines.push("```");
+
+  return lines.join("\n");
+}
+
+
 // ── Registration ──────────────────────────────────────────────────────
 
 export function registerGraph(program: Cmd): void {
@@ -153,7 +203,7 @@ export function registerGraph(program: Cmd): void {
             console.log("No flows defined in the domain model.");
             process.exit(0);
           }
-          const chunks = flows.map((f) => `## ${f.name}\n\n${generateFlowSequence(f, graph)}`);
+          const chunks = flows.map((f) => `## ${f.name}\n\n${generateFlowSwimlane(f, graph, opts.layout)}`);
           const content = chunks.join("\n\n");
           try {
             writeFileSync(outPath, content, "utf-8");
