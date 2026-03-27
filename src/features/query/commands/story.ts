@@ -12,8 +12,6 @@ import { DomainGraph } from "../../../shared/graph.js";
 import type {
   DomainModel,
   Flow,
-  DomainEvent,
-  Command,
   Policy,
   ReadModel,
   Actor,
