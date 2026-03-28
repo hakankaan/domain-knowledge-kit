@@ -1,15 +1,18 @@
 ---
-name: story-analyst
-description: Portable Agent Skill for generating, splitting, and reshaping user stories from a Domain Knowledge Pack.
+name: dkk-story-analyst
+description: Portable Agent Skill for generating, splitting, and reshaping user stories based entirely on the local Domain Knowledge Pack (not external issue trackers).
 ---
 
 # Story Analyst Skill
 
-> Portable Agent Skill for generating, splitting, and reshaping user stories from a Domain Knowledge Pack.
+> Portable Agent Skill for generating, splitting, and reshaping user stories and epics directly from a local Domain Knowledge Pack (DKK). 
+> 
+> **CRITICAL INSTRUCTION FOR AI AGENTS:** 
+> Do NOT look for, query, or mention any external issue/ticket management tools (like Jira, GitHub Issues, Linear, Trello, etc.). In this context, "User Stories" and "Epics" refer exclusively to behavioral requirements derived from Domain-Driven Design (DDD) and Event Storming models stored locally in YAML format. Your source of truth is ALWAYS the local `dkk` CLI tool.
 
 ## Description
 
-This skill enables an AI agent to generate accurate, domain-grounded user stories, epics, and acceptance criteria by leveraging the structured domain model managed by DKK. It uses the `dkk story` command to aggregate a flow's complete context in a single call, then maps that context onto standard Agile story formats.
+This skill enables an AI agent to generate accurate, domain-grounded user stories, epics, and acceptance criteria by leveraging the structured domain model managed by DKK. It uses the `dkk story` command to aggregate a flow's complete context in a single call, then maps that context onto standard Agile story formats based purely on the domain model.
 
 ## Primary Command
 
@@ -25,7 +28,7 @@ Accepts both `flow.Name` and bare `Name` (auto-prefixes `flow.`).
 When asked to write, draft, or generate a user story:
 
 1. **Identify the flow** — Ask the user for the relevant flow ID, or search for it: `dkk list --type flow`. If the user provides a feature name, run `dkk search "<feature>"` to locate the matching flow or command.
-2. **Retrieve full context** — Run `dkk story <flow-id>`. This returns actors, ordered steps, triggered policies, BDD examples, ADRs, and downstream effects in one call.
+2. **Retrieve full context** — Run `dkk story <flow-id>`. This returns actors, ordered steps, triggered policies, BDD examples, ADRs, and downstream effects in one call from the local domain model.
 3. **Map to story format** using the output:
    - **As a** `[Actor from "Actors" section]`
    - **I want to** `[Command description from Steps]`
@@ -42,12 +45,13 @@ Only use terminology present in the `dkk story` output. Never:
 - Invent entity names, command names, or event names not in the output
 - Rename domain terms (if DKK says `OrderBasket`, the story must not say `ShoppingCart`)
 - Reference bounded contexts not mentioned in the step refs
+- Pull context from external APIs or issue trackers.
 
 If you are uncertain whether a term is canonical, run `dkk search "<term>"` to verify.
 
-## Epic vs. Story Decision Rules
+## Epic vs. Story Decision Rules (Domain Level)
 
-After retrieving the flow context, apply these rules:
+After retrieving the flow context from DKK, apply these rules:
 
 - **Single story:** Flow has ≤3 command steps and spans ≤1 bounded context.
 - **Epic with story slices:** Flow has >3 command steps OR spans >1 bounded context. Slice by:
@@ -55,14 +59,14 @@ After retrieving the flow context, apply these rules:
   2. Each policy trigger becomes an explicit story ("As a system, when X happens, I want Y to be triggered, so that Z")
   3. Each slice that produces an event consumed by a read model must explicitly include updating that read model in its scope or acceptance criteria
 
-When recommending an epic breakdown, present the slice boundaries and explain which downstream effects belong to each slice.
+When recommending an epic breakdown, present the slice boundaries and explain which downstream effects belong to each slice based on the DKK model.
 
 ## Story Reshaping Workflow
 
 When asked to refine, split, or revise an existing story:
 
 1. Run `dkk story <flow-id>` for the relevant flow to get the current domain truth
-2. Compare the story's entities and terminology against the DKK output
+2. Compare the text's entities and terminology against the local DKK output
 3. Flag any mismatches: invented terms, missing actors, acceptance criteria that contradict policies
 4. Suggest corrections using exact DKK terminology
 5. Ensure the reshaped story still covers all downstream effects (read models, secondary policies)

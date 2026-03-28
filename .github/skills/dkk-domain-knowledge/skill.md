@@ -1,5 +1,5 @@
 ---
-name: domain-knowledge
+name: dkk-domain-knowledge
 description: Portable Agent Skill for working with a Domain Knowledge Pack.
 ---
 

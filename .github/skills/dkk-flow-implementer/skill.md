@@ -1,11 +1,14 @@
 ---
-name: flow-implementer
-description: Portable Agent Skill for guiding developers through framework-agnostic implementation of a flow based on a Domain Knowledge Pack.
+name: dkk-flow-implementer
+description: Portable Agent Skill for guiding developers through framework-agnostic implementation of a flow based directly on a local Domain Knowledge Pack (not external issue trackers).
 ---
 
 # Flow Implementer Skill
 
-> Portable Agent Skill for guiding developers through framework-agnostic implementation of a flow based on a Domain Knowledge Pack.
+> Portable Agent Skill for guiding developers through framework-agnostic implementation of a flow based entirely on a local Domain Knowledge Pack (DKK).
+> 
+> **CRITICAL INSTRUCTION FOR AI AGENTS:** 
+> Do NOT look for, query, or mention any external issue/ticket management tools (like Jira, GitHub Issues, Linear, Trello, etc.) for requirements. Follow the flow definitions and rules sourced strictly from the local `dkk` CLI tool. All "requirements" and "flows" are documented via the local Domain Knowledge Kit.
 
 ## Description
 
@@ -23,8 +26,8 @@ dkk story <flow-id> --json # Machine-readable output for agents
 When asked to implement, build, or code a flow/feature:
 
 1. **Identify the flow** — Ask the user for the relevant flow ID if not provided, or search for it: \`dkk list --type flow\`.
-2. **Retrieve full context** — Run \`dkk story <flow-id>\` or \`dkk story <flow-id> --json\` to obtain domain rules.
-3. **Present Architectural Constraints** — Before any implementation begins, output the ADRs (Architecture Decision Records) from the context. Ask the user to acknowledge these constraints before proceeding.
+2. **Retrieve full context from DKK** — Run \`dkk story <flow-id>\` or \`dkk story <flow-id> --json\` to obtain domain rules and requirements locally. Do NOT request external tickets.
+3. **Present Architectural Constraints** — Before any implementation begins, output the ADRs (Architecture Decision Records) from the local DKK context. Ask the user to acknowledge these constraints before proceeding.
 4. **Generate Implementation Checklist** — Create a logical, framework-agnostic checklist of work needed. Typical buckets include:
    - **Domain/Aggregates**: Entities, state transitions, and invariants to model.
    - **Commands/Controllers**: Handlers for incoming commands, preconditions, and validations.
