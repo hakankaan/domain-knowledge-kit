@@ -29,15 +29,21 @@ When asked to write, draft, or generate a user story:
 
 1. **Identify the flow** — Ask the user for the relevant flow ID, or search for it: `dkk list --type flow`. If the user provides a feature name, run `dkk search "<feature>"` to locate the matching flow or command.
 2. **Retrieve full context** — Run `dkk story <flow-id>`. This returns actors, ordered steps, triggered policies, BDD examples, ADRs, and downstream effects in one call from the local domain model.
-3. **Map to story format** using the output:
+3. **Clarify scope** — Use `askQuestions` to ask **1–7 clarifying questions** before drafting. Derive each question, its options, and your recommended default from the actual DKK output and the project's conventions — do not use a fixed set. Each question must offer concrete options with one marked as recommended. Skip entirely for trivial flows (≤2 steps, 1 actor, no ambiguity). Questions should target **product behavior and story scope**, e.g.:
+   - Which user-facing outcome matters most for this story?
+   - Should the user receive confirmation/feedback after this action, and how?
+   - When a step fails or is rejected, what should the user experience?
+   - Are there optional steps the user can skip, or is the flow strictly linear?
+   - Should this story cover the happy path only, or include edge cases?
+4. **Map to story format** using the output:
    - **As a** `[Actor from "Actors" section]`
    - **I want to** `[Command description from Steps]`
    - **So that** `[Flow description]`
-4. **Write acceptance criteria** from the "Policies" and "BDD Examples" sections:
+5. **Write acceptance criteria** from the "Policies" and "BDD Examples" sections:
    - Policies provide the **Given/When/Then** structure: When [triggering event] → Then [consequent command]
    - BDD Examples from commands and events are pre-written scenarios — use them directly or expand them
-5. **Add an Architectural Constraints section** listing all ADRs from the output. Developers must respect these when implementing the story.
-6. **Add an Implementation Notes section** from "Downstream Effects": read models that must be updated, secondary policies that will fire.
+6. **Add an Architectural Constraints section** listing all ADRs from the output. Developers must respect these when implementing the story.
+7. **Add an Implementation Notes section** from "Downstream Effects": read models that must be updated, secondary policies that will fire.
 
 ## Noun Enforcement (MANDATORY)
 
