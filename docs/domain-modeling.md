@@ -134,6 +134,13 @@ File: `.dkk/domain/contexts/<context>/read-models/OrderSummary.yml`
 ```yaml
 name: OrderSummary
 description: Read-optimized view of order details.
+fields:
+  - name: orderId
+    type: UUID
+  - name: status
+    type: string
+  - name: totalAmount
+    type: Money
 subscribes_to:
   - OrderPlaced
   - OrderCancelled
@@ -146,6 +153,7 @@ used_by:
 |-------|----------|-------------|
 | `name` | Yes | PascalCase (e.g. `OrderSummary`, `InventoryDashboard`) |
 | `description` | Yes | What this read model shows |
+| `fields` | No | Data fields exposed by this projection |
 | `subscribes_to` | No | Events this read model listens to |
 | `used_by` | No | Actors that consume this read model |
 | `adr_refs` | No | List of ADR IDs |
@@ -186,6 +194,14 @@ actors:
   - name: PaymentGateway
     type: external
     description: Third-party payment processor.
+    capabilities:
+      - Authorize payments
+      - Capture authorized payments
+      - Issue refunds
+    failure_modes:
+      - Gateway timeout
+      - Insufficient funds
+      - Card declined
   - name: InventoryService
     type: system
     description: Internal service managing stock levels.
@@ -196,6 +212,8 @@ actors:
 | `name` | Yes | PascalCase (e.g. `Customer`, `PaymentGateway`) |
 | `type` | Yes | One of: `human`, `system`, `external` |
 | `description` | Yes | What this actor does in the domain |
+| `capabilities` | No | What this actor can do, expressed in domain language |
+| `failure_modes` | No | How this actor can fail, expressed in domain language |
 | `adr_refs` | No | List of ADR IDs |
 
 ### Flows
@@ -311,6 +329,7 @@ For a quick validation-only check (without rendering), use `dkk validate`.
 ## What's Next?
 
 - **[Getting Started](getting-started.md)** — Set up your first project step by step.
+- **[Iterative Modeling](iterative-modeling.md)** — Decision patterns, modeling phases, external constraints.
 - **[CLI Reference](cli-reference.md)** — Full command and flag reference.
 - **[ADR Guide](adr-guide.md)** — Architecture Decision Records workflow.
 - **[AI Agent Integration](ai-agent-integration.md)** — Set up AI agents to query and maintain your domain model.

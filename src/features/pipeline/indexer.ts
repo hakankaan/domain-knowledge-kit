@@ -159,7 +159,7 @@ function collectRows(model: DomainModel): IndexRow[] {
       context: "",
       name: actor.name,
       tags: actor.type,
-      text: joinText(actor.description),
+      text: joinText(actor.description, ...(actor.capabilities ?? []), ...(actor.failure_modes ?? [])),
       relations: "[]",
       adrRefs: JSON.stringify(actor.adr_refs ?? []),
     });
@@ -279,7 +279,7 @@ function collectRows(model: DomainModel): IndexRow[] {
             context: ctxName,
             name: rm.name,
             tags: "",
-            text: joinText(rm.description),
+            text: joinText(rm.description, fieldsText(rm.fields)),
             relations: JSON.stringify(relIds),
             adrRefs,
           });

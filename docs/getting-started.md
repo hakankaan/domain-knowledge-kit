@@ -181,6 +181,13 @@ Update `.dkk/domain/contexts/ordering/read-models/OrderSummary.yml`:
 ```yaml
 name: OrderSummary
 description: Read-optimized view of order details.
+fields:
+  - name: orderId
+    type: UUID
+  - name: status
+    type: string
+  - name: totalAmount
+    type: Money
 subscribes_to:
   - OrderPlaced
 used_by:
@@ -196,6 +203,15 @@ actors:
   - name: Customer
     type: human
     description: End user who places and tracks orders.
+  - name: PaymentGateway
+    type: external
+    description: Third-party payment processor.
+    capabilities:
+      - Authorize payments
+      - Issue refunds
+    failure_modes:
+      - Gateway timeout
+      - Card declined
 ```
 
 Actor types can be `human`, `system`, or `external`.

@@ -147,5 +147,6 @@ With DKK integration, AI agents can:
 
 - **[Getting Started](getting-started.md)** — Set up your first domain model.
 - **[Domain Modeling Guide](domain-modeling.md)** — Item types, naming conventions, cross-references.
+- **[Iterative Modeling](iterative-modeling.md)** — Decision patterns, modeling phases, external constraints.
 - **[CLI Reference](cli-reference.md)** — Full command and flag reference.
 - **[ADR Guide](adr-guide.md)** — Architecture Decision Records workflow.

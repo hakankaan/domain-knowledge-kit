@@ -60,6 +60,10 @@ export interface Actor {
   type: ActorType;
   /** What role this actor plays in the domain. */
   description: string;
+  /** What this actor can do, expressed in domain language. */
+  capabilities?: string[];
+  /** How this actor can fail, expressed in domain language. */
+  failure_modes?: string[];
   /** Related ADR identifiers. */
   adr_refs?: AdrRef[];
 }
@@ -157,6 +161,8 @@ export interface ReadModel {
   name: string;
   /** What data this read model exposes. */
   description: string;
+  /** Data fields exposed by this read model. */
+  fields?: Field[];
   /** Event names this read model subscribes to. */
   subscribes_to?: string[];
   /** Actor names that consume this read model. */

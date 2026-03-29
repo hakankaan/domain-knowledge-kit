@@ -25,6 +25,16 @@
             "minLength": 1,
             "description": "What role this actor plays in the domain"
           },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "What this actor can do, expressed in domain language"
+          },
+          "failure_modes": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "description": "How this actor can fail, expressed in domain language"
+          },
           "adr_refs": {
             "type": "array",
             "items": { "type": "string", "pattern": "^adr-\\d{4}$" },

@@ -63,9 +63,9 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 | **Command** | An instruction to change state | \`name\`, \`description\`, \`fields\`, \`actor\`, \`handled_by\`, \`adr_refs\` |
 | **Policy** | Reactive logic triggered by events | \`name\`, \`description\`, \`when\`, \`then\`, \`adr_refs\` |
 | **Aggregate** | Consistency boundary handling commands | \`name\`, \`description\`, \`handles\`, \`emits\`, \`adr_refs\` |
-| **Read Model** | Query-optimized projection | \`name\`, \`description\`, \`subscribes_to\`, \`used_by\`, \`adr_refs\` |
+| **Read Model** | Query-optimized projection | \`name\`, \`description\`, \`fields\`, \`subscribes_to\`, \`used_by\`, \`adr_refs\` |
 | **Glossary** | Ubiquitous language term | \`term\`, \`definition\`, \`aliases\`, \`adr_refs\` |
-| **Actor** | Person or system interacting with the domain | \`name\`, \`type\` (human/system/external), \`description\`, \`adr_refs\` |
+| **Actor** | Person or system interacting with the domain | \`name\`, \`type\` (human/system/external), \`description\`, \`capabilities\`, \`failure_modes\`, \`adr_refs\` |
 | **Flow** | Cross-context sequence of steps | \`name\`, \`description\`, \`steps[]\` |
 
 ## ID Conventions
@@ -274,6 +274,13 @@ emits:
 \`\`\`yaml
 name: OrderSummary
 description: Read-optimized view of order details.
+fields:
+  - name: orderId
+    type: UUID
+  - name: status
+    type: string
+  - name: totalAmount
+    type: Money
 subscribes_to:
   - OrderPlaced
 used_by:
@@ -287,6 +294,15 @@ actors:
   - name: Customer
     type: human
     description: End user who places and tracks orders.
+  - name: PaymentGateway
+    type: external
+    description: Third-party payment processor.
+    capabilities:
+      - Authorize payments
+      - Issue refunds
+    failure_modes:
+      - Gateway timeout
+      - Card declined
 \`\`\`
 
 **Index file** (\`.dkk/domain/index.yml\`):

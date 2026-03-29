@@ -107,6 +107,7 @@ function resolveStep(model: DomainModel, ref: string, type: string): Omit<Resolv
       return {
         name: rm.name,
         description: rm.description,
+        fields: rm.fields,
         subscribes_to: rm.subscribes_to,
         used_by: rm.used_by,
       };

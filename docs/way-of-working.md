@@ -137,6 +137,7 @@ Track these metrics to gauge whether DKK is adding value:
 
 - **[Getting Started](getting-started.md)** — Install DKK and set up your first domain model.
 - **[Domain Modeling Guide](domain-modeling.md)** — Item types, naming conventions, cross-references.
+- **[Iterative Modeling](iterative-modeling.md)** — Decision patterns, modeling phases, external constraints.
 - **[CLI Reference](cli-reference.md)** — Full command and flag reference.
 - **[ADR Guide](adr-guide.md)** — Architecture Decision Records workflow.
 - **[AI Agent Integration](ai-agent-integration.md)** — Set up AI agents to query and maintain your domain model.
