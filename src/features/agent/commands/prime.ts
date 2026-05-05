@@ -133,7 +133,7 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 |------------------------|------------------------------------------------------|
 | \`dkk init\`            | Create/update AGENTS.md with DKK section             |
 | \`dkk init --skills\`   | Also install agent skills into \`.github/skills/\`     |
-| \`dkk init --claude\`   | Also scaffold \`.claude/\` (Claude Code hooks + perms) |
+| \`dkk init --claude\`   | Also scaffold \`.claude/\` (settings, hooks, skills, agents, commands) |
 | \`dkk prime\`           | Output this agent context to stdout                  |
 | \`dkk mcp\`             | Run the DKK MCP server over stdio                    |
 

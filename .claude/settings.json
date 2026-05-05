@@ -2,17 +2,6 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Bash(npx tsx src/cli.ts list:*)",
-      "Bash(npx tsx src/cli.ts show:*)",
-      "Bash(npx tsx src/cli.ts summary:*)",
-      "Bash(npx tsx src/cli.ts search:*)",
-      "Bash(npx tsx src/cli.ts related:*)",
-      "Bash(npx tsx src/cli.ts graph:*)",
-      "Bash(npx tsx src/cli.ts locate:*)",
-      "Bash(npx tsx src/cli.ts story:*)",
-      "Bash(npx tsx src/cli.ts validate:*)",
-      "Bash(npx tsx src/cli.ts stats:*)",
-      "Bash(npx tsx src/cli.ts prime:*)",
       "Bash(dkk list:*)",
       "Bash(dkk show:*)",
       "Bash(dkk summary:*)",
@@ -23,12 +12,7 @@
       "Bash(dkk story:*)",
       "Bash(dkk validate:*)",
       "Bash(dkk stats:*)",
-      "Bash(dkk prime:*)",
-      "Bash(npm run typecheck)",
-      "Bash(npm run lint)",
-      "Bash(npm run check)",
-      "Bash(npm run build)",
-      "Bash(npm test)"
+      "Bash(dkk prime:*)"
     ]
   },
   "hooks": {
@@ -37,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/dkk/claude/hooks/session-start-prime.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-prime.mjs\""
           }
         ]
       }
@@ -48,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/dkk/claude/hooks/pre-edit-block-generated.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-block-generated.mjs\""
           }
         ]
       }
@@ -59,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/dkk/claude/hooks/post-edit-validate.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-validate.mjs\""
           }
         ]
       }
@@ -69,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/tools/dkk/claude/hooks/stop-validate.mjs\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validate.mjs\""
           }
         ]
       }

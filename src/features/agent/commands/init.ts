@@ -72,7 +72,7 @@ dkk stats                             # Domain statistics + orphaned items
 
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section
-dkk init --claude                     # Also scaffold .claude/ (Claude Code hooks + permissions)
+dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
 dkk init --skills                     # Also install agent skills into .github/skills/
 dkk prime                             # Output full agent context
 dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
@@ -140,14 +140,99 @@ function installSkills(root: string, force: boolean): void {
 }
 
 /**
- * Copy the bundled Claude Code config (`settings.json` + hook scripts)
- * from the DKK package into the consumer project's `.claude/` directory.
+ * Copy every file in `srcDir` (one level deep) into `destDir`. Skips files
+ * that already exist unless `force` is true. Reports each file with a
+ * `.claude/<relSubpath>/<filename>` label.
  *
- * - `settings.json` is skipped if present (use `--force` to overwrite).
- * - Hook scripts under `.claude/hooks/` are copied individually with the
- *   same skip-existing semantics.
- * - Hook scripts get the executable bit so they can run directly as well
- *   as via `node ...`.
+ * If `executable` is true, sets 0o755 on each copied file (used for hook
+ * scripts).
+ */
+function copyFlatDir(opts: {
+  srcDir: string;
+  destDir: string;
+  relSubpath: string;
+  force: boolean;
+  executable?: boolean;
+}): void {
+  const { srcDir, destDir, relSubpath, force, executable } = opts;
+  if (!existsSync(srcDir)) return;
+  mkdirSync(destDir, { recursive: true });
+  for (const fileName of readdirSync(srcDir)) {
+    const srcFile = join(srcDir, fileName);
+    if (!statSync(srcFile).isFile()) continue;
+
+    const destFile = join(destDir, fileName);
+    const relPath = `${relSubpath}/${fileName}`;
+
+    if (existsSync(destFile) && !force) {
+      console.log(`Skipped  ${relPath} (already exists — use --force to overwrite)`);
+      continue;
+    }
+
+    const alreadyExisted = existsSync(destFile);
+    writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
+    if (executable) {
+      try {
+        chmodSync(destFile, 0o755);
+      } catch {
+        // Non-POSIX filesystems may reject chmod — safe to ignore.
+      }
+    }
+    console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+  }
+}
+
+/**
+ * Copy a directory of skill subdirectories. Layout is `<srcDir>/<skill>/<file>`,
+ * mirrored under `<destDir>/<skill>/<file>`. Skips files that already exist
+ * unless `force` is true.
+ */
+function copyNestedDir(opts: {
+  srcDir: string;
+  destDir: string;
+  relSubpath: string;
+  force: boolean;
+}): void {
+  const { srcDir, destDir, relSubpath, force } = opts;
+  if (!existsSync(srcDir)) return;
+  for (const subName of readdirSync(srcDir)) {
+    const subSrc = join(srcDir, subName);
+    if (!statSync(subSrc).isDirectory()) continue;
+
+    const subDest = join(destDir, subName);
+    mkdirSync(subDest, { recursive: true });
+
+    for (const fileName of readdirSync(subSrc)) {
+      const srcFile = join(subSrc, fileName);
+      if (!statSync(srcFile).isFile()) continue;
+
+      const destFile = join(subDest, fileName);
+      const relPath = `${relSubpath}/${subName}/${fileName}`;
+
+      if (existsSync(destFile) && !force) {
+        console.log(`Skipped  ${relPath} (already exists — use --force to overwrite)`);
+        continue;
+      }
+
+      const alreadyExisted = existsSync(destFile);
+      writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
+      console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+    }
+  }
+}
+
+/**
+ * Copy the bundled Claude Code config (`settings.json`, hooks, skills,
+ * subagents, slash commands) from the DKK package into the consumer
+ * project's `.claude/` directory.
+ *
+ * Layout produced (all skip-if-present unless `--force`):
+ *   .claude/
+ *     settings.json
+ *     hooks/<hook>.mjs            (executable bit set)
+ *     skills/<skill>/SKILL.md
+ *     agents/<agent>.md
+ *     commands/<command>.md
  */
 function installClaudeConfig(root: string, force: boolean): void {
   const srcDir = packageClaudeDir();
@@ -173,34 +258,38 @@ function installClaudeConfig(root: string, force: boolean): void {
     }
   }
 
-  // 2. hooks/
-  const hooksSrcDir = join(srcDir, "hooks");
-  const hooksDestDir = join(destDir, "hooks");
-  if (existsSync(hooksSrcDir)) {
-    mkdirSync(hooksDestDir, { recursive: true });
-    for (const fileName of readdirSync(hooksSrcDir)) {
-      const srcFile = join(hooksSrcDir, fileName);
-      if (!statSync(srcFile).isFile()) continue;
+  // 2. hooks/ (flat, executable)
+  copyFlatDir({
+    srcDir: join(srcDir, "hooks"),
+    destDir: join(destDir, "hooks"),
+    relSubpath: ".claude/hooks",
+    force,
+    executable: true,
+  });
 
-      const destFile = join(hooksDestDir, fileName);
-      const relPath = `.claude/hooks/${fileName}`;
+  // 3. skills/<skill>/SKILL.md (nested)
+  copyNestedDir({
+    srcDir: join(srcDir, "skills"),
+    destDir: join(destDir, "skills"),
+    relSubpath: ".claude/skills",
+    force,
+  });
 
-      if (existsSync(destFile) && !force) {
-        console.log(`Skipped  ${relPath} (already exists — use --force to overwrite)`);
-        continue;
-      }
+  // 4. agents/<agent>.md (flat)
+  copyFlatDir({
+    srcDir: join(srcDir, "agents"),
+    destDir: join(destDir, "agents"),
+    relSubpath: ".claude/agents",
+    force,
+  });
 
-      const alreadyExisted = existsSync(destFile);
-      writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
-      // Make the hook script executable so it can run directly too.
-      try {
-        chmodSync(destFile, 0o755);
-      } catch {
-        // Non-POSIX filesystems may reject chmod — safe to ignore.
-      }
-      console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
-    }
-  }
+  // 5. commands/<command>.md (flat)
+  copyFlatDir({
+    srcDir: join(srcDir, "commands"),
+    destDir: join(destDir, "commands"),
+    relSubpath: ".claude/commands",
+    force,
+  });
 }
 
 /** Register the `init` subcommand. */
@@ -209,7 +298,7 @@ export function registerInit(program: Cmd): void {
     .command("init")
     .description("Create or update AGENTS.md with DKK onboarding section")
     .option("--skills", "Also install DKK skill files into .github/skills/")
-    .option("--claude", "Also install Claude Code config (.claude/settings.json + hooks)")
+    .option("--claude", "Also install Claude Code config (.claude/ settings, hooks, skills, agents, commands)")
     .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
     .option("-r, --root <path>", "Override repository root")
     .action((opts: { root?: string; skills?: boolean; claude?: boolean; force?: boolean }) => {
