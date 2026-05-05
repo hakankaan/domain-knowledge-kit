@@ -143,6 +143,53 @@ With DKK integration, AI agents can:
 - **Make changes** — Add new events/commands/policies with proper cross-references and ADR links
 - **Review PRs** — Identify domain items affected by code changes and flag broken invariants
 
+## Claude Code Integration
+
+DKK ships with a native **Model Context Protocol (MCP) server** plus reference Claude Code hooks. Once configured, Claude Code can introspect the domain model directly through MCP tools — no Bash, no shell quoting, no CLI parsing — and a small set of hooks keeps the model valid as the agent edits.
+
+### MCP server
+
+Register the server with Claude Code in your repo:
+
+```bash
+claude mcp add dkk -- dkk mcp
+```
+
+Then Claude Code exposes the following tools (all read-only except `dkk_validate`):
+
+| Tool | Purpose |
+|------|---------|
+| `dkk_search` | FTS5 keyword search with context/type/tag filters |
+| `dkk_show` | Full YAML/JSON for an item id |
+| `dkk_summary` | Concise summary + direct neighbours (cheapest orientation tool) |
+| `dkk_related` | BFS graph traversal — use depth ≥ 2 for blast radius |
+| `dkk_list` | List all items, filterable by context/type |
+| `dkk_story` | Aggregate a flow's full story context (markdown or JSON) |
+| `dkk_locate` | Absolute file path(s) for an item |
+| `dkk_stats` | Domain counts + orphaned-item detection |
+| `dkk_prime` | Full agent context document + live domain summary |
+| `dkk_validate` | Schema + cross-reference validation |
+
+The server reuses the same in-process modules the CLI uses, so the output is identical and there's no shell-escaping fragility.
+
+### Hooks (one-shot install)
+
+DKK ships a working `.claude/` template — `settings.json` plus four hook scripts — that you can scaffold into your repo with a single command:
+
+```bash
+dkk init --claude
+```
+
+Re-run with `--force` to overwrite local edits. The scaffolder creates:
+
+- **`.claude/settings.json`** — pre-approved permissions for read-only `dkk` commands, plus the four hooks below wired in.
+- **`.claude/hooks/session-start-prime.mjs`** (`SessionStart`) — pipes `dkk prime` into the conversation context so the agent is domain-aware from turn 1.
+- **`.claude/hooks/pre-edit-block-generated.mjs`** (`PreToolUse` on `Edit|Write|MultiEdit|NotebookEdit`) — blocks writes to `.dkk/docs/` and `dist/` since those are regenerated outputs.
+- **`.claude/hooks/post-edit-validate.mjs`** (`PostToolUse` on `Edit|Write|MultiEdit`) — when a file under `.dkk/domain/*.yml` changes, runs `dkk validate` so cross-reference breaks surface back into the agent loop immediately.
+- **`.claude/hooks/stop-validate.mjs`** (`Stop`) — runs `dkk validate` as a quality gate before the agent finishes a turn; an invalid model returns exit 2 with the error report so the agent must fix it before declaring the work done.
+
+Each hook script auto-detects whether it's running inside the DKK source repo (where it uses `npx tsx src/cli.ts`) or in a downstream consumer repo (where it uses the published `dkk` binary). They work unchanged in both contexts.
+
 ## What's Next?
 
 - **[Getting Started](getting-started.md)** — Set up your first domain model.

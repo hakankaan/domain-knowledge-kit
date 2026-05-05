@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { adrDir, actorsFile, indexFile, contextsDir } from "../../../shared/paths.js";
 import { parseYaml } from "../../../shared/yaml.js";
 
-function resolveItemPath(id: string, root?: string): string[] {
+export function resolveItemPath(id: string, root?: string): string[] {
   const rootPath = resolve(root || process.cwd());
   
   if (id.startsWith("actor.")) {

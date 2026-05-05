@@ -9,7 +9,7 @@ import { loadDomainModel } from "../../../shared/loader.js";
 import { forEachItem, itemDescription } from "../../../shared/item-visitor.js";
 
 /** A row in the list output table. */
-interface ListRow {
+export interface ListRow {
   id: string;
   type: string;
   context: string;
@@ -18,7 +18,7 @@ interface ListRow {
 }
 
 /** Collect all domain items into flat rows. */
-function collectRows(root?: string): ListRow[] {
+export function collectRows(root?: string): ListRow[] {
   const model = loadDomainModel({ root });
   const rows: ListRow[] = [];
 

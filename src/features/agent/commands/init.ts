@@ -6,9 +6,9 @@
  * markers are absent, creates the file if it does not exist.
  */
 import type { Command as Cmd } from "commander";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { repoRoot, packageSkillsDir } from "../../../shared/paths.js";
+import { repoRoot, packageSkillsDir, packageClaudeDir } from "../../../shared/paths.js";
 
 const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
@@ -72,7 +72,10 @@ dkk stats                             # Domain statistics + orphaned items
 
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section
+dkk init --claude                     # Also scaffold .claude/ (Claude Code hooks + permissions)
+dkk init --skills                     # Also install agent skills into .github/skills/
 dkk prime                             # Output full agent context
+dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
 \`\`\`
 
 ### Quality Gates
@@ -136,15 +139,80 @@ function installSkills(root: string, force: boolean): void {
   }
 }
 
+/**
+ * Copy the bundled Claude Code config (`settings.json` + hook scripts)
+ * from the DKK package into the consumer project's `.claude/` directory.
+ *
+ * - `settings.json` is skipped if present (use `--force` to overwrite).
+ * - Hook scripts under `.claude/hooks/` are copied individually with the
+ *   same skip-existing semantics.
+ * - Hook scripts get the executable bit so they can run directly as well
+ *   as via `node ...`.
+ */
+function installClaudeConfig(root: string, force: boolean): void {
+  const srcDir = packageClaudeDir();
+  const destDir = join(root, ".claude");
+
+  if (!existsSync(srcDir)) {
+    console.warn(`Warning: DKK package Claude template not found at ${srcDir}`);
+    return;
+  }
+
+  mkdirSync(destDir, { recursive: true });
+
+  // 1. settings.json
+  const settingsSrc = join(srcDir, "settings.json");
+  const settingsDest = join(destDir, "settings.json");
+  if (existsSync(settingsSrc)) {
+    if (existsSync(settingsDest) && !force) {
+      console.log(`Skipped  .claude/settings.json (already exists — use --force to overwrite)`);
+    } else {
+      const alreadyExisted = existsSync(settingsDest);
+      writeFileSync(settingsDest, readFileSync(settingsSrc, "utf-8"), "utf-8");
+      console.log(`${alreadyExisted ? "Updated" : "Created"}  .claude/settings.json`);
+    }
+  }
+
+  // 2. hooks/
+  const hooksSrcDir = join(srcDir, "hooks");
+  const hooksDestDir = join(destDir, "hooks");
+  if (existsSync(hooksSrcDir)) {
+    mkdirSync(hooksDestDir, { recursive: true });
+    for (const fileName of readdirSync(hooksSrcDir)) {
+      const srcFile = join(hooksSrcDir, fileName);
+      if (!statSync(srcFile).isFile()) continue;
+
+      const destFile = join(hooksDestDir, fileName);
+      const relPath = `.claude/hooks/${fileName}`;
+
+      if (existsSync(destFile) && !force) {
+        console.log(`Skipped  ${relPath} (already exists — use --force to overwrite)`);
+        continue;
+      }
+
+      const alreadyExisted = existsSync(destFile);
+      writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
+      // Make the hook script executable so it can run directly too.
+      try {
+        chmodSync(destFile, 0o755);
+      } catch {
+        // Non-POSIX filesystems may reject chmod — safe to ignore.
+      }
+      console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+    }
+  }
+}
+
 /** Register the `init` subcommand. */
 export function registerInit(program: Cmd): void {
   program
     .command("init")
     .description("Create or update AGENTS.md with DKK onboarding section")
     .option("--skills", "Also install DKK skill files into .github/skills/")
-    .option("--force", "Overwrite existing skill files (only applies with --skills)")
+    .option("--claude", "Also install Claude Code config (.claude/settings.json + hooks)")
+    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { root?: string; skills?: boolean; force?: boolean }) => {
+    .action((opts: { root?: string; skills?: boolean; claude?: boolean; force?: boolean }) => {
       const root = repoRoot(opts.root);
       const agentsPath = join(root, "AGENTS.md");
       const section = delimitedSection();
@@ -175,6 +243,10 @@ export function registerInit(program: Cmd): void {
 
       if (opts.skills) {
         installSkills(root, opts.force ?? false);
+      }
+
+      if (opts.claude) {
+        installClaudeConfig(root, opts.force ?? false);
       }
     });
 }

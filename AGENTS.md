@@ -157,7 +157,10 @@ dkk stats                             # Domain statistics + orphaned items
 
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section
+dkk init --claude                     # Also scaffold .claude/ (Claude Code hooks + permissions)
+dkk init --skills                     # Also install agent skills into .github/skills/
 dkk prime                             # Output full agent context
+dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
 ```
 
 ### Quality Gates

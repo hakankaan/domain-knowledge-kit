@@ -20,7 +20,7 @@ import type { DomainModel, Aggregate } from "../../../shared/types/domain.js";
  * The full agent context document.
  * Keep the CLI Command Reference tables in sync with the Quick Reference block in init.ts#dkkSection.
  */
-function primeContent(): string {
+export function primeContent(): string {
   return `# Domain Knowledge Kit — Agent Context
 
 ## Project Overview
@@ -129,10 +129,13 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 ### Agent
 
-| Command       | Purpose                                              |
-|---------------|------------------------------------------------------|
-| \`dkk init\`   | Create/update AGENTS.md with DKK section             |
-| \`dkk prime\`  | Output this agent context to stdout                  |
+| Command                | Purpose                                              |
+|------------------------|------------------------------------------------------|
+| \`dkk init\`            | Create/update AGENTS.md with DKK section             |
+| \`dkk init --skills\`   | Also install agent skills into \`.github/skills/\`     |
+| \`dkk init --claude\`   | Also scaffold \`.claude/\` (Claude Code hooks + perms) |
+| \`dkk prime\`           | Output this agent context to stdout                  |
+| \`dkk mcp\`             | Run the DKK MCP server over stdio                    |
 
 ## Domain Search Workflow
 
@@ -384,7 +387,7 @@ Do not edit files under \`.dkk/docs/\` by hand; they are regenerated on each ren
  * model on disk.  Returns the Markdown string to append after the static
  * instructions.
  */
-function buildDomainSummary(root?: string): string {
+export function buildDomainSummary(root?: string): string {
   // If there's no .dkk/domain/ directory at all, short-circuit.
   if (!existsSync(domainDir(root))) {
     return (

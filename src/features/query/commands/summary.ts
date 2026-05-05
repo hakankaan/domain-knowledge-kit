@@ -7,7 +7,7 @@ import { DomainGraph } from "../../../shared/graph.js";
 import type { DomainModel } from "../../../shared/types/domain.js";
 
 /** Resolve a plain description string for any domain item ID. */
-function resolveDescription(model: DomainModel, id: string): string | undefined {
+export function resolveDescription(model: DomainModel, id: string): string | undefined {
   if (id.startsWith("actor.")) {
     const name = id.slice("actor.".length);
     return model.actors.find((a) => a.name === name)?.description;

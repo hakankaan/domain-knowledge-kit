@@ -42,7 +42,7 @@ interface ResolvedStep {
   used_by?: string[];
 }
 
-interface StoryContext {
+export interface StoryContext {
   flow: { name: string; description?: string; stepCount: number };
   actors: Array<{ name: string; type: string; description: string }>;
   steps: ResolvedStep[];
@@ -121,7 +121,7 @@ function resolveStep(model: DomainModel, ref: string, type: string): Omit<Resolv
  * Build the full story context for a given flow by resolving all steps
  * and collecting secondary relationships through the domain model.
  */
-function buildStoryContext(model: DomainModel, graph: DomainGraph, flow: Flow): StoryContext {
+export function buildStoryContext(model: DomainModel, graph: DomainGraph, flow: Flow): StoryContext {
   const resolvedSteps: ResolvedStep[] = [];
   const actorMap = new Map<string, Actor>();
   const policyMap = new Map<string, { id: string; name: string; when?: { events?: string[] }; then?: { commands?: string[] } }>();
@@ -243,7 +243,7 @@ function buildStoryContext(model: DomainModel, graph: DomainGraph, flow: Flow): 
 
 // ── Markdown renderer ─────────────────────────────────────────────────
 
-function renderMarkdown(ctx: StoryContext): string {
+export function renderMarkdown(ctx: StoryContext): string {
   const lines: string[] = [];
 
   lines.push(`# Flow: ${ctx.flow.name}\n`);

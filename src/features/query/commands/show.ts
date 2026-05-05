@@ -13,7 +13,7 @@ import type { DomainModel } from "../../../shared/types/domain.js";
  * Resolve an item by its composite ID and return the raw object
  * suitable for YAML serialisation.
  */
-function resolveItem(model: DomainModel, id: string): { found: boolean; data?: unknown; label?: string } {
+export function resolveItem(model: DomainModel, id: string): { found: boolean; data?: unknown; label?: string } {
   // Actor: "actor.<Name>"
   if (id.startsWith("actor.")) {
     const name = id.slice("actor.".length);

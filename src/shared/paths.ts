@@ -103,6 +103,18 @@ export function packageSkillsDir(): string {
 }
 
 /**
+ * Absolute path to the `tools/dkk/claude/` directory bundled inside the
+ * DKK package installation.
+ *
+ * Holds the Claude Code config template (`settings.json` + hook scripts)
+ * used by `dkk init --claude` to scaffold AI-assistant integration in
+ * a consumer's repo.
+ */
+export function packageClaudeDir(): string {
+  return join(packageRoot(), "tools", "dkk", "claude");
+}
+
+/**
  * Turn an absolute path into a repo-relative POSIX path
  * (forward slashes, no leading `./`).
  */
