@@ -8,6 +8,7 @@
 // ── Types ─────────────────────────────────────────────────────────────
 export * from "./types/domain.js";
 export * from "./types/index.js";
+export * from "./types/federation.js";
 
 // ── Item visitor ──────────────────────────────────────────────────────
 export {
@@ -30,6 +31,7 @@ export { DomainGraph, type NodeKind, type GraphNode, type GraphEdge } from "./gr
 // ── Path helpers ──────────────────────────────────────────────────────
 export {
   repoRoot,
+  findDkkRoot,
   packageRoot,
   domainDir,
   contextsDir,
@@ -40,7 +42,25 @@ export {
   templatesDir,
   schemaDir,
   repoRelative,
+  serviceFile,
+  federationFile,
+  federationLockFile,
+  importsDir,
+  importedServiceDir,
 } from "./paths.js";
+
+// ── Refs ──────────────────────────────────────────────────────────────
+export {
+  parseRef,
+  formatRef,
+  qualifyItemRef,
+  qualifyActorRef,
+  type ParsedRef,
+  type QualifiedRef,
+} from "./refs.js";
+
+// ── Service identity ──────────────────────────────────────────────────
+export { loadServiceId } from "./service-id.js";
 
 // ── YAML helpers ──────────────────────────────────────────────────────
 export { parseYaml, stringifyYaml } from "./yaml.js";

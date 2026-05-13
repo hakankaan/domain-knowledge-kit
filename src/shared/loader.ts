@@ -38,6 +38,38 @@ import {
   indexFile,
   adrDir,
 } from "./paths.js";
+import { loadServiceId } from "./service-id.js";
+
+// ── Federation hook (inversion of dependency) ─────────────────────────
+//
+// The federation slice owns the peer-loading logic, but it needs to
+// run at the tail end of every `loadDomainModel` call so that callers
+// of the shared loader transparently see `model.peers`. Rather than
+// have this module reach into the federation slice by path string
+// (the old `createRequire` hack), the federation slice imports this
+// module and registers a hook at module-init time via
+// {@link setFederationHook}. The hook is opt-in: if no federation
+// module is loaded (e.g. a script that imports `loadDomainModel`
+// directly without the federation slice), no peers are hydrated.
+
+/**
+ * Federation-hook signature. Implementations receive the resolved
+ * `root` and the already-built local `DomainModel`, and may mutate
+ * `model.peers` in place. Errors thrown by the hook are caught and
+ * logged as warnings — the local model still loads.
+ */
+export type FederationHook = (root: string | undefined, model: DomainModel) => void;
+
+let federationHook: FederationHook | undefined;
+
+/**
+ * Register a federation hook. Called once at module-init time by the
+ * federation slice. Passing `undefined` clears the hook (intended for
+ * tests).
+ */
+export function setFederationHook(hook: FederationHook | undefined): void {
+  federationHook = hook;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -146,6 +178,15 @@ function loadAllContexts(ctxDir: string): Map<string, DomainContext> {
 export interface LoaderOptions {
   /** Override repository root (default: auto-detected). */
   root?: string;
+  /**
+   * When `false`, skip federation hydration — `model.peers` will not be
+   * populated even if `.dkk/federation.yml` exists. Used when loading a
+   * peer's own model (one level deep, no transitive peers) and by
+   * callers that want a pure local view.
+   *
+   * Default: `true` (federation runs when a manifest is present).
+   */
+  followPeers?: boolean;
 }
 
 /**
@@ -187,10 +228,31 @@ export function loadDomainModel(options: LoaderOptions = {}): DomainModel {
     }
   }
 
-  return {
+  // 5. Service identity (federation Phase 1 — optional)
+  const service = loadServiceId(root) ?? undefined;
+
+  const model: DomainModel = {
     index,
     actors: actorsData.actors ?? [],
     contexts,
     adrs,
   };
+  if (service) model.service = service;
+
+  // 6. Federation peers (Phase 2 — optional, one level deep).
+  // The federation slice registers itself via `setFederationHook` at
+  // module-init time. The hook is suppressed via `followPeers: false`
+  // when this loader is itself invoked from inside the federation
+  // slice (loading a peer's own model). That keeps peer-of-peer
+  // transitivity off without any cycle detection.
+  if (options.followPeers !== false && federationHook) {
+    try {
+      federationHook(root, model);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`dkk: federation load failed: ${msg}`);
+    }
+  }
+
+  return model;
 }

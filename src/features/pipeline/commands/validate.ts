@@ -14,13 +14,30 @@ export function registerValidate(program: Cmd): void {
     .command("validate [id]")
     .description("Validate domain YAML against schemas and cross-references")
     .option("--warn-missing-fields", "Warn about events/commands with no fields")
+    .option(
+      "--federation <mode>",
+      "Federation strictness: lenient (default — unreachable peers warn) or strict (errors)",
+      "lenient",
+    )
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string | undefined, opts: { warnMissingFields?: boolean; json?: boolean; minify?: boolean; root?: string }) => {
+    .action((id: string | undefined, opts: {
+      warnMissingFields?: boolean;
+      federation?: string;
+      json?: boolean;
+      minify?: boolean;
+      root?: string;
+    }) => {
+      const fedMode = opts.federation;
+      if (fedMode !== undefined && fedMode !== "lenient" && fedMode !== "strict") {
+        console.error(`Error: --federation must be "lenient" or "strict" (got "${fedMode}").`);
+        process.exit(1);
+      }
       const model = loadDomainModel({ root: opts.root });
       const result = validateDomainModel(model, {
         warnMissingFields: opts.warnMissingFields,
+        federation: fedMode as "lenient" | "strict" | undefined,
       });
 
       let { valid, errors, warnings } = result;

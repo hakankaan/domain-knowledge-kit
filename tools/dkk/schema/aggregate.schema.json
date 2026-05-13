@@ -48,7 +48,7 @@
     },
     "adr_refs": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^adr-\\d{4}$" },
+      "items": { "type": "string", "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$" },
       "uniqueItems": true,
       "description": "Related ADR identifiers"
     }

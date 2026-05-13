@@ -21,6 +21,10 @@ export function registerSearch(program: Cmd): void {
     .option("-c, --context <name>", "Filter results to a bounded context")
     .option("-t, --type <type>", "Filter results by item type")
     .option("--tag <tag>", "Filter results by tag/keyword")
+    .option(
+      "-s, --service <name>",
+      "Filter results to one service (use \"\" or omit for local rows in unfederated repos)",
+    )
     .option("--limit <n>", "Maximum results to return", "20")
     .option("--expand", "Expand top results with graph neighbours")
     .option("--json", "Output as JSON")
@@ -31,6 +35,7 @@ export function registerSearch(program: Cmd): void {
       context?: string;
       type?: string;
       tag?: string;
+      service?: string;
       limit?: string;
       expand?: boolean;
       json?: boolean;
@@ -42,6 +47,7 @@ export function registerSearch(program: Cmd): void {
         context: opts.context,
         type: opts.type,
         tag: opts.tag,
+        service: opts.service,
       };
 
       const searchOpts = {

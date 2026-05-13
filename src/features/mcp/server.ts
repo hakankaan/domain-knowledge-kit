@@ -27,6 +27,9 @@ import {
 } from "../query/commands/story.js";
 import { primeContent, buildDomainSummary } from "../agent/commands/prime.js";
 import type { Flow } from "../../shared/types/domain.js";
+import { loadFederation, resolvePeerRoot, peerEnvKey } from "../federation/loader.js";
+import { findConsumers } from "../federation/commands/consumers.js";
+import { repoRoot } from "../../shared/paths.js";
 
 /** JSON-stringify a payload for tool output. */
 function asText(payload: unknown): string {
@@ -48,7 +51,7 @@ export function buildServer(rootOpt?: string): McpServer {
     "dkk_search",
     {
       description:
-        "Full-text search across domain items (events, commands, policies, aggregates, read models, ADRs, glossary). Returns ranked results with excerpts, related ids, and ADR refs.",
+        "Full-text search across domain items (events, commands, policies, aggregates, read models, ADRs, glossary). Federation-aware: results include items from any loaded peer service, with their id prefixed `<service>:<context>.<Name>` and a `service` field on each row.",
       inputSchema: {
         query: z.string().describe("FTS5 query string."),
         context: z.string().optional().describe("Filter by bounded context name."),
@@ -57,14 +60,20 @@ export function buildServer(rootOpt?: string): McpServer {
           .optional()
           .describe("Filter by item type (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context)."),
         tag: z.string().optional().describe("Filter by tag/keyword."),
+        service: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by service. Use the local service name to see only local rows, or a peer name to see only that peer's items. Empty string matches local rows in unfederated repos.",
+          ),
         limit: z.number().int().min(1).max(200).optional().describe("Max results (default 20)."),
         expand: z.boolean().optional().describe("Expand top results with graph neighbours."),
         root: z.string().optional().describe("Override repository root."),
       },
     },
-    async ({ query, context, type, tag, limit, expand, root }) => {
+    async ({ query, context, type, tag, service, limit, expand, root }) => {
       const r = root ?? defaultRoot;
-      const filters = { context, type, tag };
+      const filters = { context, type, tag, service };
       const opts = { root: r, limit: limit ?? 20 } as { root?: string; limit: number; graph?: DomainGraph };
 
       if (expand) {
@@ -95,9 +104,9 @@ export function buildServer(rootOpt?: string): McpServer {
     "dkk_show",
     {
       description:
-        "Show the full definition of a domain item by its ID. Accepts ids like 'ordering.OrderPlaced', 'actor.Customer', 'adr-0001', 'flow.OrderFulfillment', 'context.ordering'.",
+        "Show the full definition of a domain item by its ID. Accepts ids like 'ordering.OrderPlaced', 'actor.Customer', 'adr-0001', 'flow.OrderFulfillment', 'context.ordering'. Federation-aware: prefix any id with '<service>:' to look it up in a loaded peer service (e.g. 'ordering:ordering.OrderPlaced' from a billing repo that has ordering as a peer). The shorthand '<service>:<ItemName>' is also accepted when the service exports a single context.",
       inputSchema: {
-        id: z.string().describe("Composite item id."),
+        id: z.string().describe("Composite item id, optionally `<service>:` prefixed for federated lookups."),
         format: z.enum(["json", "yaml"]).optional().describe("Output format (default json)."),
         root: z.string().optional(),
       },
@@ -124,9 +133,9 @@ export function buildServer(rootOpt?: string): McpServer {
     "dkk_summary",
     {
       description:
-        "Concise, AI-optimised summary of a domain item with its direct graph neighbours. Cheapest tool for quick orientation around an id.",
+        "Concise, AI-optimised summary of a domain item with its direct graph neighbours. Cheapest tool for quick orientation around an id. Federation-aware: accepts '<service>:<id>' for peer items.",
       inputSchema: {
-        id: z.string().describe("Composite item id."),
+        id: z.string().describe("Composite item id, optionally `<service>:` prefixed for peer items."),
         root: z.string().optional(),
       },
     },
@@ -168,9 +177,9 @@ export function buildServer(rootOpt?: string): McpServer {
     "dkk_related",
     {
       description:
-        "BFS graph traversal from an item id. Use depth >= 2 to assess blast radius (what would break if this item changes).",
+        "BFS graph traversal from an item id. Use depth >= 2 to assess blast radius (what would break if this item changes). Federation-aware: the graph spans loaded peer services, so cross-service edges (e.g. a local policy's `when.events: ['ordering:ordering.OrderPlaced']`) are traversable. Peer node ids appear prefixed with '<service>:'.",
       inputSchema: {
-        id: z.string().describe("Composite item id."),
+        id: z.string().describe("Composite item id, optionally `<service>:` prefixed for peer items."),
         depth: z.number().int().min(1).max(5).optional().describe("Traversal depth (default 1)."),
         root: z.string().optional(),
       },
@@ -207,7 +216,7 @@ export function buildServer(rootOpt?: string): McpServer {
   server.registerTool(
     "dkk_list",
     {
-      description: "List domain items with optional filters by bounded context and/or item type.",
+      description: "List domain items with optional filters by bounded context and/or item type. Lists local items only; for peers use `dkk_search` with a `service` filter or `dkk_peers` for an overview.",
       inputSchema: {
         context: z.string().optional(),
         type: z.string().optional(),
@@ -273,7 +282,7 @@ export function buildServer(rootOpt?: string): McpServer {
   server.registerTool(
     "dkk_locate",
     {
-      description: "Return the absolute file path(s) where a domain item is defined on disk.",
+      description: "Return the absolute file path(s) where a domain item is defined on disk. Resolves local ids only; peer items live in their own repos — use `dkk_peers` to find where each peer is checked out.",
       inputSchema: {
         id: z.string(),
         root: z.string().optional(),
@@ -373,6 +382,68 @@ export function buildServer(rootOpt?: string): McpServer {
       let text = primeContent();
       if (!staticOnly) text += buildDomainSummary(root ?? defaultRoot);
       return { content: [{ type: "text", text }] };
+    },
+  );
+
+  // ── peers ───────────────────────────────────────────────────────────
+  server.registerTool(
+    "dkk_peers",
+    {
+      description:
+        "List federation peers and their reachability state. Peers are services whose `.dkk/` is loaded alongside this repo's; their items can be referenced as `<service>:<context>.<Name>`.",
+      inputSchema: {
+        root: z.string().optional().describe("Override repository root."),
+      },
+    },
+    async ({ root }) => {
+      const r = root ?? defaultRoot;
+      const rootAbs = repoRoot(r);
+      const manifest = loadFederation(r);
+      if (!manifest || manifest.peers.length === 0) {
+        return { content: [{ type: "text", text: asText({ peers: [] }) }] };
+      }
+      const peers = manifest.peers.map((peer) => {
+        const resolution = resolvePeerRoot(peer, rootAbs);
+        return {
+          name: peer.name,
+          kind: peer.source.type,
+          reachable: resolution.reachable,
+          peerRoot: resolution.peerRoot,
+          envOverride: process.env[peerEnvKey(peer.name)] ?? null,
+          reason: resolution.reason ?? null,
+        };
+      });
+      return { content: [{ type: "text", text: asText({ peers }) }] };
+    },
+  );
+
+  // ── consumers ───────────────────────────────────────────────────────
+  server.registerTool(
+    "dkk_consumers",
+    {
+      description:
+        "Reverse-lookup across federation: given a local item id (e.g. `ordering.OrderPlaced`), list every reference back to it from a loaded peer. Use to answer 'who breaks if I rename this?'.",
+      inputSchema: {
+        id: z.string().describe("Local item id (bare form, e.g. ordering.OrderPlaced)."),
+        root: z.string().optional().describe("Override repository root."),
+      },
+    },
+    async ({ id, root }) => {
+      const model = loadDomainModel({ root: root ?? defaultRoot });
+      const consumers = findConsumers(model, id, model.service?.name);
+      return {
+        content: [
+          {
+            type: "text",
+            text: asText({
+              item: id,
+              service: model.service?.name ?? null,
+              consumers,
+              peerCount: model.peers?.size ?? 0,
+            }),
+          },
+        ],
+      };
     },
   );
 

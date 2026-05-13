@@ -13,6 +13,7 @@
 import type { DomainModel, DomainEvent, Command, Policy, Aggregate, ReadModel } from "./types/domain.js";
 import { forEachItem, itemAdrRefs } from "./item-visitor.js";
 import type { ItemType, AnyDomainItem } from "./item-visitor.js";
+import { parseRef, qualifyItemRef, qualifyActorRef } from "./refs.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -98,6 +99,14 @@ export class DomainGraph {
 
   /**
    * Build a domain graph from a loaded {@link DomainModel}.
+   *
+   * Federation-aware: the local model is walked first, then each peer
+   * model in `model.peers` is walked with its service name as a prefix.
+   * Local node ids keep the bare grammar (`<ctx>.<Name>`, `actor.X`,
+   * `adr-NNNN`, `flow.X`, `context.X`); peer node ids are prefixed
+   * with `<peerService>:` so a local policy referencing
+   * `ordering:ordering.OrderCancelled` connects through to the peer's
+   * node by name.
    */
   static from(model: DomainModel): DomainGraph {
     const nodes = new Map<string, GraphNode>();
@@ -129,150 +138,201 @@ export class DomainGraph {
       adj.get(to)?.add(from);
     }
 
-    /** Wire adr_refs for any item. */
-    function wireAdrRefs(itemId: string, adrRefs: string[] | undefined): void {
+    /** Wire adr_refs for any item. Adds the peer prefix when refs are bare. */
+    function wireAdrRefs(itemId: string, adrRefs: string[] | undefined, prefix: string): void {
       if (!adrRefs) return;
       for (const ref of adrRefs) {
-        // ADR node might not exist yet if the ADR file wasn't present;
-        // we still create a placeholder node so the edge is recorded.
-        ensureNode(ref, "adr", ref);
-        addEdge(itemId, ref, "adr_ref");
+        // Author-qualified refs (already contain `:`) stay as-is; bare
+        // refs are prefixed with this walk's service prefix.
+        const nodeRefId = ref.includes(":") || !prefix ? ref : `${prefix}${ref}`;
+        ensureNode(nodeRefId, "adr", nodeRefId);
+        addEdge(itemId, nodeRefId, "adr_ref");
       }
     }
 
-    // ── Actors ────────────────────────────────────────────────────
-
-    for (const actor of model.actors) {
-      const id = ensureNode(actorId(actor.name), "actor", actor.name);
-      wireAdrRefs(id, actor.adr_refs);
-    }
-
-    // ── Bounded contexts & their items ────────────────────────────
-
-    for (const [ctxName, ctx] of model.contexts) {
-      const ctxId = ensureNode(`context.${ctxName}`, "context", ctxName);
-      wireAdrRefs(ctxId, undefined); // contexts don't have adr_refs currently
-
-      // Visit all item types: create node, add contains edge, wire ADR refs,
-      // then apply type-specific relationship wiring.
-      forEachItem(ctx, (type: ItemType, name: string, item: AnyDomainItem) => {
-        const nodeKind = type as NodeKind;
-        const id = ensureNode(scopedId(ctxName, name), nodeKind, name, ctxName);
-        addEdge(ctxId, id, "contains");
-        wireAdrRefs(id, itemAdrRefs(item));
-
-        // Type-specific relationship wiring
-        switch (type) {
-          case "event": {
-            const evt = item as DomainEvent;
-            if (evt.raised_by) {
-              const aggId = ensureNode(scopedId(ctxName, evt.raised_by), "aggregate", evt.raised_by, ctxName);
-              addEdge(aggId, id, "emits");
-            }
-            break;
-          }
-          case "command": {
-            const cmd = item as Command;
-            if (cmd.handled_by) {
-              const aggId = ensureNode(scopedId(ctxName, cmd.handled_by), "aggregate", cmd.handled_by, ctxName);
-              addEdge(aggId, id, "handles");
-            }
-            if (cmd.actor) {
-              const aId = ensureNode(actorId(cmd.actor), "actor", cmd.actor);
-              addEdge(aId, id, "initiates");
-            }
-            break;
-          }
-          case "policy": {
-            const pol = item as Policy;
-            for (const trigger of pol.when?.events ?? []) {
-              const evtId = ensureNode(scopedId(ctxName, trigger), "event", trigger, ctxName);
-              addEdge(evtId, id, "triggers");
-            }
-            for (const emitted of pol.then?.commands ?? []) {
-              const cmdId = ensureNode(scopedId(ctxName, emitted), "command", emitted, ctxName);
-              addEdge(id, cmdId, "emits");
-            }
-            break;
-          }
-          case "aggregate": {
-            const agg = item as Aggregate;
-            for (const h of agg.handles?.commands ?? []) {
-              const cmdId = ensureNode(scopedId(ctxName, h), "command", h, ctxName);
-              addEdge(id, cmdId, "handles");
-            }
-            for (const e of agg.emits?.events ?? []) {
-              const evtId = ensureNode(scopedId(ctxName, e), "event", e, ctxName);
-              addEdge(id, evtId, "emits");
-            }
-            break;
-          }
-          case "read_model": {
-            const rm = item as ReadModel;
-            for (const sub of rm.subscribes_to ?? []) {
-              const evtId = ensureNode(scopedId(ctxName, sub), "event", sub, ctxName);
-              addEdge(id, evtId, "subscribes_to");
-            }
-            for (const user of rm.used_by ?? []) {
-              const aId = ensureNode(actorId(user), "actor", user);
-              addEdge(id, aId, "used_by");
-            }
-            break;
-          }
-          case "glossary":
-            // Glossary items have no type-specific relationship wiring.
-            break;
-        }
-      });
-    }
-
-    // ── ADRs ──────────────────────────────────────────────────────
-
-    for (const [adrId, adr] of model.adrs) {
-      ensureNode(adrId, "adr", adr.title);
-
-      // domain_refs → domain items
-      for (const ref of adr.domain_refs ?? []) {
-        // ref is in "context.Name" format — ensure node exists
-        const dotIdx = ref.indexOf(".");
-        if (dotIdx > 0) {
-          const ctx = ref.slice(0, dotIdx);
-          const name = ref.slice(dotIdx + 1);
-          // We don't know the item kind from the ref alone; default to
-          // a generic node that will be reconciled if it was already created.
-          ensureNode(ref, "aggregate", name, ctx);
-        }
-        addEdge(adrId, ref, "domain_ref");
+    /**
+     * Walk one model (local or peer). When `walkPrefix` is set to
+     * `"<peerName>:"`, every node id created inside this walk is
+     * prefixed accordingly, so local + peer namespaces stay disjoint.
+     */
+    function walkOne(m: DomainModel, walkPrefix: string): void {
+      // ── Actors ────────────────────────────────────────────────────
+      for (const actor of m.actors) {
+        const id = ensureNode(`${walkPrefix}${actorId(actor.name)}`, "actor", actor.name);
+        wireAdrRefs(id, actor.adr_refs, walkPrefix);
       }
 
-      // superseded_by → another ADR
-      if (adr.superseded_by) {
-        ensureNode(adr.superseded_by, "adr", adr.superseded_by);
-        addEdge(adrId, adr.superseded_by, "superseded_by");
+      // ── Bounded contexts & their items ────────────────────────────
+      for (const [ctxName, ctx] of m.contexts) {
+        const ctxId = ensureNode(`${walkPrefix}context.${ctxName}`, "context", ctxName);
+        wireAdrRefs(ctxId, undefined, walkPrefix);
+
+        forEachItem(ctx, (type: ItemType, name: string, item: AnyDomainItem) => {
+          const nodeKind = type as NodeKind;
+          const id = ensureNode(`${walkPrefix}${scopedId(ctxName, name)}`, nodeKind, name, ctxName);
+          addEdge(ctxId, id, "contains");
+          wireAdrRefs(id, itemAdrRefs(item), walkPrefix);
+
+          switch (type) {
+            case "event": {
+              const evt = item as DomainEvent;
+              if (evt.raised_by) {
+                const res = qualifyItemRef(evt.raised_by, walkPrefix, ctxName);
+                const aggId = ensureNode(res.id, "aggregate", res.name, res.context);
+                addEdge(aggId, id, "emits");
+              }
+              break;
+            }
+            case "command": {
+              const cmd = item as Command;
+              if (cmd.handled_by) {
+                const res = qualifyItemRef(cmd.handled_by, walkPrefix, ctxName);
+                const aggId = ensureNode(res.id, "aggregate", res.name, res.context);
+                addEdge(aggId, id, "handles");
+              }
+              if (cmd.actor) {
+                const a = qualifyActorRef(cmd.actor, walkPrefix);
+                const aId = ensureNode(a.id, "actor", a.name);
+                addEdge(aId, id, "initiates");
+              }
+              break;
+            }
+            case "policy": {
+              const pol = item as Policy;
+              for (const trigger of pol.when?.events ?? []) {
+                const res = qualifyItemRef(trigger, walkPrefix, ctxName);
+                const evtId = ensureNode(res.id, "event", res.name, res.context);
+                addEdge(evtId, id, "triggers");
+              }
+              for (const emitted of pol.then?.commands ?? []) {
+                const res = qualifyItemRef(emitted, walkPrefix, ctxName);
+                const cmdId = ensureNode(res.id, "command", res.name, res.context);
+                addEdge(id, cmdId, "emits");
+              }
+              break;
+            }
+            case "aggregate": {
+              const agg = item as Aggregate;
+              for (const h of agg.handles?.commands ?? []) {
+                const res = qualifyItemRef(h, walkPrefix, ctxName);
+                const cmdId = ensureNode(res.id, "command", res.name, res.context);
+                addEdge(id, cmdId, "handles");
+              }
+              for (const e of agg.emits?.events ?? []) {
+                const res = qualifyItemRef(e, walkPrefix, ctxName);
+                const evtId = ensureNode(res.id, "event", res.name, res.context);
+                addEdge(id, evtId, "emits");
+              }
+              break;
+            }
+            case "read_model": {
+              const rm = item as ReadModel;
+              for (const sub of rm.subscribes_to ?? []) {
+                const res = qualifyItemRef(sub, walkPrefix, ctxName);
+                const evtId = ensureNode(res.id, "event", res.name, res.context);
+                addEdge(id, evtId, "subscribes_to");
+              }
+              for (const user of rm.used_by ?? []) {
+                const a = qualifyActorRef(user, walkPrefix);
+                const aId = ensureNode(a.id, "actor", a.name);
+                addEdge(id, aId, "used_by");
+              }
+              break;
+            }
+            case "glossary":
+              // Glossary items have no type-specific relationship wiring.
+              break;
+          }
+        });
+      }
+
+      // ── ADRs ──────────────────────────────────────────────────────
+      for (const [adrIdRaw, adr] of m.adrs) {
+        const adrNodeId = `${walkPrefix}${adrIdRaw}`;
+        ensureNode(adrNodeId, "adr", adr.title);
+
+        // domain_refs → domain items. Use parseRef to split correctly
+        // for both bare and service-prefixed forms.
+        for (const ref of adr.domain_refs ?? []) {
+          const parsed = parseRef(ref);
+          if (parsed?.kind === "item" && parsed.service) {
+            // Explicit peer ref — keep as-is.
+            const id = `${parsed.service}:${parsed.context}.${parsed.name}`;
+            ensureNode(id, "aggregate", parsed.name, parsed.context);
+            addEdge(adrNodeId, id, "domain_ref");
+          } else if (parsed?.kind === "item") {
+            // Bare ref — prefix with this walk's service.
+            const id = `${walkPrefix}${parsed.context}.${parsed.name}`;
+            ensureNode(id, "aggregate", parsed.name, parsed.context);
+            addEdge(adrNodeId, id, "domain_ref");
+          } else {
+            // Unparseable — record edge against the raw form so
+            // visibility is preserved even though the node is dangling.
+            ensureNode(ref, "aggregate", ref);
+            addEdge(adrNodeId, ref, "domain_ref");
+          }
+        }
+
+        // superseded_by → another ADR
+        if (adr.superseded_by) {
+          const parsed = parseRef(adr.superseded_by);
+          const targetId =
+            parsed?.kind === "adr"
+              ? parsed.service
+                ? `${parsed.service}:${parsed.id}`
+                : `${walkPrefix}${parsed.id}`
+              : adr.superseded_by;
+          ensureNode(targetId, "adr", targetId);
+          addEdge(adrNodeId, targetId, "superseded_by");
+        }
+      }
+
+      // ── Flows ─────────────────────────────────────────────────────
+      for (const flow of m.index.flows ?? []) {
+        const fId = ensureNode(`${walkPrefix}${flowId(flow.name)}`, "flow", flow.name);
+
+        let prevStepId: string | undefined;
+        for (const step of flow.steps) {
+          const raw = step.ref as string;
+          const parsed = parseRef(raw);
+          let stepId: string;
+          let ctx: string | undefined;
+          let name: string;
+          if (parsed?.kind === "item" && parsed.service) {
+            stepId = `${parsed.service}:${parsed.context}.${parsed.name}`;
+            ctx = parsed.context;
+            name = parsed.name;
+          } else if (parsed?.kind === "item") {
+            stepId = `${walkPrefix}${parsed.context}.${parsed.name}`;
+            ctx = parsed.context;
+            name = parsed.name;
+          } else {
+            stepId = raw;
+            const dot = raw.indexOf(".");
+            ctx = dot > 0 ? raw.slice(0, dot) : undefined;
+            name = dot > 0 ? raw.slice(dot + 1) : raw;
+          }
+          const kind = step.type === "read_model" ? "read_model" : step.type;
+          ensureNode(stepId, kind as NodeKind, name, ctx);
+          addEdge(fId, stepId, "flow_step");
+          if (prevStepId) {
+            addEdge(prevStepId, stepId, "flow_next");
+          }
+          prevStepId = stepId;
+        }
       }
     }
 
-    // ── Flows ─────────────────────────────────────────────────────
+    // Local walk (no prefix).
+    walkOne(model, "");
 
-    for (const flow of model.index.flows ?? []) {
-      const fId = ensureNode(flowId(flow.name), "flow", flow.name);
-
-      let prevStepId: string | undefined;
-      for (const step of flow.steps) {
-        const ref = step.ref as string;
-        const dotIdx = ref.indexOf(".");
-        const ctx = dotIdx > 0 ? ref.slice(0, dotIdx) : undefined;
-        const name = dotIdx > 0 ? ref.slice(dotIdx + 1) : ref;
-        const kind = step.type === "read_model" ? "read_model" : step.type;
-
-        ensureNode(ref, kind as NodeKind, name, ctx);
-        addEdge(fId, ref, "flow_step");
-
-        // Link consecutive flow steps
-        if (prevStepId) {
-          addEdge(prevStepId, ref, "flow_next");
-        }
-        prevStepId = ref;
+    // Peer walks, one prefix per peer.
+    for (const [peerName, peerModel] of model.peers ?? []) {
+      try {
+        walkOne(peerModel, `${peerName}:`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`dkk: skipped graphing peer "${peerName}": ${msg}`);
       }
     }
 

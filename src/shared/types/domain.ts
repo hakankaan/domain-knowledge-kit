@@ -287,4 +287,18 @@ export interface DomainModel {
   contexts: Map<string, DomainContext>;
   /** All ADR records keyed by ADR id. */
   adrs: Map<string, AdrRecord>;
+  /**
+   * Service identity for this repo (federation). Present when a
+   * `.dkk/service.yml` was found; otherwise `undefined`. Legacy
+   * unfederated repos keep working unchanged.
+   */
+  service?: import("./federation.js").ServiceManifest;
+  /**
+   * Peer service models loaded from `.dkk/federation.yml`. Keyed by
+   * peer service name. Each value is a fully-loaded `DomainModel`
+   * (one level deep — peer's own peers are not transitively followed).
+   * Present only when federation is configured and at least one peer
+   * was reachable.
+   */
+  peers?: Map<string, DomainModel>;
 }

@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "federation.schema.json",
+  "title": "Federation Manifest",
+  "description": "Peer service manifest for multi-repo federation (.dkk/federation.yml). Each peer points at a filesystem path or a git URL+branch; the peer's `.dkk/` directory is loaded read-only alongside the local model.",
+  "type": "object",
+  "properties": {
+    "peers": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/peer" },
+      "description": "Peer services whose .dkk/ should be loaded alongside the local model."
+    }
+  },
+  "required": ["peers"],
+  "additionalProperties": false,
+  "definitions": {
+    "peer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Kebab-case peer service name (must match the peer's own service.yml)."
+        },
+        "source": {
+          "oneOf": [
+            { "$ref": "#/definitions/localSource" },
+            { "$ref": "#/definitions/gitSource" }
+          ]
+        }
+      },
+      "required": ["name", "source"],
+      "additionalProperties": false
+    },
+    "localSource": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "local" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute or repo-root-relative path to the peer's repository root."
+        }
+      },
+      "required": ["type", "path"],
+      "additionalProperties": false
+    },
+    "gitSource": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "git" },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Git URL (https or ssh)."
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Branch to track."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional sub-path inside the peer repo where .dkk/ lives (default: repo root)."
+        }
+      },
+      "required": ["type", "url", "branch"],
+      "additionalProperties": false
+    }
+  }
+}

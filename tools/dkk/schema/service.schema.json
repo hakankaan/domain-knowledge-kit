@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "service.schema.json",
+  "title": "Service Manifest",
+  "description": "Service identity for multi-repo federation (.dkk/service.yml). Declares this repo's service name and the bounded contexts it publishes for cross-repo consumption.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Kebab-case service identifier (e.g. \"ordering\"). Globally unique within an org."
+    },
+    "exports": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "uniqueItems": true,
+      "description": "Bounded-context names this service publishes for federation."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional human-readable description of the service."
+    }
+  },
+  "required": ["name", "exports"],
+  "additionalProperties": false
+}

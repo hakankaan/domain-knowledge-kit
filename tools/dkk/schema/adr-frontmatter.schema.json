@@ -34,16 +34,16 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
-        "description": "Domain item reference in context.Name format (e.g. ordering.OrderPlaced)"
+        "pattern": "^([a-z][a-z0-9-]*:)?[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
+        "description": "Domain item reference in context.Name format (e.g. ordering.OrderPlaced, or service:context.Name for federated refs)"
       },
       "uniqueItems": true,
       "description": "Domain items related to this decision"
     },
     "superseded_by": {
       "type": "string",
-      "pattern": "^adr-\\d{4}$",
-      "description": "ID of the ADR that supersedes this one"
+      "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$",
+      "description": "ID of the ADR that supersedes this one (optionally service-qualified for peer ADRs)"
     }
   },
   "required": ["id", "title", "status", "date"],

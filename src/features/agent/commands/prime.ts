@@ -27,6 +27,8 @@ export function primeContent(): string {
 
 This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain model with Architecture Decision Records (ADRs), full-text search, and generated Markdown documentation. The CLI tool is \`dkk\`.
 
+DKK supports **multi-repo federation**: when a \`.dkk/service.yml\` exists, the repo declares itself a service, and a \`.dkk/federation.yml\` can list peer services (other repos, by local path or git URL). The loader transparently merges peer domain models so that queries, search, graph traversal, validation, and \`dkk consumers\` span every loaded peer. Cross-service references use the additive grammar \`<service>:<context>.<Item>\` — bare refs stay local-only.
+
 ## Core Principles
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code.
@@ -40,6 +42,11 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 
 \`\`\`
 .dkk/
+  service.yml        # OPTIONAL: declares this repo as a federated service
+                      #   { name: kebab-case, exports: [<ctx-name>, ...] }
+  federation.yml      # OPTIONAL: lists peer services (local path or git URL+branch)
+  federation.lock.json # AUTO: pins resolved git-source commit SHAs
+  imports/           # AUTO (gitignored): cached peer .dkk/ trees from \`dkk pull\`
   domain/
     index.yml          # Top-level: registered contexts + cross-context flows
     actors.yml          # Global actors (human | system | external)
@@ -77,6 +84,18 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 | ADR          | \`adr-NNNN\`                         | \`adr-0001\`                 |
 | Flow         | \`flow.<Name>\`                      | \`flow.OrderFulfillment\`    |
 | Context      | \`context.<name>\`                   | \`context.ordering\`         |
+
+**Federated form** (cross-repo references): prefix any id with \`<service>:\`.
+
+| Federated Form                                 | Example                                |
+|------------------------------------------------|----------------------------------------|
+| \`<service>:<context>.<ItemName>\`               | \`ordering:ordering.OrderPlaced\`        |
+| \`<service>:actor.<Name>\`                       | \`payments:actor.PaymentGateway\`        |
+| \`<service>:adr-NNNN\`                           | \`ordering:adr-0007\`                    |
+| \`<service>:flow.<Name>\`                        | \`ordering:flow.OrderFulfillment\`       |
+| \`<service>:context.<name>\`                     | \`ordering:context.ordering\`            |
+
+Bare ids resolve only against the local repo. Service-prefixed ids resolve against \`model.peers.get(<service>)\`. A self-prefix (\`<localService>:<id>\`) is treated as local. Use the fully-qualified form (\`<service>:<context>.<Name>\`) when writing cross-service refs in YAML — the name-only shorthand is reserved for \`dkk show\`.
 
 ## CLI Command Reference
 
@@ -136,6 +155,22 @@ This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain m
 | \`dkk init --claude\`   | Also scaffold \`.claude/\` (settings, hooks, skills, agents, commands) |
 | \`dkk prime\`           | Output this agent context to stdout                  |
 | \`dkk mcp\`             | Run the DKK MCP server over stdio                    |
+
+### Federation
+
+| Command                                            | Purpose                                              |
+|----------------------------------------------------|------------------------------------------------------|
+| \`dkk service init --name <n> --export <ctx>\`      | Declare this repo a federated service (writes \`.dkk/service.yml\`) |
+| \`dkk peers add <name> --local <path>\`             | Register a peer by filesystem path                  |
+| \`dkk peers add <name> --git <url> --branch <b>\`   | Register a peer by git URL + branch                 |
+| \`dkk peers list\`                                  | List configured peers + reachability state          |
+| \`dkk peers status\`                                | Detailed peer status: service id, exports, contexts |
+| \`dkk pull [name]\`                                 | Sparse-checkout git peers into \`.dkk/imports/\`      |
+| \`dkk pull --refresh\`                              | Re-fetch even when cache exists                     |
+| \`dkk pull --offline\`                              | Use cache only; no network                          |
+| \`dkk consumers <id>\`                              | Reverse-lookup: which peers reference this item     |
+| \`dkk validate --federation strict\`                | Promote unreachable-peer warnings to errors (CI gate) |
+| \`dkk search --service <n>\`                        | Narrow search to one service (local or peer)        |
 
 ## Domain Search Workflow
 
@@ -352,13 +387,49 @@ When reviewing changes for domain impact:
    \`\`\`
 7. **Compile impact analysis** — Report impacted items, blast radius, invariant violations, affected ADRs, and recommendations.
 
+## Federation Workflow
+
+When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every reachable peer's domain into \`model.peers\`. Reading commands (\`dkk show\`, \`dkk search\`, \`dkk related\`, \`dkk graph\`) and the MCP server transparently span peers.
+
+1. **Inspect peer state**:
+   \`\`\`bash
+   dkk peers list                    # quick overview
+   dkk peers status                  # exports + contexts per peer
+   \`\`\`
+2. **Reference a peer item** — when authoring a local policy, ADR, or flow that consumes something across the boundary, use the fully-qualified form:
+   \`\`\`yaml
+   when:
+     events:
+       - ordering:ordering.OrderPlaced   # peer service "ordering", context "ordering", item "OrderPlaced"
+   \`\`\`
+3. **Inspect a peer item directly**:
+   \`\`\`bash
+   dkk show ordering:OrderPlaced           # shorthand (single-export service)
+   dkk show ordering:ordering.OrderPlaced  # fully qualified
+   \`\`\`
+4. **Find downstream consumers of a local item** before renaming/deprecating:
+   \`\`\`bash
+   dkk consumers ordering.OrderPlaced
+   \`\`\`
+5. **Refresh git-source peers** when needed:
+   \`\`\`bash
+   dkk pull ordering            # fetch (no-op if SHA matches the lockfile)
+   dkk pull ordering --refresh  # force re-fetch
+   \`\`\`
+
+**Reference resolution rules:**
+- A **bare** ref (\`OrderPlaced\`, \`ordering.OrderPlaced\`) resolves only against the local repo's items. Never falls through to peers — collisions are silent data corruption.
+- A **service-prefixed** ref (\`ordering:ordering.OrderPlaced\`) resolves only against \`model.peers.get(<service>)\`. If the service equals the local service name, it's treated as a local ref (self-prefix is harmless).
+- An **unreachable peer** produces a warning by default. CI gates that must guarantee resolution should run \`dkk validate --federation strict\`.
+
 ## Validation
 
 The validator checks:
 
-- **Schema conformance** — Each YAML file is validated against its JSON Schema.
-- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
+- **Schema conformance** — Each YAML file is validated against its JSON Schema. \`.dkk/service.yml\` and \`.dkk/federation.yml\` are validated at load time.
+- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly, including federated forms.
 - **Context registration** — Every context directory in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
+- **Federation strictness** (\`--federation strict\`): unreachable peers escalate from warnings to errors; refs to non-exported peer contexts always warn.
 
 ## Generated Documentation
 
@@ -440,6 +511,29 @@ export function buildDomainSummary(root?: string): string {
     `**${model.actors.length}** actor(s), ` +
     `**${model.adrs.size}** ADR(s)\n`,
   );
+
+  // ── Service identity & peers (federation) ────────────────────────
+  if (model.service) {
+    lines.push(`### Service Identity\n`);
+    lines.push(`- **name:** \`${model.service.name}\``);
+    lines.push(`- **exports:** ${model.service.exports.map((e) => `\`${e}\``).join(", ") || "(none)"}`);
+    if (model.service.description) {
+      lines.push(`- **description:** ${model.service.description}`);
+    }
+    lines.push("");
+  }
+  if (model.peers && model.peers.size > 0) {
+    lines.push(`### Federated Peers (${model.peers.size})\n`);
+    for (const [peerName, peerModel] of model.peers) {
+      const peerExports = peerModel.service?.exports ?? [];
+      const peerCtxCount = peerModel.contexts.size;
+      const exportsStr = peerExports.length ? peerExports.map((e) => `\`${e}\``).join(", ") : "(none declared)";
+      lines.push(`- **${peerName}**: ${peerCtxCount} context(s), exports: ${exportsStr}`);
+    }
+    lines.push("");
+    lines.push("Reference any peer item as \`<service>:<context>.<Name>\` (e.g. \`ordering:ordering.OrderPlaced\`).");
+    lines.push("");
+  }
 
   // ── Contexts detail ──────────────────────────────────────────────
   if (model.contexts.size > 0) {

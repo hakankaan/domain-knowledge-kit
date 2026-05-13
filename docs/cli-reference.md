@@ -101,12 +101,14 @@ dkk show adr-0001 --json
 
 ## `search <query>`
 
-Full-text search across all domain items with relevance ranking. Uses FTS5 (SQLite). Requires a pre-built index — run `dkk render` first.
+Full-text search across all domain items with relevance ranking. Uses FTS5 (SQLite). Requires a pre-built index — run `dkk render` first. **Federation-aware:** when peers are configured, results include items from every loaded peer (id prefixed `<service>:<context>.<Name>`, with a `service` field on each row).
 
 ```bash
 dkk search "order"
 dkk search "payment" --context billing --type event
 dkk search "customer" --expand --limit 5
+dkk search "order" --service ordering          # only peer "ordering"
+dkk search "invoice" --service billing         # only local rows (when local svc is "billing")
 ```
 
 | Flag | Default | Description |
@@ -114,6 +116,7 @@ dkk search "customer" --expand --limit 5
 | `-c, --context <name>` | — | Filter results to a bounded context |
 | `-t, --type <type>` | — | Filter by item type |
 | `--tag <tag>` | — | Filter by tag/keyword |
+| `-s, --service <name>` | — | Filter to one service (local name or peer name; empty matches unfederated local rows) |
 | `--limit <n>` | `20` | Maximum number of results |
 | `--expand` | — | Expand top results with graph neighbours |
 | `--json` | — | Output as JSON |
@@ -242,6 +245,7 @@ Checks performed:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--warn-missing-fields` | — | Warn about events/commands with no `fields` defined |
+| `--federation <mode>` | `lenient` | Federation strictness: `lenient` (unreachable peers warn) or `strict` (errors). Use `strict` in CI gates. |
 | `--json` | — | Output as JSON |
 | `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
@@ -387,6 +391,116 @@ dkk add command PlaceOrder --context ordering
 | `-r, --root <path>` | repo root | Override repository root |
 
 See below for the list of available Types.
+
+---
+
+## Federation
+
+DKK supports multi-repo federation: a repo declares itself a service with `.dkk/service.yml` and lists peer services in `.dkk/federation.yml`. Peer `.dkk/` trees are merged read-only into the loaded model, and cross-service references use the `<service>:<context>.<Item>` grammar.
+
+### `service init`
+
+Declare this repo as a federated service. Writes `.dkk/service.yml`.
+
+```bash
+dkk service init --name billing --export billing
+dkk service init --name ordering --export ordering --export returns
+dkk service init --name billing --export billing --force   # overwrite
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--name <name>` | — | Kebab-case service name (required) |
+| `--export <ctx...>` | — | Bounded-context name(s) this service publishes. Repeatable, or comma-separate. |
+| `--description <text>` | — | Optional human-readable description |
+| `--force` | — | Overwrite an existing `service.yml` |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `peers add <name>`
+
+Append a peer service to `.dkk/federation.yml`. Pick either `--local` (filesystem path) or `--git` (URL + branch).
+
+```bash
+# Local-path peer (no fetch needed — read live from disk)
+dkk peers add ordering --local ../order-svc
+
+# Git peer (fetch with dkk pull)
+dkk peers add ordering --git git@github.com:acme/order-svc.git --branch main
+dkk peers add ordering --git ... --branch feature/v2 --git-path services/ordering
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--local <path>` | — | Filesystem path to the peer's repo root (absolute or repo-root-relative) |
+| `--git <url>` | — | Git URL (https or ssh) |
+| `--branch <branch>` | `main` | Branch to track for git sources |
+| `--git-path <subpath>` | — | Sub-path inside the peer repo where `.dkk/` lives (monorepo support) |
+| `--force` | — | Replace an existing entry for this peer |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+The env-var `DKK_PEER_<NAME>=<path>` (uppercase, hyphens → underscores) overrides a peer's resolved path. Useful for per-developer redirection to local checkouts without editing the committed manifest.
+
+### `peers list`
+
+List configured peers and reachability. Reads `federation.yml` but doesn't load peer models.
+
+```bash
+dkk peers list
+dkk peers list --json
+```
+
+### `peers status`
+
+Detailed peer status: source, env override, reachability, loaded service identity, exports, contexts, and any peer-load warnings.
+
+```bash
+dkk peers status
+dkk peers status --json
+```
+
+### `pull [name]`
+
+Sparse-checkout git-source peers into `.dkk/imports/`. Local-source peers are no-ops (always live from disk). On first pull, writes `.dkk/imports/.gitignore` so the cache stays off git regardless of the project's root `.gitignore`. Records resolved commit SHAs in `.dkk/federation.lock.json` (committed) so two developers see the same peer state.
+
+```bash
+dkk pull                   # all git peers
+dkk pull ordering          # one peer
+dkk pull --refresh         # re-fetch even when cached
+dkk pull --offline         # use cache only; no network
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--refresh` | — | Re-fetch even if the cache exists and the SHA matches the lockfile |
+| `--offline` | — | Use cache only; warn if cache missing |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `consumers <id>`
+
+Reverse-lookup across federation: list every reference to a local item across loaded peers. Use to answer "who breaks if I rename this?" before deprecating an event.
+
+```bash
+dkk consumers ordering.OrderPlaced
+dkk consumers actor.PaymentGateway --json
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### Federated ID forms
+
+| Form | Example | When to use |
+|------|---------|-------------|
+| Bare | `ordering.OrderPlaced` | Local-only; never falls through to peers |
+| Service-prefixed item | `ordering:ordering.OrderPlaced` | Cross-service reference in any YAML field |
+| Service-prefixed actor | `payments:actor.PaymentGateway` | Cross-service actor reference |
+| Service-prefixed ADR | `ordering:adr-0007` | Cross-service ADR link |
+| Show shorthand | `ordering:OrderPlaced` | `dkk show` only — resolves via peer's exports |
 
 ---
 

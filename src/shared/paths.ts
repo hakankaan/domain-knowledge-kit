@@ -11,35 +11,85 @@
  *    resolve from `import.meta.dirname` relative to the DKK package
  *    install.  Schemas and Handlebars templates ship with the package.
  */
-import { resolve, join, relative } from "node:path";
+import { resolve, join, relative, dirname } from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 /**
  * Resolve the DKK package installation root.
  *
- * When running from source (`tsx src/cli.ts`) `import.meta.dirname`
- * points at `src/shared/`, so we go up two levels.  When running from
- * the compiled output (`dist/shared/`) we also go up two levels.
+ * Computed from `import.meta.url` via `fileURLToPath` instead of
+ * `import.meta.dirname` because the latter is undefined under tsx
+ * when this module is loaded transitively via `createRequire` (used
+ * by the loader's federation hydration). `fileURLToPath(import.meta.url)`
+ * works in all loading paths.
+ *
+ * Running from source (`tsx src/cli.ts`) → resolves to `src/shared`.
+ * Running from the compiled output (`dist/shared/`) → `dist/shared`.
+ * Both cases go up two levels to reach the package root.
  *
  * Used exclusively for locating package-bundled assets (schemas,
  * templates).
  */
 export function packageRoot(): string {
-  // import.meta.dirname is src/shared  or dist/shared
-  return resolve(import.meta.dirname, "../..");
+  return resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+}
+
+/**
+ * Walk up the directory tree from `from`, returning the first ancestor
+ * that contains a `.dkk/` directory. Returns `null` when none is found.
+ *
+ * Capped at 64 iterations as a defensive measure against pathological
+ * filesystems; normal trees terminate at `/` well before that. The
+ * `from` path is resolved to an absolute path before searching.
+ *
+ * Exposed separately from {@link repoRoot} so other tools (e.g. a
+ * future `dkk doctor`) can reuse the search without inheriting
+ * `repoRoot`'s override/fallback semantics.
+ */
+export function findDkkRoot(from: string): string | null {
+  let current = resolve(from);
+  for (let i = 0; i < 64; i++) {
+    if (existsSync(join(current, ".dkk"))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+  return null;
 }
 
 /**
  * Resolve the project root (where `.dkk/` lives).
  *
- * Defaults to `process.cwd()` so that DKK works correctly whether it
- * is run from source, from a global install, or as a project dependency.
+ * Resolution order:
+ *   1. Explicit `override` (the `--root` CLI flag) — used verbatim,
+ *      no walk-up. This preserves the contract for callers that pass
+ *      an absolute root and expect it to be used as-is (including
+ *      pointing at a fresh directory that has no `.dkk/` yet).
+ *   2. Walk-up search via {@link findDkkRoot}: if `cwd/.dkk/` exists,
+ *      return `cwd`. Otherwise walk up the directory tree to the
+ *      first ancestor containing a `.dkk/`. This makes DKK usable
+ *      from any sub-directory of a service repo (including monorepos
+ *      where services live under `services/<name>/`).
+ *   3. Fallback: if no `.dkk/` is found on the walk-up path, return
+ *      `process.cwd()` (matches the historical behaviour, so that
+ *      scaffold commands which create `.dkk/` in cwd still work).
  *
- * Callers can override by passing an explicit root path (the `--root`
- * CLI flag).
+ * The walk-up can be disabled with `DKK_DISABLE_WALKUP=1` for callers
+ * who want the strict legacy behaviour.
  */
 export function repoRoot(override?: string): string {
   if (override) return resolve(override);
-  return resolve(process.cwd());
+
+  const cwd = resolve(process.cwd());
+
+  if (process.env.DKK_DISABLE_WALKUP === "1") {
+    return cwd;
+  }
+
+  return findDkkRoot(cwd) ?? cwd;
 }
 
 /** Absolute path to the `.dkk/domain/` directory. */
@@ -120,4 +170,34 @@ export function packageClaudeDir(): string {
  */
 export function repoRelative(absPath: string, root?: string): string {
   return relative(repoRoot(root), absPath).replace(/\\/g, "/");
+}
+
+// ── Federation paths ─────────────────────────────────────────────────
+
+/** Absolute path to `.dkk/service.yml` (service identity manifest). */
+export function serviceFile(root?: string): string {
+  return join(repoRoot(root), ".dkk", "service.yml");
+}
+
+/** Absolute path to `.dkk/federation.yml` (peer manifest). */
+export function federationFile(root?: string): string {
+  return join(repoRoot(root), ".dkk", "federation.yml");
+}
+
+/** Absolute path to `.dkk/federation.lock.json` (pinned peer SHAs). */
+export function federationLockFile(root?: string): string {
+  return join(repoRoot(root), ".dkk", "federation.lock.json");
+}
+
+/** Absolute path to `.dkk/imports/` (gitignored peer cache root). */
+export function importsDir(root?: string): string {
+  return join(repoRoot(root), ".dkk", "imports");
+}
+
+/**
+ * Absolute path to a single peer's cached repo root under `.dkk/imports/<service>/`.
+ * The peer's `.dkk/` lives at `<importedServiceDir>/.dkk/`.
+ */
+export function importedServiceDir(service: string, root?: string): string {
+  return join(importsDir(root), service);
 }

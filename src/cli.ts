@@ -16,6 +16,12 @@ import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
 import { registerNewContext } from "./features/scaffold/commands/new-context.js";
 import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
 import { registerAddItem } from "./features/scaffold/commands/add-item.js";
+import { registerServiceInit } from "./features/scaffold/commands/service-init.js";
+import { registerPeersAdd } from "./features/federation/commands/peers-add.js";
+import { registerPeersList } from "./features/federation/commands/peers-list.js";
+import { registerPeersStatus } from "./features/federation/commands/peers-status.js";
+import { registerPull } from "./features/federation/commands/pull.js";
+import { registerConsumers } from "./features/federation/commands/consumers.js";
 import { registerRename } from "./features/refactor/commands/rename.js";
 import { registerRm } from "./features/refactor/commands/rm.js";
 import { registerMove } from "./features/refactor/commands/move.js";
@@ -77,6 +83,21 @@ registerNewAdr(newCmd);
 
 // Top-level "add" command for individual domain items
 registerAddItem(program);
+
+// Federation: service identity
+registerServiceInit(program);
+
+// Federation: peer management
+const peersCmd = program
+  .command("peers")
+  .description("Federation peer management");
+registerPeersAdd(peersCmd);
+registerPeersList(peersCmd);
+registerPeersStatus(peersCmd);
+
+// Federation: dkk pull + dkk consumers
+registerPull(program);
+registerConsumers(program);
 
 // ── Agent mode injection ─────────────────────────────────────────────
 program.option("--agent", "Enable agent mode (JSON + minify by default)");

@@ -46,8 +46,8 @@
               "properties": {
                 "ref": {
                   "type": "string",
-                  "pattern": "^[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
-                  "description": "Domain item reference (context.Name)"
+                  "pattern": "^([a-z][a-z0-9-]*:)?[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
+                  "description": "Domain item reference (context.Name, or service:context.Name for federated refs)"
                 },
                 "type": {
                   "type": "string",

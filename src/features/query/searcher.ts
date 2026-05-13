@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import type { DomainGraph } from "../../shared/graph.js";
 import { repoRoot } from "../../shared/paths.js";
+import { parseRef } from "../../shared/refs.js";
 
 // better-sqlite3 CJS interop
 const require = createRequire(import.meta.url);
@@ -20,7 +21,12 @@ const Database = require("better-sqlite3") as typeof import("better-sqlite3");
 
 /** A single search result. */
 export interface SearchResult {
-  /** Unique identifier (e.g. "ordering.OrderPlaced"). */
+  /**
+   * Unique identifier. Local items use `<ctx>.<Name>` / `actor.X` /
+   * `adr-NNNN` / `flow.X` / `context.X`. Peer items are prefixed with
+   * `<service>:` so that two services sharing an item name don't
+   * collide in FTS.
+   */
   id: string;
   /** Item kind. */
   type: string;
@@ -28,6 +34,12 @@ export interface SearchResult {
   context: string;
   /** Human-readable display name. */
   name: string;
+  /**
+   * Source service. Empty string for local rows in unfederated repos;
+   * the local service name when federation is configured; the peer
+   * service name for peer rows.
+   */
+  service: string;
   /** Short excerpt with matching text. */
   excerpt: string;
   /** Computed relevance score (higher = more relevant). */
@@ -46,6 +58,12 @@ export interface SearchFilters {
   type?: string;
   /** Only include items whose tags contain this value. */
   tag?: string;
+  /**
+   * Only include items from this service. Use the empty string to
+   * match local rows in unfederated repos. Useful for narrowing to
+   * "what does service X publish?" or "what's only local?".
+   */
+  service?: string;
 }
 
 /** Options for the searcher. */
@@ -149,6 +167,7 @@ export function search(
         type,
         context,
         name,
+        service,
         tags,
         text,
         relations,
@@ -165,6 +184,7 @@ export function search(
       type: string;
       context: string;
       name: string;
+      service: string;
       tags: string;
       text: string;
       relations: string;
@@ -216,6 +236,10 @@ export function search(
       const tag = filters.tag.toLowerCase();
       filtered = filtered.filter((s) => s.row.tags.toLowerCase().includes(tag));
     }
+    if (filters.service !== undefined) {
+      const svc = filters.service.toLowerCase();
+      filtered = filtered.filter((s) => s.row.service.toLowerCase() === svc);
+    }
 
     // ── Step 4: Sort ──────────────────────────────────────────────
 
@@ -238,9 +262,11 @@ export function search(
         for (const nId of expanded) {
           relatedIds.push(nId);
         }
-        // Collect ADR ids from graph neighbours
+        // Collect ADR ids from graph neighbours (federation-aware:
+        // `adr-NNNN` and `<service>:adr-NNNN` both count).
         for (const nId of expanded) {
-          if (nId.startsWith("adr-") && !adrIds.includes(nId)) {
+          const parsed = parseRef(nId);
+          if (parsed?.kind === "adr" && !adrIds.includes(nId)) {
             adrIds.push(nId);
           }
         }
@@ -255,6 +281,7 @@ export function search(
         type: row.type,
         context: row.context,
         name: row.name,
+        service: row.service ?? "",
         excerpt: makeExcerpt(row.text),
         score: Math.round(score * 1000) / 1000,
         relatedIds: uniqueRelated,
