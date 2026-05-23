@@ -33,7 +33,7 @@ Start from business knowledge. Ask **"what does the business do?"** — not "wha
 At this stage, descriptions can be brief. Cross-references don't need to be complete. The goal is to establish the **vocabulary** — the ubiquitous language your team will use.
 
 ```bash
-dkk init                                       # scaffolds .dkk/domain/ + AGENTS.md (safe to re-run)
+dkk new domain
 dkk new context ordering
 dkk add event OrderPlaced --context ordering
 dkk add command PlaceOrder --context ordering

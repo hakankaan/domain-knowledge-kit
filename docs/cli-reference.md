@@ -278,14 +278,22 @@ Output:
 
 ## `init`
 
-Bootstrap a project for DKK. Two things happen on every run:
+Create or update `AGENTS.md` with a DKK onboarding section, then print conditional next-step guidance based on the current repo state.
 
-1. **Scaffold `.dkk/domain/`** with sample content (an index, actors file, and a `sample` bounded context with one event/command/aggregate). Skipped silently if `.dkk/domain/` already exists — use [`dkk new domain --force`](#new-domain) if you need to replace it.
-2. **Create or update `AGENTS.md`** with a DKK onboarding section delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers. Idempotent: re-running replaces the section in place.
+The DKK section is delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers, making the operation idempotent — re-running replaces the section in place. `dkk init` does **not** scaffold `.dkk/domain/`; the domain is the project's business and is created deliberately with [`dkk new domain`](#new).
+
+After writing AGENTS.md, init prints a "Next steps" block tuned to whichever state it detects:
+
+| Detected state | Guidance |
+|---|---|
+| `.dkk/domain/` missing or empty | "Scaffold the domain: `dkk new domain` …" |
+| Only the `sample` context exists | "Replace the `sample` scaffold with real bounded contexts (`dkk new context <name>` …)" |
+| Real model present | "You're set. Common daily commands: `dkk search`, `dkk add`, `dkk render`, `dkk prime`" |
+| `.dkk/domain/` exists but loader throws | "Run `dkk validate` to see what's wrong." |
 
 ```bash
-dkk init                  # bootstrap domain + AGENTS.md
-dkk init --claude         # also scaffold .claude/ for Claude Code
+dkk init                  # AGENTS.md + next-step guidance
+dkk init --claude         # also install Claude Code config under .claude/
 dkk init --skills         # also install agent skills into .github/skills/
 ```
 
@@ -293,7 +301,7 @@ dkk init --skills         # also install agent skills into .github/skills/
 |------|---------|-------------|
 | `--claude` | — | Also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands). |
 | `--skills` | — | Also install DKK skill files into `.github/skills/`. |
-| `--force` | — | Overwrite existing files under `.claude/` or `.github/skills/`. Never touches an existing `.dkk/domain/` — use `dkk new domain --force` for that. |
+| `--force` | — | Overwrite existing files under `.claude/` or `.github/skills/`. |
 | `-r, --root <path>` | repo root | Override repository root. |
 
 → See [AI Agent Integration](ai-agent-integration.md) for the full agent onboarding workflow.
@@ -388,8 +396,8 @@ Scaffold new domain structures. Automates creating standard directory layouts an
 There are three sub-commands under `new`.
 
 ```bash
-# Replace the entire .dkk/domain/ scaffold from scratch (destructive — requires --force if it already exists):
-dkk new domain --force
+# One-time per project: scaffold the .dkk/domain/ tree with a sample bounded context.
+dkk new domain
 
 # Add a bounded context (registers in index.yml and creates structure):
 dkk new context <name>
@@ -398,9 +406,7 @@ dkk new context <name>
 dkk new adr "<title>"
 ```
 
-> For first-time project setup, use [`dkk init`](#init) — it scaffolds `.dkk/domain/` and creates `AGENTS.md` in one step. `dkk new domain` is the lower-level primitive for re-scaffolding the domain after initialization.
-
-### <a id="new-domain"></a>`new domain`
+> Run [`dkk init`](#init) first — it writes `AGENTS.md` and then tells you to run `dkk new domain` next. The two commands intentionally do different jobs: `init` configures AI-agent integration, `new domain` materializes the domain skeleton.
 
 | Sub-Command | Description | Flags |
 |-------------|-------------|-------|

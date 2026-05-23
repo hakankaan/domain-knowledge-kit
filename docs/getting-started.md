@@ -59,17 +59,23 @@ tools/
 
 ## Step 1: Initialize DKK for the project
 
-Set up the base DKK directory structure and AI-agent onboarding file in one shot:
+`dkk init` sets up AI-agent onboarding (`AGENTS.md`) and prints next-step guidance tuned to your repo's current state:
 
 ```bash
 dkk init
 ```
 
-This scaffolds `.dkk/domain/` (with `index.yml`, `actors.yml`, and a sample bounded context under `contexts/sample/`) and creates or updates `AGENTS.md` with a DKK section. `dkk init` is safe to re-run — it will not overwrite an existing `.dkk/domain/`. To replace it from scratch, use `dkk new domain --force`.
+On a fresh project, init will tell you to scaffold the domain next. Do that:
 
-Optional flags layer in additional integrations:
+```bash
+dkk new domain
+```
 
-- `dkk init --claude` — also scaffold `.claude/` (settings, hooks, skills, agents, commands)
+This creates `.dkk/domain/` with `index.yml`, `actors.yml`, and a sample bounded context under `contexts/sample/`. It's a one-time-per-project step — the next sections show how to grow the model from there.
+
+Optional flags for the init step layer in additional integrations:
+
+- `dkk init --claude` — also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands)
 - `dkk init --skills` — also install agent skills under `.github/skills/`
 
 ## Step 2: Create a Bounded Context

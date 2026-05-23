@@ -1,12 +1,16 @@
 /**
- * `dkk init` command — bootstrap a project for DKK.
+ * `dkk init` command — create or update AGENTS.md with a DKK section, and
+ * print conditional next-step guidance based on the current repo state.
  *
- * Default behavior on every run:
- *   1. Scaffolds `.dkk/domain/` with sample content (skipped silently if it
- *      already exists — use `dkk new domain --force` to replace it).
- *   2. Creates or updates `AGENTS.md`, injecting a Domain Knowledge Kit
- *      section delimited by HTML comment markers. Idempotent: replaces the
- *      section between markers on re-run, appends if markers are absent.
+ * Inserts a Domain Knowledge Kit section delimited by HTML comment markers.
+ * Idempotent: replaces the section between markers on re-run, appends if
+ * markers are absent, creates the file if it does not exist.
+ *
+ * Does NOT scaffold `.dkk/domain/` — that is a separate, deliberate step
+ * (`dkk new domain`). The intuition is that a domain model is intrinsic to
+ * the project's business, not something to be templated. After writing
+ * AGENTS.md, init prints next-step guidance tuned to whether the repo has
+ * no domain, only the sample scaffold, or a real model.
  *
  * Optional flags layer in `.claude/` and `.github/skills/` for AI-agent
  * integrations.
@@ -14,8 +18,8 @@
 import type { Command as Cmd } from "commander";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { repoRoot, packageSkillsDir, packageClaudeDir } from "../../../shared/paths.js";
-import { scaffoldDomain, SCAFFOLD_DOMAIN_FILES } from "../../scaffold/commands/new-domain.js";
+import { repoRoot, packageSkillsDir, packageClaudeDir, domainDir } from "../../../shared/paths.js";
+import { loadDomainModel } from "../../../shared/loader.js";
 
 const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
@@ -65,7 +69,7 @@ dkk render                            # Validate, render docs, rebuild search in
 # ADR
 
 # Scaffold
-dkk new domain                        # Re-scaffold .dkk/domain/ from scratch (requires --force if it exists)
+dkk new domain                        # Scaffold .dkk/domain/ structure (one-time, per project)
 dkk new context <name>                # Scaffold a new bounded context
 dkk new adr "<title>"                 # Scaffold a new ADR file
 dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
@@ -78,7 +82,7 @@ dkk rm <id>                           # Remove item safely
 dkk stats                             # Domain statistics + orphaned items
 
 # Agent
-dkk init                              # Bootstrap project: scaffold .dkk/domain/ (if absent) + create/update AGENTS.md
+dkk init                              # Create/update AGENTS.md with DKK section + print next steps
 dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
 dkk init --skills                     # Also install agent skills into .github/skills/
 dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
@@ -451,30 +455,86 @@ export function refreshAgentsMd(root: string): "created" | "updated" | "appended
   return "appended";
 }
 
+/**
+ * Detect the current state of the repo's domain model and return a
+ * one-of-four state tag for `printNextSteps` to dispatch on.
+ *
+ * Mirrors the detection ladder used by `prime.ts#buildDomainSummary`:
+ * - No `.dkk/domain/` directory          → `"missing"`
+ * - Loader throws (malformed/incomplete) → `"broken"`
+ * - Loader returns an empty model        → `"missing"` (same guidance)
+ * - Only a `sample` context exists       → `"sample-only"`
+ * - At least one real context exists     → `"ready"`
+ */
+type DomainState = "missing" | "broken" | "sample-only" | "ready";
+
+function detectDomainState(root: string): DomainState {
+  if (!existsSync(domainDir(root))) return "missing";
+  try {
+    const model = loadDomainModel({ root });
+    if (model.contexts.size === 0 && model.actors.length === 0 && model.adrs.size === 0) {
+      return "missing";
+    }
+    if (model.contexts.size === 1 && model.contexts.has("sample")) {
+      return "sample-only";
+    }
+    return "ready";
+  } catch {
+    return "broken";
+  }
+}
+
+/**
+ * Print a "Next steps" block tuned to what the repo currently looks like.
+ * Called at the end of `dkk init` so users always get an actionable nudge
+ * regardless of whether they just ran init for the first time or are
+ * refreshing AGENTS.md on a populated model.
+ */
+function printNextSteps(root: string): void {
+  const state = detectDomainState(root);
+  console.log("");
+  console.log("Next steps:");
+  switch (state) {
+    case "missing":
+      console.log("  1. Scaffold the domain:        dkk new domain");
+      console.log("  2. Create your first context:  dkk new context <name>");
+      console.log("  3. Add domain items:           dkk add <type> <name> --context <ctx>");
+      console.log("  4. Validate + render docs:     dkk render");
+      break;
+    case "sample-only":
+      console.log("  Your domain only has the `sample` scaffold. Replace it with real");
+      console.log("  bounded contexts that match your business (e.g. billing, inventory):");
+      console.log("    dkk new context <name>");
+      console.log("    dkk add <type> <name> --context <ctx>");
+      console.log("    dkk rm sample.SampleCreated   # (and the rest, once replacements exist)");
+      break;
+    case "ready":
+      console.log("  You're set. Common daily commands:");
+      console.log("    dkk search \"<query>\"           # find items");
+      console.log("    dkk add <type> <name> --context <ctx>");
+      console.log("    dkk render                     # after changes");
+      console.log("    dkk prime                      # full AI-agent context");
+      break;
+    case "broken":
+      console.log("  `.dkk/domain/` exists but could not be loaded. Run:");
+      console.log("    dkk validate                   # see what's wrong");
+      break;
+  }
+}
+
 /** Register the `init` subcommand. */
 export function registerInit(program: Cmd): void {
   program
     .command("init")
-    .description("Bootstrap project: scaffold .dkk/domain/ (if absent) and create/update AGENTS.md")
+    .description("Create or update AGENTS.md with DKK onboarding section + print next-step guidance")
     .option("--skills", "Also install DKK skill files into .github/skills/")
     .option("--claude", "Also install Claude Code config (.claude/ settings, hooks, skills, agents, commands)")
-    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude). Never touches an existing .dkk/domain/ — use `dkk new domain --force` for that.")
+    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
     .option("-r, --root <path>", "Override repository root")
     .action((opts: { root?: string; skills?: boolean; claude?: boolean; force?: boolean }) => {
       const root = repoRoot(opts.root);
 
-      // 1. Scaffold .dkk/domain/ — skips silently if it already exists.
-      //    Never destructive: --force here only affects .claude/.github files,
-      //    not domain content (which must be replaced via `dkk new domain --force`).
-      const domainResult = scaffoldDomain({ root });
-      if (domainResult.status === "created") {
-        console.log("Created  .dkk/domain/ with sample content:");
-        for (const f of SCAFFOLD_DOMAIN_FILES) console.log(`           .dkk/domain/${f}`);
-      } else {
-        console.log("Skipped  .dkk/domain/ (already exists — use `dkk new domain --force` to replace)");
-      }
-
-      // 2. AGENTS.md — create, refresh in place, or append the DKK section.
+      // AGENTS.md — create, refresh in place, or append the DKK section.
       const status = refreshAgentsMd(root);
       if (status === "created") console.log(`Created  AGENTS.md`);
       else if (status === "updated") console.log(`Updated  AGENTS.md (DKK section refreshed)`);
@@ -487,6 +547,8 @@ export function registerInit(program: Cmd): void {
       if (opts.claude) {
         installClaudeConfig(root, opts.force ?? false);
       }
+
+      printNextSteps(root);
     });
 }
 

@@ -665,6 +665,10 @@ try {
     const content = readFileSync(join(root, "AGENTS.md"), "utf-8");
     assert("AGENTS.md has DKK markers", content.includes("<!-- dkk:start -->") && content.includes("<!-- dkk:end -->"));
     assert("AGENTS.md has dkk prime reference", content.includes("dkk prime"));
+    // makeTempRoot leaves an incomplete .dkk/domain/ (no index.yml/actors.yml), so
+    // the next-steps detection should land on "missing" and recommend `dkk new domain`.
+    assert("init prints next-steps", result.stdout.includes("Next steps:"));
+    assert("init next-steps suggests dkk new domain", result.stdout.includes("dkk new domain"));
   }
 
   console.log("\n=== init: appends to existing AGENTS.md ===");
@@ -697,35 +701,6 @@ try {
     // Only one pair of markers
     const startCount = (afterSecond.match(/<!-- dkk:start -->/g) || []).length;
     assert("only one start marker", startCount === 1);
-  }
-
-  console.log("\n=== init: scaffolds .dkk/domain/ on a fresh project ===");
-  {
-    const root = join(tmpdir(), `dkk-cli-init-fresh-${Date.now()}`);
-    mkdirSync(root, { recursive: true });
-    tempRoots.push(root);
-    const result = run(["init"], { root });
-    assert("init exits 0", result.exitCode === 0);
-    assert("init prints created for domain", result.stdout.includes("Created  .dkk/domain/"));
-    assert("creates index.yml", existsSync(join(root, ".dkk", "domain", "index.yml")));
-    assert("creates actors.yml", existsSync(join(root, ".dkk", "domain", "actors.yml")));
-    assert("creates sample context.yml", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
-    assert("creates sample event", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "events", "SampleCreated.yml")));
-    assert("creates AGENTS.md", existsSync(join(root, "AGENTS.md")));
-  }
-
-  console.log("\n=== init: leaves existing .dkk/domain/ untouched ===");
-  {
-    const root = makeTempRoot("init-preserve-domain");
-    tempRoots.push(root);
-    // Seed a marker file inside .dkk/domain/ to detect any overwrite
-    writeFileSync(join(root, ".dkk", "domain", "user-file.yml"), "preserved: true\n", "utf-8");
-    const result = run(["init"], { root });
-    assert("init exits 0", result.exitCode === 0);
-    assert("init prints skipped for domain", result.stdout.includes("Skipped  .dkk/domain/"));
-    assert("user file preserved", existsSync(join(root, ".dkk", "domain", "user-file.yml")));
-    // Confirms we did NOT silently overwrite by NOT creating a sample context where none existed.
-    assert("did not create sample context", !existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
   }
 
   // ═══════════════════════════════════════════════════════════════════

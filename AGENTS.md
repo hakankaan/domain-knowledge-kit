@@ -143,7 +143,7 @@ dkk render                            # Validate, render docs, rebuild search in
 # ADR
 
 # Scaffold
-dkk new domain                        # Re-scaffold .dkk/domain/ from scratch (requires --force if it exists)
+dkk new domain                        # Scaffold .dkk/domain/ structure (one-time, per project)
 dkk new context <name>                # Scaffold a new bounded context
 dkk new adr "<title>"                 # Scaffold a new ADR file
 dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
@@ -156,9 +156,10 @@ dkk rm <id>                           # Remove item safely
 dkk stats                             # Domain statistics + orphaned items
 
 # Agent
-dkk init                              # Bootstrap project: scaffold .dkk/domain/ (if absent) + create/update AGENTS.md
+dkk init                              # Create/update AGENTS.md with DKK section + print next steps
 dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
 dkk init --skills                     # Also install agent skills into .github/skills/
+dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
 dkk prime                             # Output full agent context
 dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
 ```

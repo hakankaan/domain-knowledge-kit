@@ -68,7 +68,7 @@ This ensures:
 Run once per repo:
 
 ```bash
-dkk init     # Scaffolds .dkk/domain/ (if absent) + injects DKK section into AGENTS.md
+dkk init     # Injects DKK section into AGENTS.md and prints next-step guidance
 ```
 
 When a newer dkk release ships, refresh the assistant artifacts in one step:
@@ -110,7 +110,8 @@ Teach agents to prefer:
 ## 9. Getting Started Checklist for a New Team
 
 - [ ] Install DKK: `npm install -g domain-knowledge-kit`
-- [ ] Initialize the project: `dkk init` (scaffolds `.dkk/domain/` and seeds `AGENTS.md` for AI agents)
+- [ ] Seed AGENTS.md and read the next-step guidance: `dkk init`
+- [ ] Scaffold the domain: `dkk new domain`
 - [ ] Create your first bounded context: `dkk new context <name>`
 - [ ] Add 3–5 core domain items (events, commands, aggregates) to build familiarity
 - [ ] Run `dkk render` and inspect the generated docs

@@ -20,24 +20,34 @@ AI agents work better when they understand your business domain, not just your c
 Two commands get your project ready for AI agents:
 
 ```bash
-# 1. Bootstrap DKK: scaffold .dkk/domain/ (if absent) + create/update AGENTS.md
+# 1. Add a DKK section to AGENTS.md (idempotent). Init prints the next steps
+#    to run based on whether you already have a domain model.
 dkk init
 
-# 2. Verify it works — output agent context to stdout
+# 2. Scaffold the .dkk/domain/ tree if you haven't already (one-time per project).
+dkk new domain
+
+# 3. Verify it works — output agent context to stdout
 dkk prime
 ```
 
-## `dkk init` — Project Bootstrap
+## `dkk init` — Agent Onboarding
 
-`dkk init` does two things on every run:
+`dkk init` creates or updates `AGENTS.md` with a DKK-specific section. The section is delimited by HTML comments (`<!-- dkk:start -->` / `<!-- dkk:end -->`), making the operation idempotent — re-running replaces only the DKK section without affecting other content.
 
-1. **Scaffolds `.dkk/domain/`** with sample content (an index, actors file, and a `sample` bounded context). If `.dkk/domain/` already exists, this step is skipped silently — `dkk init` never overwrites existing domain content. To replace the scaffold from scratch, use `dkk new domain --force`.
-2. **Creates or updates `AGENTS.md`** with a DKK-specific section delimited by HTML comments (`<!-- dkk:start -->` / `<!-- dkk:end -->`). The section is idempotent — re-running replaces only the DKK section without affecting other content. If `AGENTS.md` doesn't exist, it's created.
+After writing AGENTS.md, init prints a **Next steps** block tuned to the current state of your repo:
+
+- **No `.dkk/domain/` yet** → tells you to run `dkk new domain`, then `dkk new context`, then `dkk add`.
+- **Only the `sample` scaffold exists** → nudges you to replace `sample` with real bounded contexts.
+- **Real domain model present** → shows the everyday workflow (`dkk search`, `dkk add`, `dkk render`, `dkk prime`).
+- **Loader can't read `.dkk/domain/`** → suggests `dkk validate` to diagnose.
 
 The injected AGENTS.md section tells AI agents:
 - What DKK is and how to use it
 - Available CLI commands for querying the domain
 - Quality gates to run after domain changes
+
+`dkk init` does **not** scaffold `.dkk/domain/`. The domain model is intrinsic to your business — it's created deliberately with `dkk new domain` (once per project), not templated by init.
 
 ## `dkk update` — Refresh the AI-assistant artifacts
 
