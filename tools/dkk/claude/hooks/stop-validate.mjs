@@ -28,19 +28,38 @@ process.stdin.on("end", () => {
   }
 
   const repoRoot = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-  const cliEntry = resolve(repoRoot, "src/cli.ts");
 
   // No domain model? Nothing to gate on.
   if (!existsSync(resolve(repoRoot, ".dkk/domain"))) process.exit(0);
 
-  const [cmd, args] = existsSync(cliEntry)
-    ? ["npx", ["tsx", cliEntry, "validate", "--json", "--minify"]]
-    : ["dkk", ["validate", "--json", "--minify"]];
+  const res = spawnSync("dkk", ["validate", "--json", "--minify"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
 
-  const res = spawnSync(cmd, args, { cwd: repoRoot, encoding: "utf8" });
-  if (res.status !== 0) {
+  // Tooling problem (dkk not on PATH, spawn error, etc.) — surface a clear
+  // setup error to the user, but don't block the agent with a phantom
+  // "domain failure" it has no way to fix.
+  if (res.error?.code === "ENOENT") {
     process.stderr.write(
-      `Domain validation failed — fix these before ending the turn:\n${res.stdout || res.stderr || ""}\n`,
+      "dkk stop hook: 'dkk' CLI not found on PATH — install with `npm i -g domain-knowledge-kit` to enable the domain validation gate.\n",
+    );
+    process.exit(1);
+  }
+  if (res.error) {
+    process.stderr.write(
+      `dkk stop hook: failed to invoke validator — ${res.error.message}\n`,
+    );
+    process.exit(1);
+  }
+
+  if (res.status !== 0) {
+    const body =
+      res.stdout ||
+      res.stderr ||
+      "(validator exited non-zero with no output — likely a tooling/wiring problem, not a domain issue)";
+    process.stderr.write(
+      `Domain validation failed — fix these before ending the turn:\n${body}\n`,
     );
     process.exit(2);
   }

@@ -68,7 +68,14 @@ This ensures:
 Run once per repo:
 
 ```bash
-dkk init     # Injects DKK section into AGENTS.md
+dkk init     # Scaffolds .dkk/domain/ (if absent) + injects DKK section into AGENTS.md
+```
+
+When a newer dkk release ships, refresh the assistant artifacts in one step:
+
+```bash
+dkk update          # bumps npm + sweeps stale .claude/.github/skills/MCP/AGENTS.md, reinstalls fresh ones
+dkk update --check  # preview the diff without applying
 ```
 
 At the start of an agent session (or in your agent's system prompt), feed:
@@ -103,11 +110,10 @@ Teach agents to prefer:
 ## 9. Getting Started Checklist for a New Team
 
 - [ ] Install DKK: `npm install -g domain-knowledge-kit`
-- [ ] Scaffold the domain: `dkk new domain`
+- [ ] Initialize the project: `dkk init` (scaffolds `.dkk/domain/` and seeds `AGENTS.md` for AI agents)
 - [ ] Create your first bounded context: `dkk new context <name>`
 - [ ] Add 3–5 core domain items (events, commands, aggregates) to build familiarity
 - [ ] Run `dkk render` and inspect the generated docs
-- [ ] Run `dkk init` to set up AI agent integration
 - [ ] Add the CI quality gate (see Section 5)
 - [ ] Share this Way of Working with the team
 - [ ] Schedule a 30-minute "domain modeling" slot in sprint planning to keep the model current

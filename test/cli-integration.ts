@@ -699,6 +699,35 @@ try {
     assert("only one start marker", startCount === 1);
   }
 
+  console.log("\n=== init: scaffolds .dkk/domain/ on a fresh project ===");
+  {
+    const root = join(tmpdir(), `dkk-cli-init-fresh-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+    tempRoots.push(root);
+    const result = run(["init"], { root });
+    assert("init exits 0", result.exitCode === 0);
+    assert("init prints created for domain", result.stdout.includes("Created  .dkk/domain/"));
+    assert("creates index.yml", existsSync(join(root, ".dkk", "domain", "index.yml")));
+    assert("creates actors.yml", existsSync(join(root, ".dkk", "domain", "actors.yml")));
+    assert("creates sample context.yml", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
+    assert("creates sample event", existsSync(join(root, ".dkk", "domain", "contexts", "sample", "events", "SampleCreated.yml")));
+    assert("creates AGENTS.md", existsSync(join(root, "AGENTS.md")));
+  }
+
+  console.log("\n=== init: leaves existing .dkk/domain/ untouched ===");
+  {
+    const root = makeTempRoot("init-preserve-domain");
+    tempRoots.push(root);
+    // Seed a marker file inside .dkk/domain/ to detect any overwrite
+    writeFileSync(join(root, ".dkk", "domain", "user-file.yml"), "preserved: true\n", "utf-8");
+    const result = run(["init"], { root });
+    assert("init exits 0", result.exitCode === 0);
+    assert("init prints skipped for domain", result.stdout.includes("Skipped  .dkk/domain/"));
+    assert("user file preserved", existsSync(join(root, ".dkk", "domain", "user-file.yml")));
+    // Confirms we did NOT silently overwrite by NOT creating a sample context where none existed.
+    assert("did not create sample context", !existsSync(join(root, ".dkk", "domain", "contexts", "sample", "context.yml")));
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   // 12. prime command — stdout output with key sections
   // ═══════════════════════════════════════════════════════════════════
@@ -1211,6 +1240,125 @@ try {
     assert("prime relationships shows OrderPlaced", result.stdout.includes("OrderPlaced"));
     assert("prime relationships shows handles/emits", result.stdout.includes("handles"));
     assert("prime relationships shows emits", result.stdout.includes("emits"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 20. update command — diff, sweep, prune, idempotency
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== update: --check exits 0 with diff for fresh repo ===");
+  {
+    const root = makeTempRoot("update-check");
+    tempRoots.push(root);
+    const result = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("update --check exits 0", result.exitCode === 0);
+    assert("update --check shows artifact diff header", result.stdout.includes("Artifact diff"));
+    assert("update --check lists at least one add", result.stdout.includes("+ add"));
+    assert("update --check does NOT write files", !existsSync(join(root, ".claude", "settings.json")));
+  }
+
+  console.log("\n=== update: errors when no .dkk/ in target root ===");
+  {
+    const root = join(tmpdir(), `dkk-cli-update-no-dkk-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+    tempRoots.push(root);
+    const result = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("update without .dkk/ exits 1", result.exitCode === 1);
+    assert(
+      "update without .dkk/ has clear error",
+      result.stderr.includes("requires a DKK-using project") || result.stderr.includes("no .dkk/"),
+    );
+  }
+
+  console.log("\n=== update: --yes applies, removes legacy artifact, idempotent on re-run ===");
+  {
+    const root = makeTempRoot("update-apply");
+    tempRoots.push(root);
+    // Seed a legacy artifact that previous DKK versions installed.
+    const legacyDir = join(root, ".github", "skills", "dkk-domain-knowledge");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(join(legacyDir, "skill.md"), "legacy content\n", "utf-8");
+
+    const result = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root });
+    assert("update --yes exits 0", result.exitCode === 0);
+    assert(
+      "legacy directory removed",
+      !existsSync(legacyDir),
+    );
+    assert(
+      "current skills installed",
+      existsSync(join(root, ".claude", "skills", "dkk-flow-implementer", "SKILL.md")),
+    );
+    assert(
+      "hooks installed",
+      existsSync(join(root, ".claude", "hooks", "session-start-prime.mjs")),
+    );
+    assert(
+      "settings.json created from template",
+      existsSync(join(root, ".claude", "settings.json")),
+    );
+    assert("AGENTS.md refreshed", existsSync(join(root, "AGENTS.md")));
+
+    // Re-run: diff should now be empty.
+    const rerun = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("update re-run --check exits 0", rerun.exitCode === 0);
+    assert("update re-run reports no changes", rerun.stdout.includes("(no changes)"));
+  }
+
+  console.log("\n=== update: preserves user-authored settings.json entries ===");
+  {
+    const root = makeTempRoot("update-preserve-user-settings");
+    tempRoots.push(root);
+    mkdirSync(join(root, ".claude"), { recursive: true });
+    // Seed a settings.json with a user-only permission and a mixed hook entry
+    // alongside a DKK-owned permission and a DKK-owned hook.
+    const userSettings = {
+      permissions: {
+        allow: [
+          "Bash(dkk list:*)",            // DKK-owned — should be pruned + re-merged
+          "Bash(myproject deploy:*)",    // user-only — must survive
+        ],
+      },
+      hooks: {
+        SessionStart: [
+          {
+            hooks: [
+              { type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-prime.mjs"' },
+            ],
+          },
+          {
+            hooks: [{ type: "command", command: "echo my-custom-hook" }],
+          },
+        ],
+      },
+    };
+    writeFileSync(
+      join(root, ".claude", "settings.json"),
+      JSON.stringify(userSettings, null, 2),
+      "utf-8",
+    );
+
+    const result = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root });
+    assert("update preserve exits 0", result.exitCode === 0);
+
+    const merged = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf-8")) as {
+      permissions?: { allow?: string[] };
+      hooks?: Record<string, Array<{ hooks?: Array<{ command?: string }> }>>;
+    };
+    assert(
+      "user permission survived",
+      Array.isArray(merged.permissions?.allow) &&
+      merged.permissions!.allow.includes("Bash(myproject deploy:*)"),
+    );
+    assert(
+      "DKK permission re-added from template",
+      merged.permissions!.allow!.includes("Bash(dkk list:*)"),
+    );
+    // The user's "echo my-custom-hook" entry must still be there.
+    const sessionStart = merged.hooks?.SessionStart ?? [];
+    const userHook = sessionStart.find((e) =>
+      (e.hooks ?? []).some((h) => h.command === "echo my-custom-hook"),
+    );
+    assert("user-authored hook entry preserved", Boolean(userHook));
   }
 
 } finally {

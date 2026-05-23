@@ -8,6 +8,9 @@
  *     context.yml, events/, commands/, aggregates/, policies/, read-models/
  *
  * Errors if `.dkk/domain/` already exists (use `--force` to overwrite).
+ *
+ * The scaffold logic is also exported as `scaffoldDomain()` so `dkk init`
+ * can bootstrap the same structure during project initialization.
  */
 import type { Command as Cmd } from "commander";
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -65,6 +68,61 @@ emits:
     - SampleCreated
 `;
 
+// ── Scaffold logic (shared with `dkk init`) ───────────────────────────
+
+export type ScaffoldDomainStatus = "created" | "skipped" | "replaced";
+
+export interface ScaffoldDomainResult {
+  status: ScaffoldDomainStatus;
+  path: string;
+}
+
+/**
+ * Scaffold `.dkk/domain/` with sample content.
+ *
+ * - If the directory does not exist, creates it (`status: "created"`).
+ * - If it exists and `force` is false, leaves it untouched (`status: "skipped"`).
+ * - If it exists and `force` is true, removes it entirely first, then
+ *   creates a fresh scaffold (`status: "replaced"`).
+ */
+export function scaffoldDomain(opts: { root?: string; force?: boolean } = {}): ScaffoldDomainResult {
+  const dir = domainDir(opts.root);
+
+  if (existsSync(dir) && !opts.force) {
+    return { status: "skipped", path: dir };
+  }
+
+  const replaced = existsSync(dir) && (opts.force ?? false);
+  if (replaced) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  const contextsBase = join(dir, "contexts", "sample");
+  const subDirs = ["events", "commands", "aggregates", "policies", "read-models"];
+  for (const sub of subDirs) {
+    mkdirSync(join(contextsBase, sub), { recursive: true });
+  }
+
+  writeFileSync(join(dir, "index.yml"), INDEX_YML, "utf-8");
+  writeFileSync(join(dir, "actors.yml"), ACTORS_YML, "utf-8");
+  writeFileSync(join(contextsBase, "context.yml"), CONTEXT_YML, "utf-8");
+  writeFileSync(join(contextsBase, "events", "SampleCreated.yml"), SAMPLE_EVENT, "utf-8");
+  writeFileSync(join(contextsBase, "commands", "CreateSample.yml"), SAMPLE_COMMAND, "utf-8");
+  writeFileSync(join(contextsBase, "aggregates", "Sample.yml"), SAMPLE_AGGREGATE, "utf-8");
+
+  return { status: replaced ? "replaced" : "created", path: dir };
+}
+
+/** Files created by a successful scaffold — used by callers that print their own report. */
+export const SCAFFOLD_DOMAIN_FILES: readonly string[] = [
+  "index.yml",
+  "actors.yml",
+  "contexts/sample/context.yml",
+  "contexts/sample/events/SampleCreated.yml",
+  "contexts/sample/commands/CreateSample.yml",
+  "contexts/sample/aggregates/Sample.yml",
+];
+
 // ── Registration ──────────────────────────────────────────────────────
 
 export function registerNewDomain(program: Cmd): void {
@@ -81,7 +139,6 @@ export function registerNewDomain(program: Cmd): void {
     .action((opts: { root?: string; force?: boolean; json?: boolean; minify?: boolean }) => {
       const dir = domainDir(opts.root);
 
-      // Guard: refuse to overwrite unless --force
       if (existsSync(dir) && !opts.force) {
         console.error(
           `Error: ${dir} already exists. Use --force to replace it entirely.`,
@@ -89,43 +146,18 @@ export function registerNewDomain(program: Cmd): void {
         process.exit(1);
       }
 
-      // --force: remove the entire domain directory so the scaffold is applied
-      // to a clean slate (no silent merging of pre-existing content).
-      if (existsSync(dir) && opts.force) {
-        rmSync(dir, { recursive: true, force: true });
-      }
-
-      // Create directory structure
-      const contextsBase = join(dir, "contexts", "sample");
-      const subDirs = ["events", "commands", "aggregates", "policies", "read-models"];
-      for (const sub of subDirs) {
-        mkdirSync(join(contextsBase, sub), { recursive: true });
-      }
-
-      // Write files
-      writeFileSync(join(dir, "index.yml"), INDEX_YML, "utf-8");
-      writeFileSync(join(dir, "actors.yml"), ACTORS_YML, "utf-8");
-      writeFileSync(join(contextsBase, "context.yml"), CONTEXT_YML, "utf-8");
-      writeFileSync(join(contextsBase, "events", "SampleCreated.yml"), SAMPLE_EVENT, "utf-8");
-      writeFileSync(join(contextsBase, "commands", "CreateSample.yml"), SAMPLE_COMMAND, "utf-8");
-      writeFileSync(join(contextsBase, "aggregates", "Sample.yml"), SAMPLE_AGGREGATE, "utf-8");
+      const result = scaffoldDomain({ root: opts.root, force: opts.force });
 
       if (opts.json) {
          console.log(JSON.stringify({
-            path: dir,
-            success: true
+            path: result.path,
+            success: true,
          }, null, opts.minify ? 0 : 2));
          return;
       }
 
       console.log("Created .dkk/domain/ with sample content:");
-      console.log("  index.yml");
-      console.log("  actors.yml");
-      console.log("  contexts/sample/");
-      console.log("    context.yml");
-      console.log("    events/SampleCreated.yml");
-      console.log("    commands/CreateSample.yml");
-      console.log("    aggregates/Sample.yml");
+      for (const f of SCAFFOLD_DOMAIN_FILES) console.log(`  ${f}`);
       console.log("\nRun `dkk render` to validate and generate documentation.");
     });
 }

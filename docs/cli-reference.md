@@ -278,17 +278,59 @@ Output:
 
 ## `init`
 
-Create or update `AGENTS.md` with a DKK onboarding section. The section is delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers, making the operation idempotent — re-running replaces the section in place.
+Bootstrap a project for DKK. Two things happen on every run:
+
+1. **Scaffold `.dkk/domain/`** with sample content (an index, actors file, and a `sample` bounded context with one event/command/aggregate). Skipped silently if `.dkk/domain/` already exists — use [`dkk new domain --force`](#new-domain) if you need to replace it.
+2. **Create or update `AGENTS.md`** with a DKK onboarding section delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers. Idempotent: re-running replaces the section in place.
 
 ```bash
-dkk init
+dkk init                  # bootstrap domain + AGENTS.md
+dkk init --claude         # also scaffold .claude/ for Claude Code
+dkk init --skills         # also install agent skills into .github/skills/
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-r, --root <path>` | repo root | Override repository root |
+| `--claude` | — | Also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands). |
+| `--skills` | — | Also install DKK skill files into `.github/skills/`. |
+| `--force` | — | Overwrite existing files under `.claude/` or `.github/skills/`. Never touches an existing `.dkk/domain/` — use `dkk new domain --force` for that. |
+| `-r, --root <path>` | repo root | Override repository root. |
 
 → See [AI Agent Integration](ai-agent-integration.md) for the full agent onboarding workflow.
+
+---
+
+## `update`
+
+Upgrade `dkk` to the latest npm release **and** refresh every DKK-managed AI assistant artifact in this project — `.claude/skills/dkk-*`, `.claude/agents/dkk-*.md`, `.claude/commands/dkk-*.md`, `.claude/hooks/*`, `.github/skills/dkk-*`, the DKK section of `AGENTS.md`, and the DKK MCP server registration.
+
+```bash
+dkk update                  # default: upgrade + apply
+dkk update --check          # dry-run; print the diff without writing
+dkk update --yes            # skip the interactive confirm prompt
+dkk update --skip-npm       # only refresh artifacts, no npm upgrade
+```
+
+Pipeline:
+
+1. **Pre-flight** — verify `.dkk/` exists; detect global vs. local install (`npx` is refused).
+2. **npm upgrade** — `npm install -g domain-knowledge-kit@latest` (or `--save-dev` for local installs). Skipped on `--skip-npm` or when already on the latest version.
+3. **Re-exec** — after upgrade, re-launch the freshly-installed binary so subsequent steps read the **new** bundled templates.
+4. **Artifact diff** — compute add / replace / remove against the bundled template, print, and confirm. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
+5. **Settings prune + merge** — remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning.
+6. **MCP register** — if no `dkk` MCP server is already registered (project `.mcp.json` or `claude mcp list`), run `claude mcp add dkk -- dkk mcp`. Falls back to writing `.mcp.json` if the `claude` CLI is unavailable.
+7. **AGENTS.md refresh** — replaces the DKK section in place.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-y, --yes` | — | Skip interactive confirmation for the artifact diff. |
+| `--check` | — | Dry-run: print the diff and plan, make no changes. |
+| `--skip-npm` | — | Don't run npm upgrade (use the already-installed version). |
+| `--skip-artifacts` | — | Don't sweep/reinstall `.claude/` and `.github/skills/` files. |
+| `--skip-mcp` | — | Don't auto-register the DKK MCP server. |
+| `-r, --root <path>` | repo root | Override repository root. |
+
+→ See [AI Agent Integration](ai-agent-integration.md) for the artifacts that `update` refreshes.
 
 ---
 
@@ -346,8 +388,8 @@ Scaffold new domain structures. Automates creating standard directory layouts an
 There are three sub-commands under `new`.
 
 ```bash
-# Set up a complete .dkk/ structure in your repository:
-dkk new domain
+# Replace the entire .dkk/domain/ scaffold from scratch (destructive — requires --force if it already exists):
+dkk new domain --force
 
 # Add a bounded context (registers in index.yml and creates structure):
 dkk new context <name>
@@ -356,9 +398,13 @@ dkk new context <name>
 dkk new adr "<title>"
 ```
 
+> For first-time project setup, use [`dkk init`](#init) — it scaffolds `.dkk/domain/` and creates `AGENTS.md` in one step. `dkk new domain` is the lower-level primitive for re-scaffolding the domain after initialization.
+
+### <a id="new-domain"></a>`new domain`
+
 | Sub-Command | Description | Flags |
 |-------------|-------------|-------|
-| `domain` | Scaffold `.dkk/domain` structure, schemas, and a base `actors.yml` and `index.yml`. | `--json`, `--minify`, `-r, --root <path>`, `--force` |
+| `domain` | Scaffold `.dkk/domain/` with `index.yml`, `actors.yml`, and a sample bounded context. Errors if `.dkk/domain/` already exists unless `--force` is passed (which deletes the existing directory entirely). | `--json`, `--minify`, `-r, --root <path>`, `--force` |
 | `context` | Scaffold a new bounded context with its metadata and subdirectories. | `--json`, `--minify`, `-d, --description <text>`, `-r, --root <path>` |
 | `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `-s, --status <status>`, `-r, --root <path>` |
 

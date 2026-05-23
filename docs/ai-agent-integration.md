@@ -20,23 +20,35 @@ AI agents work better when they understand your business domain, not just your c
 Two commands get your project ready for AI agents:
 
 ```bash
-# 1. Add a DKK section to AGENTS.md (idempotent)
+# 1. Bootstrap DKK: scaffold .dkk/domain/ (if absent) + create/update AGENTS.md
 dkk init
 
 # 2. Verify it works — output agent context to stdout
 dkk prime
 ```
 
-## `dkk init` — Agent Onboarding
+## `dkk init` — Project Bootstrap
 
-`dkk init` creates or updates `AGENTS.md` with a DKK-specific section. The section is delimited by HTML comments (`<!-- dkk:start -->` / `<!-- dkk:end -->`), making the operation idempotent — re-running replaces only the DKK section without affecting other content.
+`dkk init` does two things on every run:
 
-The injected section tells AI agents:
+1. **Scaffolds `.dkk/domain/`** with sample content (an index, actors file, and a `sample` bounded context). If `.dkk/domain/` already exists, this step is skipped silently — `dkk init` never overwrites existing domain content. To replace the scaffold from scratch, use `dkk new domain --force`.
+2. **Creates or updates `AGENTS.md`** with a DKK-specific section delimited by HTML comments (`<!-- dkk:start -->` / `<!-- dkk:end -->`). The section is idempotent — re-running replaces only the DKK section without affecting other content. If `AGENTS.md` doesn't exist, it's created.
+
+The injected AGENTS.md section tells AI agents:
 - What DKK is and how to use it
 - Available CLI commands for querying the domain
 - Quality gates to run after domain changes
 
-If `AGENTS.md` doesn't exist, it's created. If it already has a DKK section, it's updated in place.
+## `dkk update` — Refresh the AI-assistant artifacts
+
+When a newer release of `dkk` ships new skills, hooks, slash commands, or MCP wiring, `dkk update` is the canonical way to pull them in:
+
+```bash
+dkk update            # bump npm + refresh .claude/, .github/skills/, MCP, AGENTS.md
+dkk update --check    # preview the diff without applying
+```
+
+It runs the npm install for you (global or local install — `npx` is refused), re-execs onto the freshly-installed binary, then sweeps every `dkk-*` artifact in `.claude/{skills,agents,commands}/` plus the DKK-owned hook scripts and replaces them with the current template. Stale paths from older releases are removed cleanly. `.claude/settings.json` is mutated additively: DKK-owned `permissions.allow` and `hooks.*` entries are pruned and re-added from the new template, while user-authored entries are preserved untouched. If the DKK MCP server isn't registered yet, `update` registers it via `claude mcp add` (falling back to writing `.mcp.json`).
 
 ## `dkk prime` — Full Agent Context
 

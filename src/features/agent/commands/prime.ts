@@ -128,7 +128,7 @@ Bare ids resolve only against the local repo. Service-prefixed ids resolve again
 
 | Command                                  | Purpose                                              |
 |------------------------------------------|------------------------------------------------------|
-| \`dkk new domain\`                        | Scaffold a complete \`.dkk/domain/\` structure         |
+| \`dkk new domain --force\`                | Re-scaffold \`.dkk/domain/\` from scratch (destructive) |
 | \`dkk new context <name>\`               | Scaffold a new bounded context and register it       |
 | \`dkk new adr <title>\`                  | Scaffold a new ADR file (auto-increments number)     |
 | \`dkk add <type> <name> --context <ctx>\` | Scaffold an individual domain item                   |
@@ -150,9 +150,10 @@ Bare ids resolve only against the local repo. Service-prefixed ids resolve again
 
 | Command                | Purpose                                              |
 |------------------------|------------------------------------------------------|
-| \`dkk init\`            | Create/update AGENTS.md with DKK section             |
+| \`dkk init\`            | Bootstrap project: scaffold \`.dkk/domain/\` (if absent) + create/update AGENTS.md |
 | \`dkk init --skills\`   | Also install agent skills into \`.github/skills/\`     |
 | \`dkk init --claude\`   | Also scaffold \`.claude/\` (settings, hooks, skills, agents, commands) |
+| \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, MCP, and AGENTS.md |
 | \`dkk prime\`           | Output this agent context to stdout                  |
 | \`dkk mcp\`             | Run the DKK MCP server over stdio                    |
 
@@ -463,7 +464,7 @@ export function buildDomainSummary(root?: string): string {
   if (!existsSync(domainDir(root))) {
     return (
       "\n## Current Domain Summary\n\n" +
-      "No domain model found. Run `dkk new domain` to get started.\n"
+      "No domain model found. Run `dkk init` to bootstrap the project.\n"
     );
   }
 
@@ -473,7 +474,7 @@ export function buildDomainSummary(root?: string): string {
   } catch {
     return (
       "\n## Current Domain Summary\n\n" +
-      "No domain model found. Run `dkk new domain` to get started.\n"
+      "No domain model found. Run `dkk init` to bootstrap the project.\n"
     );
   }
 
@@ -481,7 +482,7 @@ export function buildDomainSummary(root?: string): string {
   if (model.contexts.size === 0 && model.actors.length === 0 && model.adrs.size === 0) {
     return (
       "\n## Current Domain Summary\n\n" +
-      "No domain model found. Run `dkk new domain` to get started.\n"
+      "No domain model found. Run `dkk init` to bootstrap the project.\n"
     );
   }
 

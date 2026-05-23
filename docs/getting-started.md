@@ -16,6 +16,17 @@ npx dkk --help
 
 During local development of DKK itself, use `npx tsx src/cli.ts` instead of `dkk`.
 
+### Keeping DKK up to date
+
+Once installed, upgrade the package and refresh the AI-assistant artifacts in your repo in one step:
+
+```bash
+dkk update            # bump npm + refresh .claude/, .github/skills/, MCP, AGENTS.md
+dkk update --check    # dry-run; preview the diff
+```
+
+`dkk update` cleans stale `dkk-*` files (e.g., skills or hooks renamed in a newer release), preserves your `.claude/settings.json` customizations, and re-registers the DKK MCP server if needed. See [`dkk update`](cli-reference.md#update) for flags and edge cases.
+
 ## Prerequisites
 
 - **Node.js** >= 21.2.0
@@ -46,15 +57,20 @@ tools/
     templates/           # Handlebars templates for doc generation
 ```
 
-## Step 1: Initialize the Domain structure
+## Step 1: Initialize DKK for the project
 
-Set up the base DKK directory structure:
+Set up the base DKK directory structure and AI-agent onboarding file in one shot:
 
 ```bash
-dkk new domain
+dkk init
 ```
 
-This will create `.dkk/domain/index.yml`, `.dkk/domain/actors.yml`, and initialize the `contexts/` directory.
+This scaffolds `.dkk/domain/` (with `index.yml`, `actors.yml`, and a sample bounded context under `contexts/sample/`) and creates or updates `AGENTS.md` with a DKK section. `dkk init` is safe to re-run — it will not overwrite an existing `.dkk/domain/`. To replace it from scratch, use `dkk new domain --force`.
+
+Optional flags layer in additional integrations:
+
+- `dkk init --claude` — also scaffold `.claude/` (settings, hooks, skills, agents, commands)
+- `dkk init --skills` — also install agent skills under `.github/skills/`
 
 ## Step 2: Create a Bounded Context
 

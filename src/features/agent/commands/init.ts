@@ -1,14 +1,21 @@
 /**
- * `dkk init` command — create or update AGENTS.md with a DKK section.
+ * `dkk init` command — bootstrap a project for DKK.
  *
- * Inserts a Domain Knowledge Kit section delimited by HTML comment markers.
- * Idempotent: replaces the section between markers on re-run, appends if
- * markers are absent, creates the file if it does not exist.
+ * Default behavior on every run:
+ *   1. Scaffolds `.dkk/domain/` with sample content (skipped silently if it
+ *      already exists — use `dkk new domain --force` to replace it).
+ *   2. Creates or updates `AGENTS.md`, injecting a Domain Knowledge Kit
+ *      section delimited by HTML comment markers. Idempotent: replaces the
+ *      section between markers on re-run, appends if markers are absent.
+ *
+ * Optional flags layer in `.claude/` and `.github/skills/` for AI-agent
+ * integrations.
  */
 import type { Command as Cmd } from "commander";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, packageSkillsDir, packageClaudeDir } from "../../../shared/paths.js";
+import { scaffoldDomain, SCAFFOLD_DOMAIN_FILES } from "../../scaffold/commands/new-domain.js";
 
 const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
@@ -58,7 +65,7 @@ dkk render                            # Validate, render docs, rebuild search in
 # ADR
 
 # Scaffold
-dkk new domain                        # Scaffold .dkk/domain/ structure
+dkk new domain                        # Re-scaffold .dkk/domain/ from scratch (requires --force if it exists)
 dkk new context <name>                # Scaffold a new bounded context
 dkk new adr "<title>"                 # Scaffold a new ADR file
 dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
@@ -71,9 +78,10 @@ dkk rm <id>                           # Remove item safely
 dkk stats                             # Domain statistics + orphaned items
 
 # Agent
-dkk init                              # Create/update AGENTS.md with DKK section
+dkk init                              # Bootstrap project: scaffold .dkk/domain/ (if absent) + create/update AGENTS.md
 dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
 dkk init --skills                     # Also install agent skills into .github/skills/
+dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
 dkk prime                             # Output full agent context
 dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
 \`\`\`
@@ -102,7 +110,7 @@ function delimitedSection(): string {
  * Each skill lives in a subdirectory (e.g. `story-analyst/skill.md`).
  * Files are skipped if they already exist, unless `force` is true.
  */
-function installSkills(root: string, force: boolean): void {
+export function installSkills(root: string, force: boolean): void {
   const srcDir = packageSkillsDir();
   const destDir = join(root, ".github", "skills");
 
@@ -224,13 +232,13 @@ function copyNestedDir(opts: {
 /** Pull `<filename>.mjs` out of a hook command string (e.g.
  *  `node "$CLAUDE_PROJECT_DIR/.claude/hooks/foo.mjs"` → `foo.mjs`).
  *  Used to dedupe DKK hooks across re-runs and merges. */
-function extractHookBasename(cmd: unknown): string | null {
+export function extractHookBasename(cmd: unknown): string | null {
   if (typeof cmd !== "string") return null;
   const match = cmd.match(/\.claude\/hooks\/([\w.-]+\.mjs)/);
   return match ? match[1] : null;
 }
 
-interface ClaudeSettings {
+export interface ClaudeSettings {
   $schema?: string;
   permissions?: { allow?: string[]; [k: string]: unknown };
   hooks?: Record<string, Array<{ matcher?: string; hooks?: Array<{ type?: string; command?: string }> }>>;
@@ -249,7 +257,7 @@ interface ClaudeSettings {
  *
  * Never removes or rewrites existing entries — user customisations survive.
  */
-function mergeClaudeSettings(
+export function mergeClaudeSettings(
   existing: ClaudeSettings,
   template: ClaudeSettings,
 ): { merged: ClaudeSettings; changes: string[] } {
@@ -317,7 +325,14 @@ function mergeClaudeSettings(
  *     agents/<agent>.md
  *     commands/<command>.md
  */
-function installClaudeConfig(root: string, force: boolean): void {
+export interface InstallClaudeOpts {
+  /** Skip writing/merging `.claude/settings.json`. Used by `dkk update` so its
+   *  prune + re-merge phase can handle settings independently from artifact
+   *  refresh. Defaults to false. */
+  skipSettings?: boolean;
+}
+
+export function installClaudeConfig(root: string, force: boolean, opts: InstallClaudeOpts = {}): void {
   const srcDir = packageClaudeDir();
   const destDir = join(root, ".claude");
 
@@ -329,9 +344,11 @@ function installClaudeConfig(root: string, force: boolean): void {
   mkdirSync(destDir, { recursive: true });
 
   // 1. settings.json — additive merge by default, full overwrite with --force.
+  //    `skipSettings` lets callers (notably `dkk update`) handle settings
+  //    via the dedicated prune+merge path instead.
   const settingsSrc = join(srcDir, "settings.json");
   const settingsDest = join(destDir, "settings.json");
-  if (existsSync(settingsSrc)) {
+  if (!opts.skipSettings && existsSync(settingsSrc)) {
     const templateRaw = readFileSync(settingsSrc, "utf-8");
     if (!existsSync(settingsDest)) {
       writeFileSync(settingsDest, templateRaw, "utf-8");
@@ -397,43 +414,71 @@ function installClaudeConfig(root: string, force: boolean): void {
   });
 }
 
+/**
+ * Create or refresh the DKK section in `AGENTS.md` at the repo root.
+ *
+ * Three outcomes, mirrored in the returned status:
+ * - `created`: no `AGENTS.md` existed; one was written with a default header.
+ * - `updated`: file existed and contained the delimited DKK section; the
+ *   section was replaced in place.
+ * - `appended`: file existed without DKK markers; the section was appended.
+ *
+ * Used by both `dkk init` and `dkk update`.
+ */
+export function refreshAgentsMd(root: string): "created" | "updated" | "appended" {
+  const agentsPath = join(root, "AGENTS.md");
+  const section = delimitedSection();
+
+  if (!existsSync(agentsPath)) {
+    writeFileSync(agentsPath, `# Agent Instructions\n\n${section}`, "utf-8");
+    return "created";
+  }
+
+  const existing = readFileSync(agentsPath, "utf-8");
+  const startIdx = existing.indexOf(START_MARKER);
+  const endIdx = existing.indexOf(END_MARKER);
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const markerEnd = endIdx + END_MARKER.length;
+    const before = existing.slice(0, startIdx);
+    const after = existing.slice(existing[markerEnd] === "\n" ? markerEnd + 1 : markerEnd);
+    writeFileSync(agentsPath, `${before}${section}${after}`, "utf-8");
+    return "updated";
+  }
+
+  const separator = existing.endsWith("\n") ? "\n" : "\n\n";
+  writeFileSync(agentsPath, `${existing}${separator}${section}`, "utf-8");
+  return "appended";
+}
+
 /** Register the `init` subcommand. */
 export function registerInit(program: Cmd): void {
   program
     .command("init")
-    .description("Create or update AGENTS.md with DKK onboarding section")
+    .description("Bootstrap project: scaffold .dkk/domain/ (if absent) and create/update AGENTS.md")
     .option("--skills", "Also install DKK skill files into .github/skills/")
     .option("--claude", "Also install Claude Code config (.claude/ settings, hooks, skills, agents, commands)")
-    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
+    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude). Never touches an existing .dkk/domain/ — use `dkk new domain --force` for that.")
     .option("-r, --root <path>", "Override repository root")
     .action((opts: { root?: string; skills?: boolean; claude?: boolean; force?: boolean }) => {
       const root = repoRoot(opts.root);
-      const agentsPath = join(root, "AGENTS.md");
-      const section = delimitedSection();
 
-      if (!existsSync(agentsPath)) {
-        // Create new file with the DKK section
-        writeFileSync(agentsPath, `# Agent Instructions\n\n${section}`, "utf-8");
-        console.log(`Created  AGENTS.md`);
+      // 1. Scaffold .dkk/domain/ — skips silently if it already exists.
+      //    Never destructive: --force here only affects .claude/.github files,
+      //    not domain content (which must be replaced via `dkk new domain --force`).
+      const domainResult = scaffoldDomain({ root });
+      if (domainResult.status === "created") {
+        console.log("Created  .dkk/domain/ with sample content:");
+        for (const f of SCAFFOLD_DOMAIN_FILES) console.log(`           .dkk/domain/${f}`);
       } else {
-        const existing = readFileSync(agentsPath, "utf-8");
-        const startIdx = existing.indexOf(START_MARKER);
-        const endIdx = existing.indexOf(END_MARKER);
-
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-          // Replace existing section between markers (include trailing newline if present)
-          const markerEnd = endIdx + END_MARKER.length;
-          const before = existing.slice(0, startIdx);
-          const after = existing.slice(existing[markerEnd] === "\n" ? markerEnd + 1 : markerEnd);
-          writeFileSync(agentsPath, `${before}${section}${after}`, "utf-8");
-          console.log(`Updated  AGENTS.md (DKK section refreshed)`);
-        } else {
-          // Append section at the end
-          const separator = existing.endsWith("\n") ? "\n" : "\n\n";
-          writeFileSync(agentsPath, `${existing}${separator}${section}`, "utf-8");
-          console.log(`Appended DKK section to AGENTS.md`);
-        }
+        console.log("Skipped  .dkk/domain/ (already exists — use `dkk new domain --force` to replace)");
       }
+
+      // 2. AGENTS.md — create, refresh in place, or append the DKK section.
+      const status = refreshAgentsMd(root);
+      if (status === "created") console.log(`Created  AGENTS.md`);
+      else if (status === "updated") console.log(`Updated  AGENTS.md (DKK section refreshed)`);
+      else console.log(`Appended DKK section to AGENTS.md`);
 
       if (opts.skills) {
         installSkills(root, opts.force ?? false);

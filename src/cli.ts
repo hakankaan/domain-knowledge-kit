@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 import { Command } from "commander";
+import { pkgVersion } from "./version.js";
 import { registerList } from "./features/query/commands/list.js";
 import { registerShow } from "./features/query/commands/show.js";
 import { registerSummary } from "./features/query/commands/summary.js";
@@ -14,6 +12,7 @@ import { registerStory } from "./features/query/commands/story.js";
 import { registerValidate } from "./features/pipeline/commands/validate.js";
 import { registerRender } from "./features/pipeline/commands/render.js";
 import { registerInit } from "./features/agent/commands/init.js";
+import { registerUpdate } from "./features/agent/commands/update.js";
 import { registerPrime } from "./features/agent/commands/prime.js";
 import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
 import { registerNewContext } from "./features/scaffold/commands/new-context.js";
@@ -34,17 +33,6 @@ import { formatCliError } from "./shared/errors.js";
 
 /** Whether to show full stack traces (set DEBUG=1 in env). */
 const DEBUG = Boolean(process.env.DEBUG);
-
-// Read version from package.json so `dkk --version` stays in sync with the
-// published package. Works in both dev (src/cli.ts) and build (dist/cli.js)
-// since package.json is one level above either entrypoint.
-const pkgPath = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../package.json"
-);
-const { version: pkgVersion } = JSON.parse(
-  readFileSync(pkgPath, "utf8")
-) as { version: string };
 
 // ── CLI setup ─────────────────────────────────────────────────────────
 
@@ -79,6 +67,7 @@ registerStory(program);
 registerValidate(program);
 registerRender(program);
 registerInit(program);
+registerUpdate(program);
 registerPrime(program);
 registerRename(program);
 registerRm(program);
