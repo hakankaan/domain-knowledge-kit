@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { registerList } from "./features/query/commands/list.js";
 import { registerShow } from "./features/query/commands/show.js";
@@ -32,6 +35,17 @@ import { formatCliError } from "./shared/errors.js";
 /** Whether to show full stack traces (set DEBUG=1 in env). */
 const DEBUG = Boolean(process.env.DEBUG);
 
+// Read version from package.json so `dkk --version` stays in sync with the
+// published package. Works in both dev (src/cli.ts) and build (dist/cli.js)
+// since package.json is one level above either entrypoint.
+const pkgPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../package.json"
+);
+const { version: pkgVersion } = JSON.parse(
+  readFileSync(pkgPath, "utf8")
+) as { version: string };
+
 // ── CLI setup ─────────────────────────────────────────────────────────
 
 const program = new Command();
@@ -39,7 +53,7 @@ const program = new Command();
 program
   .name("dkk")
   .description("Domain Knowledge Kit CLI")
-  .version("0.1.0")
+  .version(pkgVersion)
   .configureHelp({ helpWidth: 100 })
   .addHelpText(
     "after",
