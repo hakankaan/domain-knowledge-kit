@@ -221,12 +221,95 @@ function copyNestedDir(opts: {
   }
 }
 
+/** Pull `<filename>.mjs` out of a hook command string (e.g.
+ *  `node "$CLAUDE_PROJECT_DIR/.claude/hooks/foo.mjs"` → `foo.mjs`).
+ *  Used to dedupe DKK hooks across re-runs and merges. */
+function extractHookBasename(cmd: unknown): string | null {
+  if (typeof cmd !== "string") return null;
+  const match = cmd.match(/\.claude\/hooks\/([\w.-]+\.mjs)/);
+  return match ? match[1] : null;
+}
+
+interface ClaudeSettings {
+  $schema?: string;
+  permissions?: { allow?: string[]; [k: string]: unknown };
+  hooks?: Record<string, Array<{ matcher?: string; hooks?: Array<{ type?: string; command?: string }> }>>;
+  [k: string]: unknown;
+}
+
+/**
+ * Additive merge of the DKK template into an existing Claude settings file.
+ *
+ * - `$schema` is set only when absent.
+ * - `permissions.allow` gains any DKK entries not already present (string-equal dedup).
+ * - For each hook event, a template entry is appended only when no existing
+ *   entry under that event already references the same hook script basename
+ *   (so users can rename `matcher` or wrap the command and we still recognise
+ *   it as the same DKK hook on subsequent runs).
+ *
+ * Never removes or rewrites existing entries — user customisations survive.
+ */
+function mergeClaudeSettings(
+  existing: ClaudeSettings,
+  template: ClaudeSettings,
+): { merged: ClaudeSettings; changes: string[] } {
+  const changes: string[] = [];
+  const merged: ClaudeSettings = JSON.parse(JSON.stringify(existing));
+
+  if (!merged.$schema && template.$schema) {
+    merged.$schema = template.$schema;
+    changes.push("$schema");
+  }
+
+  const templateAllow = template.permissions?.allow ?? [];
+  if (templateAllow.length > 0) {
+    if (!merged.permissions) merged.permissions = {};
+    if (!Array.isArray(merged.permissions.allow)) merged.permissions.allow = [];
+    for (const entry of templateAllow) {
+      if (!merged.permissions.allow.includes(entry)) {
+        merged.permissions.allow.push(entry);
+        changes.push(`permissions.allow: ${entry}`);
+      }
+    }
+  }
+
+  if (template.hooks) {
+    if (!merged.hooks) merged.hooks = {};
+    for (const [event, templateEntries] of Object.entries(template.hooks)) {
+      if (!Array.isArray(merged.hooks[event])) merged.hooks[event] = [];
+      const existingBasenames = new Set<string>();
+      for (const entry of merged.hooks[event]) {
+        for (const h of entry.hooks ?? []) {
+          const b = extractHookBasename(h.command);
+          if (b) existingBasenames.add(b);
+        }
+      }
+      for (const templateEntry of templateEntries) {
+        const templateBasenames = (templateEntry.hooks ?? [])
+          .map((h) => extractHookBasename(h.command))
+          .filter((b): b is string => b !== null);
+        if (templateBasenames.length === 0) continue;
+        if (templateBasenames.every((b) => existingBasenames.has(b))) continue;
+        merged.hooks[event].push(templateEntry);
+        for (const b of templateBasenames) existingBasenames.add(b);
+        changes.push(`hooks.${event}: ${templateBasenames.join(", ")}`);
+      }
+    }
+  }
+
+  return { merged, changes };
+}
+
 /**
  * Copy the bundled Claude Code config (`settings.json`, hooks, skills,
  * subagents, slash commands) from the DKK package into the consumer
  * project's `.claude/` directory.
  *
- * Layout produced (all skip-if-present unless `--force`):
+ * `settings.json` is merged additively when it already exists (user
+ * customisations preserved); all other files skip-if-present unless
+ * `--force` overwrites them.
+ *
+ * Layout produced:
  *   .claude/
  *     settings.json
  *     hooks/<hook>.mjs            (executable bit set)
@@ -245,16 +328,38 @@ function installClaudeConfig(root: string, force: boolean): void {
 
   mkdirSync(destDir, { recursive: true });
 
-  // 1. settings.json
+  // 1. settings.json — additive merge by default, full overwrite with --force.
   const settingsSrc = join(srcDir, "settings.json");
   const settingsDest = join(destDir, "settings.json");
   if (existsSync(settingsSrc)) {
-    if (existsSync(settingsDest) && !force) {
-      console.log(`Skipped  .claude/settings.json (already exists — use --force to overwrite)`);
+    const templateRaw = readFileSync(settingsSrc, "utf-8");
+    if (!existsSync(settingsDest)) {
+      writeFileSync(settingsDest, templateRaw, "utf-8");
+      console.log(`Created  .claude/settings.json`);
+    } else if (force) {
+      writeFileSync(settingsDest, templateRaw, "utf-8");
+      console.log(`Updated  .claude/settings.json (overwritten with --force)`);
     } else {
-      const alreadyExisted = existsSync(settingsDest);
-      writeFileSync(settingsDest, readFileSync(settingsSrc, "utf-8"), "utf-8");
-      console.log(`${alreadyExisted ? "Updated" : "Created"}  .claude/settings.json`);
+      const existingRaw = readFileSync(settingsDest, "utf-8");
+      try {
+        const existing = JSON.parse(existingRaw) as ClaudeSettings;
+        const template = JSON.parse(templateRaw) as ClaudeSettings;
+        const { merged, changes } = mergeClaudeSettings(existing, template);
+        if (changes.length === 0) {
+          console.log(`Skipped  .claude/settings.json (DKK config already present)`);
+        } else {
+          writeFileSync(settingsDest, JSON.stringify(merged, null, 2) + "\n", "utf-8");
+          const noun = changes.length === 1 ? "entry" : "entries";
+          console.log(`Merged   .claude/settings.json (added ${changes.length} ${noun}):`);
+          for (const change of changes) console.log(`         + ${change}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`Warning: could not merge .claude/settings.json (${msg}).`);
+        console.warn(`Merge the following into .claude/settings.json manually, or re-run with --force to overwrite:`);
+        console.warn("");
+        console.warn(templateRaw);
+      }
     }
   }
 
