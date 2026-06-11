@@ -1,13 +1,20 @@
 /**
- * `dkk prime` command — output full agent context to stdout.
+ * `dkk prime` command — output agent context to stdout.
  *
- * Prints a comprehensive DKK usage guide for AI agent consumption,
- * followed by a dynamic "Current Domain Summary" section generated
- * from the live domain model on disk.
+ * Prints the **lean** DKK agent contract (behavioural rules, the MCP-first
+ * retrieval pointer, the mutation-only CLI commands, ID/naming conventions,
+ * and a compact model layout), followed by a dynamic "Current Domain
+ * Summary" generated from the live model on disk.
  *
- * Hardcoded template covering project overview, core principles,
- * domain structure, retrieval workflow, change workflow, ID conventions,
- * CLI reference, and file conventions.
+ * Deep reference material (full YAML structure, the update/review workflows,
+ * the full CLI reference, the federation guide) is NOT in the default
+ * output — agents fetch it on demand via the `dkk_guide` MCP tool, and
+ * `dkk prime --full` reproduces the comprehensive document.
+ *
+ * Rationale: now that the MCP tools are the retrieval interface, prime
+ * stops teaching retrieval and stops dumping lookup material the agent can
+ * pull only when it actually needs it — keeping the per-session context
+ * injected by the SessionStart hook small.
  */
 import type { Command as Cmd } from "commander";
 import { existsSync } from "node:fs";
@@ -17,87 +24,146 @@ import { domainDir } from "../../../shared/paths.js";
 import type { DomainModel, Aggregate } from "../../../shared/types/domain.js";
 
 /**
- * The full agent context document.
- * Keep the CLI Command Reference tables in sync with the Quick Reference block in init.ts#dkkSection.
+ * The lean agent contract injected at session start.
+ *
+ * Keep this to what an agent CANNOT discover through a tool call: the
+ * behavioural rules, the mutation commands (MCP is read-only), and the
+ * naming/ID conventions needed to construct refs. Everything lookup-shaped
+ * lives in `guideSection()` / `dkk_guide` instead.
  */
 export function primeContent(): string {
   return `# Domain Knowledge Kit — Agent Context
 
 ## Project Overview
 
-This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain model with Architecture Decision Records (ADRs), full-text search, and generated Markdown documentation. The CLI tool is \`dkk\`.
+This project uses a **Domain Knowledge Pack**: a structured, YAML-based domain model with Architecture Decision Records (ADRs), full-text search, and generated Markdown docs. The CLI is \`dkk\`.
 
-DKK supports **multi-repo federation**: when a \`.dkk/service.yml\` exists, the repo declares itself a service, and a \`.dkk/federation.yml\` can list peer services (other repos, by local path or git URL). The loader transparently merges peer domain models so that queries, search, graph traversal, validation, and \`dkk consumers\` span every loaded peer. Cross-service references use the additive grammar \`<service>:<context>.<Item>\` — bare refs stay local-only.
+DKK supports **multi-repo federation**: a \`.dkk/service.yml\` declares the repo a service and \`.dkk/federation.yml\` lists peers; the loader merges peer models so queries, search, graph traversal, and validation span every peer. Cross-service refs use \`<service>:<context>.<Item>\`; bare refs stay local. (Run \`dkk_guide\` topic \`federation\` for the full workflow.)
 
 ## Core Principles
 
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code.
-   - **For structural changes (creates, renames, deletes):** ALWAYS use the DKK CLI commands (e.g., \`dkk add\`, \`dkk rename\`, \`dkk rm\`).
-   - **For content updates (descriptions, properties, references):** You MUST edit the YAML files directly, but you must respect the JSON Schemas (\`tools/dkk/schema/\`) and run \`dkk render\` immediately afterward to ensure cross-reference integrity and schema validation.
-2. **ADRs live in \`.dkk/adr/\`** as Markdown files with YAML frontmatter. They link to domain items via \`domain_refs\` and domain items link back via \`adr_refs\`.
-3. **Prioritize ADRs in decision-making.** Before proposing architectural refactors, making tech choices, or modifying domain logic, consult existing decisions via \`dkk search "your topic"\` or \`dkk show <id>\`.
-4. **Every change to domain files must pass quality gates:** run \`dkk render\` before committing (validates automatically, then renders docs and rebuilds the search index). Use \`dkk validate\` for a quick dry-run check without rendering.
+   - **Structural changes (create, rename, delete):** ALWAYS use the dkk CLI (\`dkk add\`, \`dkk rename\`, \`dkk rm\`, \`dkk new …\`).
+   - **Content updates (descriptions, fields, refs):** edit the YAML directly (respect the JSON Schemas in \`tools/dkk/schema/\`), then run \`dkk render\`.
+2. **ADRs live in \`.dkk/adr/\`** as Markdown with YAML frontmatter; they link to items via \`domain_refs\` and items link back via \`adr_refs\`.
+3. **Prioritize ADRs.** Before architectural refactors, tech choices, or domain-logic changes, consult existing decisions (\`dkk_search\`, \`dkk_show\`).
+4. **Quality gate:** run \`dkk render\` before committing (validates → renders docs → rebuilds the search index). \`dkk_validate\` is a quick dry-run check.
 
-## Domain Model Structure
+## Retrieval — use the MCP tools
+
+For all read/query operations, call the DKK MCP tools rather than shelling out to the CLI (same data, no shell-quoting):
+
+| Tool | Use for |
+|------|---------|
+| \`dkk_search\` | Full-text search (filters: context, type, tag, service) |
+| \`dkk_summary\` | Cheapest orientation around an id (+ direct neighbours) |
+| \`dkk_show\` | Full definition of an item |
+| \`dkk_related\` | Graph traversal / blast radius (depth ≥ 2) |
+| \`dkk_list\` | List items by context/type |
+| \`dkk_story\` | A flow's full story context |
+| \`dkk_stats\` | Counts + orphan detection |
+| \`dkk_validate\` | Schema + cross-reference validation |
+| \`dkk_guide\` | On-demand deep reference: \`yaml\`, \`update\`, \`federation\`, \`review\`, \`cli\` |
+
+When you're about to author or edit YAML, call \`dkk_guide\` topic \`yaml\`; before structural mutations, topic \`update\`.
+
+## Mutations — CLI only (MCP is read-only)
+
+| Command | Purpose |
+|---------|---------|
+| \`dkk new domain\` | Scaffold \`.dkk/domain/\` (one-time) |
+| \`dkk new context <name>\` | Scaffold + register a bounded context |
+| \`dkk new adr "<title>"\` | Scaffold a new ADR (auto-numbered) |
+| \`dkk add <type> <name> --context <ctx>\` | Scaffold a domain item |
+| \`dkk rename <old-id> <new-id>\` | Rename an item + update all refs |
+| \`dkk rm <id>\` | Remove an item safely |
+| \`dkk render\` | Validate → render docs → rebuild index |
+
+## ID & Naming Conventions
+
+| Item Type    | ID Format                | Example                  |
+|--------------|--------------------------|--------------------------|
+| Context item | \`<context>.<ItemName>\`   | \`ordering.OrderPlaced\`   |
+| Actor        | \`actor.<Name>\`           | \`actor.Customer\`         |
+| ADR          | \`adr-NNNN\`               | \`adr-0001\`               |
+| Flow         | \`flow.<Name>\`            | \`flow.OrderFulfillment\`  |
+| Context      | \`context.<name>\`         | \`context.ordering\`       |
+
+Federated form: prefix any id with \`<service>:\` (e.g. \`ordering:ordering.OrderPlaced\`); bare ids resolve locally only.
+
+Naming: items PascalCase (\`OrderPlaced\`), contexts kebab-case (\`ordering\`), ADR ids zero-padded \`adr-NNNN\`, actors PascalCase. YAML files use the \`.yml\` extension.
+
+## Domain Model Layout
 
 \`\`\`
 .dkk/
-  service.yml        # OPTIONAL: declares this repo as a federated service
-                      #   { name: kebab-case, exports: [<ctx-name>, ...] }
-  federation.yml      # OPTIONAL: lists peer services (local path or git URL+branch)
-  federation.lock.json # AUTO: pins resolved git-source commit SHAs
-  imports/           # AUTO (gitignored): cached peer .dkk/ trees from \`dkk pull\`
+  service.yml / federation.yml   # OPTIONAL: federation (see dkk_guide federation)
   domain/
-    index.yml          # Top-level: registered contexts + cross-context flows
-    actors.yml          # Global actors (human | system | external)
-    contexts/
-      <name>/            # One directory per bounded context
-        context.yml      #   Context metadata (name, description, glossary)
-        events/          #   One .yml file per domain event
-        commands/        #   One .yml file per command
-        aggregates/      #   One .yml file per aggregate
-        policies/        #   One .yml file per policy
-        read-models/     #   One .yml file per read model
-  adr/
-    adr-NNNN.md      # Architecture Decision Records (YAML frontmatter)
+    index.yml                    # registered contexts + cross-context flows
+    actors.yml                   # global actors (human | system | external)
+    contexts/<name>/
+      context.yml                # name, description, glossary
+      events/ commands/ aggregates/ policies/ read-models/   # one .yml per item
+  adr/adr-NNNN.md                # ADRs (YAML frontmatter)
+  docs/                          # generated by \`dkk render\` — do not edit by hand
 \`\`\`
 
 ## Item Types
 
 | Type | Description | Key Fields |
 |------|-------------|------------|
-| **Event** | Something that happened in the domain | \`name\`, \`description\`, \`fields\`, \`raised_by\`, \`adr_refs\` |
-| **Command** | An instruction to change state | \`name\`, \`description\`, \`fields\`, \`actor\`, \`handled_by\`, \`adr_refs\` |
-| **Policy** | Reactive logic triggered by events | \`name\`, \`description\`, \`when\`, \`then\`, \`adr_refs\` |
-| **Aggregate** | Consistency boundary handling commands | \`name\`, \`description\`, \`handles\`, \`emits\`, \`adr_refs\` |
-| **Read Model** | Query-optimized projection | \`name\`, \`description\`, \`fields\`, \`subscribes_to\`, \`used_by\`, \`adr_refs\` |
-| **Glossary** | Ubiquitous language term | \`term\`, \`definition\`, \`aliases\`, \`adr_refs\` |
-| **Actor** | Person or system interacting with the domain | \`name\`, \`type\` (human/system/external), \`description\`, \`capabilities\`, \`failure_modes\`, \`adr_refs\` |
-| **Flow** | Cross-context sequence of steps | \`name\`, \`description\`, \`steps[]\` |
+| **Event** | Something that happened | \`name\`, \`description\`, \`fields\`, \`raised_by\`, \`adr_refs\` |
+| **Command** | Instruction to change state | \`name\`, \`description\`, \`fields\`, \`actor\`, \`handled_by\`, \`adr_refs\` |
+| **Policy** | Reactive logic on events | \`name\`, \`description\`, \`when\`, \`then\`, \`adr_refs\` |
+| **Aggregate** | Consistency boundary | \`name\`, \`description\`, \`handles\`, \`emits\`, \`adr_refs\` |
+| **Read Model** | Query projection | \`name\`, \`description\`, \`fields\`, \`subscribes_to\`, \`used_by\`, \`adr_refs\` |
+| **Glossary** | Ubiquitous-language term | \`term\`, \`definition\`, \`aliases\`, \`adr_refs\` |
+| **Actor** | Person or system | \`name\`, \`type\`, \`description\`, \`capabilities\`, \`failure_modes\` |
+| **Flow** | Cross-context sequence | \`name\`, \`description\`, \`steps[]\` |
 
-## ID Conventions
+For full YAML examples of each item type, call \`dkk_guide\` topic \`yaml\`.
+`;
+}
 
-| Item Type    | ID Format                          | Example                    |
-|--------------|------------------------------------|----------------------------|
-| Context item | \`<context>.<ItemName>\`             | \`ordering.OrderPlaced\`     |
-| Actor        | \`actor.<Name>\`                     | \`actor.Customer\`           |
-| ADR          | \`adr-NNNN\`                         | \`adr-0001\`                 |
-| Flow         | \`flow.<Name>\`                      | \`flow.OrderFulfillment\`    |
-| Context      | \`context.<name>\`                   | \`context.ordering\`         |
+// ── On-demand deep reference (dkk_guide / dkk prime --full) ───────────
 
-**Federated form** (cross-repo references): prefix any id with \`<service>:\`.
+/** The reference topics fetchable via `dkk_guide` / surfaced by `--full`. */
+export const GUIDE_TOPICS = ["yaml", "update", "federation", "review", "cli"] as const;
+export type GuideTopic = (typeof GUIDE_TOPICS)[number];
 
-| Federated Form                                 | Example                                |
-|------------------------------------------------|----------------------------------------|
-| \`<service>:<context>.<ItemName>\`               | \`ordering:ordering.OrderPlaced\`        |
-| \`<service>:actor.<Name>\`                       | \`payments:actor.PaymentGateway\`        |
-| \`<service>:adr-NNNN\`                           | \`ordering:adr-0007\`                    |
-| \`<service>:flow.<Name>\`                        | \`ordering:flow.OrderFulfillment\`       |
-| \`<service>:context.<name>\`                     | \`ordering:context.ordering\`            |
+/**
+ * Return one deep-reference section by topic. These are the blocks pulled
+ * out of the old monolithic prime doc so agents fetch them only when the
+ * work calls for it, instead of carrying ~15KB every session.
+ */
+export function guideSection(topic: GuideTopic): string {
+  switch (topic) {
+    case "yaml":
+      return GUIDE_YAML;
+    case "update":
+      return GUIDE_UPDATE;
+    case "federation":
+      return GUIDE_FEDERATION;
+    case "review":
+      return GUIDE_REVIEW;
+    case "cli":
+      return GUIDE_CLI;
+  }
+}
 
-Bare ids resolve only against the local repo. Service-prefixed ids resolve against \`model.peers.get(<service>)\`. A self-prefix (\`<localService>:<id>\`) is treated as local. Use the fully-qualified form (\`<service>:<context>.<Name>\`) when writing cross-service refs in YAML — the name-only shorthand is reserved for \`dkk show\`.
+/**
+ * The comprehensive document: the lean contract plus every guide section.
+ * Reproduces (as a superset) the pre-trim `dkk prime` output for callers
+ * that explicitly want everything (`dkk prime --full`, `dkk_prime` verbose).
+ */
+export function fullPrimeContent(): string {
+  return primeContent() + "\n" + GUIDE_TOPICS.map((t) => guideSection(t)).join("\n");
+}
 
-## CLI Command Reference
+const GUIDE_CLI = `## CLI Command Reference
+
+Retrieval commands below have MCP equivalents (\`dkk_*\`) — prefer the tools. Use the CLI directly for mutations and pipeline steps.
+Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 
 ### Query
 
@@ -116,13 +182,6 @@ Bare ids resolve only against the local repo. Service-prefixed ids resolve again
 |-------------------------------|------------------------------------------------------|
 | \`dkk validate\`                | Schema + cross-reference validation                  |
 | \`dkk render\`                  | Validate → render docs → rebuild search index        |
-
-### ADR
-
-| Command                       | Purpose                                              |
-|-------------------------------|------------------------------------------------------|
-| \`dkk show <id>\`           | Display ADR frontmatter                              |
-| \`dkk related <id>\`        | Show bidirectional ADR ↔ domain links                |
 
 ### Scaffold
 
@@ -150,12 +209,12 @@ Bare ids resolve only against the local repo. Service-prefixed ids resolve again
 
 | Command                | Purpose                                              |
 |------------------------|------------------------------------------------------|
-| \`dkk init\`            | Create/update AGENTS.md with DKK section + print next-step guidance |
+| \`dkk init\`            | Create/update AGENTS.md + \`.mcp.json\` + print next-step guidance |
 | \`dkk init --skills\`   | Also install agent skills into \`.github/skills/\`     |
 | \`dkk init --claude\`   | Also scaffold \`.claude/\` (settings, hooks, skills, agents, commands) |
 | \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, MCP, and AGENTS.md |
-| \`dkk prime\`           | Output this agent context to stdout                  |
-| \`dkk mcp\`             | Run the DKK MCP server over stdio                    |
+| \`dkk prime\`           | Output the lean agent context (\`--full\` for everything) |
+| \`dkk mcp\`             | MCP server entrypoint (auto-spawned by Claude Code via .mcp.json) |
 
 ### Federation
 
@@ -172,50 +231,14 @@ Bare ids resolve only against the local repo. Service-prefixed ids resolve again
 | \`dkk consumers <id>\`                              | Reverse-lookup: which peers reference this item     |
 | \`dkk validate --federation strict\`                | Promote unreachable-peer warnings to errors (CI gate) |
 | \`dkk search --service <n>\`                        | Narrow search to one service (local or peer)        |
+`;
 
-## Domain Search Workflow
-
-When answering questions about the domain, always query the model — never guess.
-
-1. **Parse the request** — Extract key concepts, entity names, and domain terms.
-2. **Search** — Run full-text search for each key concept:
-   \`\`\`bash
-   dkk search "<concept>"
-   \`\`\`
-   Use \`--context <name>\` to scope to a bounded context. Use \`--type <type>\` to narrow results (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context).
-3. **Show details** — For each relevant result, retrieve the full definition:
-   \`\`\`bash
-   dkk show <id>
-   \`\`\`
-4. **Explore relationships** — Discover connected items via graph traversal:
-   \`\`\`bash
-   dkk related <id> --depth 2
-   \`\`\`
-5. **Check ADR links** — Find architecture decisions connected to results:
-   \`\`\`bash
-   dkk related <id>
-   \`\`\`
-6. **Compile the answer** — Present results as a structured summary including:
-   - Relevant domain items with ID, type, context, name, and excerpt.
-   - Related ADRs with title and status.
-   - Key relationships between items (e.g. "PlaceOrder → handled by Order → emits OrderPlaced").
-
-## Domain Update Workflow
+const GUIDE_UPDATE = `## Domain Update Workflow
 
 When modifying the domain model or proposing architectural refactors:
 
-1. **Consult ADRs First** — Before making decisions or structural changes, check existing constraints and decisions:
-   \`\`\`bash
-   dkk search "<topic>" --type adr
-   # or
-   dkk related <id>
-   \`\`\`
-2. **Inspect current state** — Load current definitions and neighbours:
-   \`\`\`bash
-   dkk show <id>
-   dkk related <id>
-   dkk list --context <name>
-   \`\`\`
+1. **Consult ADRs First** — Before making decisions or structural changes, check existing constraints and decisions (\`dkk_search\` with \`type: adr\`, or \`dkk_related\`).
+2. **Inspect current state** — Load current definitions and neighbours (\`dkk_show\`, \`dkk_related\`, \`dkk_list\`).
 3. **Edit YAML files directly** — Apply changes to the appropriate files:
    - **New context:** Create \`.dkk/domain/contexts/<name>/context.yml\` with name/description/glossary, create subdirs (\`events/\`, \`commands/\`, etc.), and register in \`.dkk/domain/index.yml\`.
    - **New domain item:** Create a new \`.yml\` file in the correct subdirectory (e.g. \`.dkk/domain/contexts/<name>/events/OrderPlaced.yml\`).
@@ -238,12 +261,23 @@ When modifying the domain model or proposing architectural refactors:
    - Add \`domain_refs\` to the ADR frontmatter for new items.
    - Add \`adr_refs\` to new/modified domain items pointing to relevant ADRs.
    - Consider creating a new ADR if the change introduces a significant decision.
-7. **Run quality gates:**
-   \`\`\`bash
-   dkk render    # Validates → renders docs → rebuilds search index
-   \`\`\`
+7. **Run quality gates:** \`dkk render\` (validates → renders docs → rebuilds the search index).
 
-### YAML Structure Reference
+## Validation
+
+The validator (\`dkk_validate\` / \`dkk validate\` / \`dkk render\`) checks:
+
+- **Schema conformance** — Each YAML file is validated against its JSON Schema. \`.dkk/service.yml\` and \`.dkk/federation.yml\` are validated at load time.
+- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly, including federated forms.
+- **Context registration** — Every context directory in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
+- **Federation strictness** (\`--federation strict\`): unreachable peers escalate from warnings to errors; refs to non-exported peer contexts always warn.
+
+## Generated Documentation
+
+Running \`dkk render\` produces \`.dkk/docs/index.md\`, per-context \`index.md\`, per-item detail pages, and the SQLite FTS5 search index. Do not edit files under \`.dkk/docs/\` by hand; they are regenerated on each render.
+`;
+
+const GUIDE_YAML = `## YAML Structure Reference
 
 Each domain item is a separate YAML file in a typed subdirectory under the context directory.
 
@@ -359,38 +393,24 @@ flows:
       - ref: ordering.OrderPlaced
         type: event
 \`\`\`
+`;
 
-## Change Review Workflow
+const GUIDE_REVIEW = `## Change Review Workflow
 
 When reviewing changes for domain impact:
 
 1. **Understand the change** — Identify affected bounded contexts, domain concepts, and whether items are added, modified, or removed.
-2. **Search for impacted items** — For each concept in the change:
-   \`\`\`bash
-   dkk search "<concept>"
-   \`\`\`
-3. **Inspect impacted items** — Show current definitions:
-   \`\`\`bash
-   dkk show <id>
-   \`\`\`
-4. **Trace the blast radius** — Use graph traversal to find dependent items:
-   \`\`\`bash
-   dkk related <id> --depth 2
-   \`\`\`
-5. **Check invariants** — Run validation:
-   \`\`\`bash
-   dkk validate
-   \`\`\`
-   Watch for: broken \`adr_refs\`, broken \`domain_refs\` in ADRs, dangling cross-references, missing context registrations.
-6. **Find linked ADRs** — Identify decisions that may need updating:
-   \`\`\`bash
-   dkk related <id>
-   \`\`\`
+2. **Search for impacted items** — \`dkk_search\` for each concept in the change.
+3. **Inspect impacted items** — \`dkk_show <id>\` for current definitions.
+4. **Trace the blast radius** — \`dkk_related <id>\` with depth ≥ 2 to find dependent items.
+5. **Check invariants** — \`dkk_validate\`. Watch for: broken \`adr_refs\`, broken \`domain_refs\` in ADRs, dangling cross-references, missing context registrations.
+6. **Find linked ADRs** — \`dkk_related <id>\` surfaces decisions that may need updating.
 7. **Compile impact analysis** — Report impacted items, blast radius, invariant violations, affected ADRs, and recommendations.
+`;
 
-## Federation Workflow
+const GUIDE_FEDERATION = `## Federation Workflow
 
-When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every reachable peer's domain into \`model.peers\`. Reading commands (\`dkk show\`, \`dkk search\`, \`dkk related\`, \`dkk graph\`) and the MCP server transparently span peers.
+When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every reachable peer's domain into \`model.peers\`. Reading commands and the MCP tools (\`dkk_show\`, \`dkk_search\`, \`dkk_related\`, \`dkk_peers\`, \`dkk_consumers\`) transparently span peers.
 
 1. **Inspect peer state**:
    \`\`\`bash
@@ -408,49 +428,28 @@ When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every rea
    dkk show ordering:OrderPlaced           # shorthand (single-export service)
    dkk show ordering:ordering.OrderPlaced  # fully qualified
    \`\`\`
-4. **Find downstream consumers of a local item** before renaming/deprecating:
-   \`\`\`bash
-   dkk consumers ordering.OrderPlaced
-   \`\`\`
+4. **Find downstream consumers of a local item** before renaming/deprecating: \`dkk consumers ordering.OrderPlaced\` (or the \`dkk_consumers\` tool).
 5. **Refresh git-source peers** when needed:
    \`\`\`bash
    dkk pull ordering            # fetch (no-op if SHA matches the lockfile)
    dkk pull ordering --refresh  # force re-fetch
    \`\`\`
 
+**Federated ID forms** (prefix any id with \`<service>:\`):
+
+| Federated Form                     | Example                            |
+|------------------------------------|------------------------------------|
+| \`<service>:<context>.<ItemName>\`   | \`ordering:ordering.OrderPlaced\`    |
+| \`<service>:actor.<Name>\`           | \`payments:actor.PaymentGateway\`    |
+| \`<service>:adr-NNNN\`               | \`ordering:adr-0007\`                |
+| \`<service>:flow.<Name>\`            | \`ordering:flow.OrderFulfillment\`   |
+| \`<service>:context.<name>\`         | \`ordering:context.ordering\`        |
+
 **Reference resolution rules:**
 - A **bare** ref (\`OrderPlaced\`, \`ordering.OrderPlaced\`) resolves only against the local repo's items. Never falls through to peers — collisions are silent data corruption.
 - A **service-prefixed** ref (\`ordering:ordering.OrderPlaced\`) resolves only against \`model.peers.get(<service>)\`. If the service equals the local service name, it's treated as a local ref (self-prefix is harmless).
 - An **unreachable peer** produces a warning by default. CI gates that must guarantee resolution should run \`dkk validate --federation strict\`.
-
-## Validation
-
-The validator checks:
-
-- **Schema conformance** — Each YAML file is validated against its JSON Schema. \`.dkk/service.yml\` and \`.dkk/federation.yml\` are validated at load time.
-- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly, including federated forms.
-- **Context registration** — Every context directory in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
-- **Federation strictness** (\`--federation strict\`): unreachable peers escalate from warnings to errors; refs to non-exported peer contexts always warn.
-
-## Generated Documentation
-
-Running \`dkk render\` produces:
-
-- \`.dkk/docs/index.md\` — Top-level domain overview.
-- \`.dkk/docs/<context>/index.md\` — Per-context overview.
-- \`.dkk/docs/<context>/<ItemName>.md\` — Per-item detail page.
-- SQLite FTS5 search index for the \`search\` command.
-
-Do not edit files under \`.dkk/docs/\` by hand; they are regenerated on each render.
-
-## File Conventions
-
-- YAML files use \`.yml\` extension.
-- Names are PascalCase for items (events, commands, etc.) and kebab-case for contexts and ADR ids.
-- JSON Schemas live in \`tools/dkk/schema/\`; Handlebars templates in \`tools/dkk/templates/\`.
-- Generated documentation goes to \`.dkk/docs/\` (do not edit by hand).
 `;
-}
 
 // ── Dynamic domain summary ───────────────────────────────────────────
 
@@ -506,10 +505,12 @@ export function buildDomainSummary(root?: string): string {
   }
 
   const totalItems = Object.values(totals).reduce((a, b) => a + b, 0);
+  const flows = model.index.flows ?? [];
   lines.push(
     `**${model.contexts.size}** bounded context(s), ` +
     `**${totalItems}** domain item(s), ` +
     `**${model.actors.length}** actor(s), ` +
+    `**${flows.length}** flow(s), ` +
     `**${model.adrs.size}** ADR(s)\n`,
   );
 
@@ -603,6 +604,25 @@ export function buildDomainSummary(root?: string): string {
     lines.push("");
   }
 
+  // ── Flows ─────────────────────────────────────────────────────────
+  if (flows.length > 0) {
+    lines.push("### Flows\n");
+    for (const flow of flows) {
+      const steps = flow.steps ?? [];
+      let span = "";
+      if (steps.length === 1) {
+        span = ` (${steps[0].ref})`;
+      } else if (steps.length > 1) {
+        span = ` (${steps[0].ref} → ${steps[steps.length - 1].ref})`;
+      }
+      const desc = flow.description ? `${flow.description} — ` : "";
+      lines.push(`- **${flow.name}**: ${desc}${steps.length} step(s)${span}`);
+    }
+    lines.push("");
+    lines.push("Expand any flow into a full story context with `dkk story <flow.Name>`.");
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -610,11 +630,12 @@ export function buildDomainSummary(root?: string): string {
 export function registerPrime(program: Cmd): void {
   program
     .command("prime")
-    .description("Output full DKK agent context to stdout")
+    .description("Output the lean DKK agent context to stdout (--full for the complete reference)")
     .option("-r, --root <path>", "Override repository root")
-    .option("--static-only", "Output only the static instructions (skip domain summary)")
-    .action((opts: { root?: string; staticOnly?: boolean }) => {
-      process.stdout.write(primeContent());
+    .option("--full", "Output the full reference (YAML structure, workflows, full CLI reference)")
+    .option("--static-only", "Output only the static instructions (skip the current domain summary)")
+    .action((opts: { root?: string; full?: boolean; staticOnly?: boolean }) => {
+      process.stdout.write(opts.full ? fullPrimeContent() : primeContent());
       if (!opts.staticOnly) {
         process.stdout.write(buildDomainSummary(opts.root));
       }

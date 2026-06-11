@@ -25,7 +25,13 @@ import {
   renderMarkdown,
   type StoryContext,
 } from "../query/commands/story.js";
-import { primeContent, buildDomainSummary } from "../agent/commands/prime.js";
+import {
+  primeContent,
+  fullPrimeContent,
+  buildDomainSummary,
+  guideSection,
+  GUIDE_TOPICS,
+} from "../agent/commands/prime.js";
 import type { Flow } from "../../shared/types/domain.js";
 import { loadFederation, resolvePeerRoot, peerEnvKey } from "../federation/loader.js";
 import { findConsumers } from "../federation/commands/consumers.js";
@@ -372,16 +378,37 @@ export function buildServer(rootOpt?: string): McpServer {
     "dkk_prime",
     {
       description:
-        "Output the full DKK agent context (project overview, item types, retrieval/update workflows, CLI reference, plus current domain summary). Run once at session start to make the agent domain-aware.",
+        "Output the lean DKK agent context (behavioural rules, the MCP-tool retrieval pointer, mutation-only CLI commands, ID/naming conventions, model layout) plus the current domain summary. Re-prime with this after compaction or topic drift. For deep reference (YAML structure, workflows, full CLI), use `dkk_guide` or set `verbose: true`.",
       inputSchema: {
         staticOnly: z.boolean().optional().describe("Skip the dynamic domain summary."),
+        verbose: z
+          .boolean()
+          .optional()
+          .describe("Return the full reference document instead of the lean default."),
         root: z.string().optional(),
       },
     },
-    async ({ staticOnly, root }) => {
-      let text = primeContent();
+    async ({ staticOnly, verbose, root }) => {
+      let text = verbose ? fullPrimeContent() : primeContent();
       if (!staticOnly) text += buildDomainSummary(root ?? defaultRoot);
       return { content: [{ type: "text", text }] };
+    },
+  );
+
+  // ── guide ───────────────────────────────────────────────────────────
+  server.registerTool(
+    "dkk_guide",
+    {
+      description:
+        "On-demand deep reference for working with the domain model — fetch a section only when the task calls for it (prime stays lean). Topics: 'yaml' (full YAML structure for every item type — read before authoring/editing YAML), 'update' (the domain-change workflow, referential-integrity rules, and validation), 'federation' (cross-repo refs + peer workflow), 'review' (change-impact review workflow), 'cli' (the full CLI command reference).",
+      inputSchema: {
+        topic: z
+          .enum(GUIDE_TOPICS)
+          .describe("Which reference section to return: yaml | update | federation | review | cli."),
+      },
+    },
+    async ({ topic }) => {
+      return { content: [{ type: "text", text: guideSection(topic) }] };
     },
   );
 

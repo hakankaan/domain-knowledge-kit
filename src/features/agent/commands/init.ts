@@ -20,13 +20,14 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSy
 import { join } from "node:path";
 import { repoRoot, packageSkillsDir, packageClaudeDir, domainDir } from "../../../shared/paths.js";
 import { loadDomainModel } from "../../../shared/loader.js";
+import { ensureMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
 
 const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
 
 /**
  * The DKK section content (without markers).
- * Keep the command list in sync with the CLI Reference tables in prime.ts#primeContent.
+ * Keep the command list in sync with the CLI Reference tables in prime.ts (the `cli` guide section, GUIDE_CLI).
  */
 function dkkSection(): string {
   return `
@@ -87,8 +88,12 @@ dkk init --claude                     # Also scaffold .claude/ (settings, hooks,
 dkk init --skills                     # Also install agent skills into .github/skills/
 dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
 dkk prime                             # Output full agent context
-dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
+dkk mcp                               # MCP server entrypoint — auto-spawned by Claude Code via .mcp.json (do not run by hand)
 \`\`\`
+
+### Model Context Protocol (MCP)
+
+\`dkk init\` writes a committed \`.mcp.json\` registering the **dkk** MCP server. Once it's committed, every clone gets the server automatically — Claude Code spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (\`dkk_search\`, \`dkk_show\`, \`dkk_summary\`, \`dkk_related\`, \`dkk_list\`, \`dkk_story\`, \`dkk_validate\`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
 
 ### Quality Gates
 
@@ -485,6 +490,26 @@ function detectDomainState(root: string): DomainState {
 }
 
 /**
+ * Report the result of writing the `.mcp.json` MCP registration. Mirrors the
+ * `Created/Skipped/Warning` vocabulary the rest of init uses for file output.
+ */
+function printMcpOutcome(outcome: McpRegisterOutcome): void {
+  switch (outcome.status) {
+    case "registered":
+      console.log(`Created  .mcp.json (registered dkk MCP server: \`${outcome.command}\`)`);
+      console.log(`         → Commit it, then restart Claude Code and approve the "dkk" server when prompted.`);
+      break;
+    case "already-registered":
+      console.log(`Skipped  .mcp.json (dkk MCP server already registered)`);
+      break;
+    case "failed":
+      console.warn(`Warning: could not write .mcp.json (${outcome.reason}).`);
+      console.warn(`         Add it manually: {"mcpServers":{"dkk":{"command":"dkk","args":["mcp"]}}}`);
+      break;
+  }
+}
+
+/**
  * Print a "Next steps" block tuned to what the repo currently looks like.
  * Called at the end of `dkk init` so users always get an actionable nudge
  * regardless of whether they just ran init for the first time or are
@@ -529,9 +554,10 @@ export function registerInit(program: Cmd): void {
     .description("Create or update AGENTS.md with DKK onboarding section + print next-step guidance")
     .option("--skills", "Also install DKK skill files into .github/skills/")
     .option("--claude", "Also install Claude Code config (.claude/ settings, hooks, skills, agents, commands)")
+    .option("--no-mcp", "Don't write the .mcp.json MCP server registration")
     .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { root?: string; skills?: boolean; claude?: boolean; force?: boolean }) => {
+    .action((opts: { root?: string; skills?: boolean; claude?: boolean; mcp?: boolean; force?: boolean }) => {
       const root = repoRoot(opts.root);
 
       // AGENTS.md — create, refresh in place, or append the DKK section.
@@ -546,6 +572,12 @@ export function registerInit(program: Cmd): void {
 
       if (opts.claude) {
         installClaudeConfig(root, opts.force ?? false);
+      }
+
+      // MCP registration — commander sets `mcp` false only when `--no-mcp`
+      // is passed; default (undefined/true) writes the committed .mcp.json.
+      if (opts.mcp !== false) {
+        printMcpOutcome(ensureMcpRegistered(root));
       }
 
       printNextSteps(root);

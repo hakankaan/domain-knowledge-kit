@@ -1,30 +1,35 @@
 /**
- * Register the DKK MCP server with Claude Code, with a fallback for
- * environments where the `claude` CLI is unavailable.
+ * Register the DKK MCP server with Claude Code (and any MCP-aware client)
+ * by writing a project-scoped `.mcp.json` — the committed, shareable
+ * registration that every clone of the repo inherits automatically.
  *
- * Order of attempts:
+ * Why a committed `.mcp.json` rather than `claude mcp add`:
  *
- * 1. If a `dkk` MCP server is already present in the project's `.mcp.json`,
- *    skip — we don't want to overwrite a user's customised entry.
- * 2. If `which claude` succeeds, run `claude mcp add dkk -- dkk mcp`.
- *    This writes into the user's Claude config (`~/.claude.json` or
- *    equivalent), which is the canonical place for project-agnostic
- *    Claude Code config.
- * 3. Fallback: merge `{ "mcpServers": { "dkk": { "command": "dkk", "args": ["mcp"] } } }`
- *    into the project's `.mcp.json`, preserving any other servers
- *    already registered there.
+ * `claude mcp add dkk -- dkk mcp` (no `--scope`) writes a *local*-scope
+ * entry into the running user's `~/.claude.json`. That entry is private to
+ * that machine and never committed, so every teammate who clones the repo
+ * has to re-register by hand — the exact "I forgot, so the agent silently
+ * has no domain tools" failure we want to eliminate. A committed `.mcp.json`
+ * is registered once and shared with the whole team: Claude Code picks it up
+ * (after a one-time approval prompt) on every session, and it needs no
+ * `claude` CLI on PATH to work.
  *
- * Failures are reported but never throw — `dkk update` continues even if
- * MCP registration can't be completed automatically.
+ * Note: nobody runs `dkk mcp` by hand. It's a long-lived stdio server that
+ * Claude Code spawns and manages itself once `.mcp.json` declares it.
+ *
+ * Idempotent: if `.mcp.json` already declares a `dkk` server we leave it
+ * untouched (never clobber a user's customised entry); otherwise we merge a
+ * `dkk` entry in, preserving any other servers already registered there.
+ *
+ * Failures are reported, never thrown — callers continue regardless.
  */
-import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { detectInstallMode } from "./install-mode.js";
 
 export type McpRegisterOutcome =
-  | { status: "already-registered"; via: "project" | "claude-cli" }
-  | { status: "registered"; via: "claude-cli" | "mcp-json" }
-  | { status: "skipped"; reason: string }
+  | { status: "already-registered"; path: string }
+  | { status: "registered"; path: string; command: string }
   | { status: "failed"; reason: string };
 
 interface McpJsonShape {
@@ -35,43 +40,31 @@ interface McpJsonShape {
 const SERVER_NAME = "dkk";
 
 /**
- * Detect existing registration → register via `claude mcp add` → fall back
- * to writing `.mcp.json`. Returns a structured outcome rather than logging
- * so callers can format the result as part of a larger summary.
+ * Ensure the project's `.mcp.json` declares the `dkk` server. Returns a
+ * structured outcome rather than logging, so callers can fold the result
+ * into their own summary output.
  */
 export function ensureMcpRegistered(root: string): McpRegisterOutcome {
-  if (isRegisteredInProject(root)) {
-    return { status: "already-registered", via: "project" };
-  }
+  const path = join(root, ".mcp.json");
 
-  if (isRegisteredInClaudeCli()) {
-    return { status: "already-registered", via: "claude-cli" };
-  }
-
-  if (hasClaudeCli()) {
-    const result = spawnSync("claude", ["mcp", "add", SERVER_NAME, "--", "dkk", "mcp"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf-8",
-      timeout: 20_000,
-    });
-    if (result.status === 0) {
-      return { status: "registered", via: "claude-cli" };
-    }
-    // Fall through to .mcp.json if `claude mcp add` failed for some reason;
-    // we'd rather have a working entry than fail loudly here.
+  if (isRegisteredInProject(path)) {
+    return { status: "already-registered", path: ".mcp.json" };
   }
 
   try {
-    writeToMcpJson(root);
-    return { status: "registered", via: "mcp-json" };
+    const entry = writeToMcpJson(path);
+    return {
+      status: "registered",
+      path: ".mcp.json",
+      command: `${entry.command} ${entry.args.join(" ")}`,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { status: "failed", reason: msg };
   }
 }
 
-function isRegisteredInProject(root: string): boolean {
-  const path = join(root, ".mcp.json");
+function isRegisteredInProject(path: string): boolean {
   if (!existsSync(path)) return false;
   try {
     const config = JSON.parse(readFileSync(path, "utf-8")) as McpJsonShape;
@@ -81,37 +74,26 @@ function isRegisteredInProject(root: string): boolean {
   }
 }
 
-function hasClaudeCli(): boolean {
-  try {
-    execFileSync("which", ["claude"], {
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 5_000,
-    });
-    return true;
-  } catch {
-    return false;
+/**
+ * The command a committed `.mcp.json` should use to launch the server. It
+ * must resolve on *every* teammate's machine, not just on whoever ran init,
+ * so we key off how this repo's `dkk` is installed:
+ *
+ * - global / unknown → `dkk` is on PATH everywhere → invoke it directly.
+ * - local devDependency → `dkk` is NOT on PATH, but `npx` resolves the
+ *   project-local `node_modules/.bin/dkk` first (no network once installed),
+ *   so the whole team gets the version pinned in `package.json`.
+ *
+ * Teams with a mixed setup can edit the generated `.mcp.json` by hand.
+ */
+export function mcpServerEntry(): { command: string; args: string[] } {
+  if (detectInstallMode().mode === "local") {
+    return { command: "npx", args: [SERVER_NAME, "mcp"] };
   }
+  return { command: SERVER_NAME, args: ["mcp"] };
 }
 
-function isRegisteredInClaudeCli(): boolean {
-  if (!hasClaudeCli()) return false;
-  try {
-    const out = execFileSync("claude", ["mcp", "list"], {
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf-8",
-      timeout: 10_000,
-    });
-    // `claude mcp list` prints one server per line; match a token-bounded
-    // `dkk` rather than a substring so we don't false-positive on
-    // names like `dkk-extended`.
-    return new RegExp(`(^|\\s|:)${SERVER_NAME}(\\s|:|$)`, "m").test(out);
-  } catch {
-    return false;
-  }
-}
-
-function writeToMcpJson(root: string): void {
-  const path = join(root, ".mcp.json");
+function writeToMcpJson(path: string): { command: string; args: string[] } {
   let config: McpJsonShape = {};
   if (existsSync(path)) {
     try {
@@ -122,6 +104,8 @@ function writeToMcpJson(root: string): void {
     }
   }
   if (!config.mcpServers) config.mcpServers = {};
-  config.mcpServers[SERVER_NAME] = { command: "dkk", args: ["mcp"] };
+  const entry = mcpServerEntry();
+  config.mcpServers[SERVER_NAME] = entry;
   writeFileSync(path, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  return entry;
 }

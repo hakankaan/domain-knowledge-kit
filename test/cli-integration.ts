@@ -669,6 +669,20 @@ try {
     // the next-steps detection should land on "missing" and recommend `dkk new domain`.
     assert("init prints next-steps", result.stdout.includes("Next steps:"));
     assert("init next-steps suggests dkk new domain", result.stdout.includes("dkk new domain"));
+    // MCP registration: a committed .mcp.json declaring the dkk server.
+    assert("init writes .mcp.json", existsSync(join(root, ".mcp.json")));
+    const mcp = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf-8"));
+    assert("mcp.json declares dkk server", Boolean(mcp.mcpServers?.dkk));
+    assert("init reports MCP registration", result.stdout.includes(".mcp.json"));
+  }
+
+  console.log("\n=== init: --no-mcp skips .mcp.json ===");
+  {
+    const root = makeTempRoot("init-no-mcp");
+    tempRoots.push(root);
+    const result = run(["init", "--no-mcp"], { root });
+    assert("init --no-mcp exits 0", result.exitCode === 0);
+    assert("no .mcp.json written", !existsSync(join(root, ".mcp.json")));
   }
 
   console.log("\n=== init: appends to existing AGENTS.md ===");
@@ -706,19 +720,33 @@ try {
   // ═══════════════════════════════════════════════════════════════════
   // 12. prime command — stdout output with key sections
   // ═══════════════════════════════════════════════════════════════════
-  console.log("\n=== prime: outputs agent context ===");
+  console.log("\n=== prime: lean default output ===");
   {
     const result = run(["prime"]);
     assert("prime exits 0", result.exitCode === 0);
     assert("prime has Project Overview", result.stdout.includes("Project Overview"));
     assert("prime has Core Principles", result.stdout.includes("Core Principles"));
-    assert("prime has Domain Model Structure", result.stdout.includes("Domain Model Structure"));
-    assert("prime has Retrieval", result.stdout.includes("Domain Search Workflow"));
-    assert("prime has Making Domain Changes", result.stdout.includes("Domain Update Workflow"));
-    assert("prime has ID Conventions", result.stdout.includes("ID Conventions"));
-    assert("prime has CLI Command Reference", result.stdout.includes("CLI Command Reference"));
-    assert("prime has File Conventions", result.stdout.includes("File Conventions"));
-    assert("prime uses dkk as CLI name", result.stdout.includes("dkk list"));
+    assert("prime has ID & Naming Conventions", result.stdout.includes("ID & Naming Conventions"));
+    assert("prime points retrieval at MCP tools", result.stdout.includes("use the MCP tools"));
+    assert("prime documents mutation commands", result.stdout.includes("Mutations — CLI only"));
+    assert("prime mentions dkk_guide", result.stdout.includes("dkk_guide"));
+    // Deep reference is NOT in the lean default — moved to `--full` / dkk_guide.
+    assert("lean prime omits the full CLI reference", !result.stdout.includes("CLI Command Reference"));
+    assert("lean prime omits the YAML structure dump", !result.stdout.includes("YAML Structure Reference"));
+    // Substantially smaller than the old ~20KB dump.
+    assert("lean prime is compact (< 9KB)", Buffer.byteLength(result.stdout, "utf-8") < 9000,
+      `size=${Buffer.byteLength(result.stdout, "utf-8")}`);
+  }
+
+  console.log("\n=== prime --full: complete reference ===");
+  {
+    const result = run(["prime", "--full"]);
+    assert("prime --full exits 0", result.exitCode === 0);
+    assert("--full has CLI Command Reference", result.stdout.includes("CLI Command Reference"));
+    assert("--full has YAML Structure Reference", result.stdout.includes("YAML Structure Reference"));
+    assert("--full has Domain Update Workflow", result.stdout.includes("Domain Update Workflow"));
+    assert("--full has Federation Workflow", result.stdout.includes("Federation Workflow"));
+    assert("--full still leads with the lean contract", result.stdout.includes("Core Principles"));
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1215,6 +1243,34 @@ try {
     assert("prime relationships shows OrderPlaced", result.stdout.includes("OrderPlaced"));
     assert("prime relationships shows handles/emits", result.stdout.includes("handles"));
     assert("prime relationships shows emits", result.stdout.includes("emits"));
+  }
+
+  console.log("\n=== prime: flows section lists flows with span and step count ===");
+  {
+    const root = makeValidDomain("prime-flows");
+    tempRoots.push(root);
+    // Overwrite index.yml to register a flow over the existing ordering items.
+    writeYaml(root, ".dkk/domain/index.yml", [
+      "contexts:",
+      "  - name: ordering",
+      '    description: "Order management"',
+      "flows:",
+      "  - name: OrderFulfillment",
+      '    description: "End-to-end order processing"',
+      "    steps:",
+      "      - ref: ordering.PlaceOrder",
+      "        type: command",
+      "      - ref: ordering.OrderPlaced",
+      "        type: event",
+    ].join("\n"));
+    const result = run(["prime"], { root });
+    assert("prime flows exits 0", result.exitCode === 0);
+    assert("prime flows section exists", result.stdout.includes("### Flows"));
+    assert("prime flows shows flow name", result.stdout.includes("OrderFulfillment"));
+    assert("prime flows shows step count", result.stdout.includes("2 step(s)"));
+    assert("prime flows shows span", result.stdout.includes("ordering.PlaceOrder → ordering.OrderPlaced"));
+    assert("prime flows shows story hint", result.stdout.includes("dkk story"));
+    assert("prime totals include flow count", result.stdout.includes("1** flow(s)"));
   }
 
   // ═══════════════════════════════════════════════════════════════════

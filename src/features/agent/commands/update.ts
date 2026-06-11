@@ -365,13 +365,13 @@ function formatSettingsResult(s: SettingsResult): string {
 function formatMcpResult(m: McpRegisterOutcome | { status: "skipped"; reason: string }): string {
   switch (m.status) {
     case "already-registered":
-      return `already registered (${m.via === "project" ? ".mcp.json" : "claude CLI"})`;
+      return `already registered (${m.path})`;
     case "registered":
-      return `registered via ${m.via === "claude-cli" ? "`claude mcp add`" : ".mcp.json"}`;
+      return `registered (${m.path}: \`${m.command}\`)`;
     case "skipped":
       return `skipped (${m.reason})`;
     case "failed":
-      return `failed: ${m.reason} (run \`claude mcp add dkk -- dkk mcp\` manually)`;
+      return `failed: ${m.reason} (add a "dkk" entry to .mcp.json manually)`;
   }
 }
 

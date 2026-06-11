@@ -171,13 +171,26 @@ DKK ships with a native **Model Context Protocol (MCP) server** plus reference C
 
 ### MCP server
 
-Register the server with Claude Code in your repo:
+`dkk init` registers the server for you by writing a committed, project-scoped `.mcp.json`:
 
-```bash
-claude mcp add dkk -- dkk mcp
+```json
+{ "mcpServers": { "dkk": { "command": "dkk", "args": ["mcp"] } } }
 ```
 
-Then Claude Code exposes the following tools (all read-only except `dkk_validate`):
+This is the recommended setup: because `.mcp.json` is committed, **every teammate who clones the repo gets the server automatically** — there is nothing to remember per-session and nothing to register per-machine. Claude Code spawns the server on session start (the first time it sees `.mcp.json`, it asks you to approve the `dkk` server once).
+
+> **You never run `dkk mcp` by hand.** It is a long-lived stdio server that Claude Code launches and manages itself — running it in a terminal just hangs, waiting for a client on stdin. The one-time setup is *registration* (the `.mcp.json` entry), not *running*.
+
+If a project pins `dkk` as a devDependency rather than a global install, `dkk init` writes `npx dkk mcp` so the command resolves to the version in `package.json` on every machine.
+
+Prefer `claude mcp add` only when you deliberately want a private, uncommitted entry scoped to your machine (note the default scope is *local* — not shared with the team):
+
+```bash
+claude mcp add --scope project dkk -- dkk mcp   # writes the same committed .mcp.json
+claude mcp add dkk -- dkk mcp                    # local scope: private to you, not committed
+```
+
+Either way, Claude Code exposes the following tools (all read-only except `dkk_validate`):
 
 | Tool | Purpose |
 |------|---------|
@@ -189,10 +202,13 @@ Then Claude Code exposes the following tools (all read-only except `dkk_validate
 | `dkk_story` | Aggregate a flow's full story context (markdown or JSON) |
 | `dkk_locate` | Absolute file path(s) for an item |
 | `dkk_stats` | Domain counts + orphaned-item detection |
-| `dkk_prime` | Full agent context document + live domain summary |
+| `dkk_prime` | Lean agent context + live domain summary (`verbose: true` for the full reference) |
+| `dkk_guide` | On-demand deep reference by topic: `yaml`, `update`, `federation`, `review`, `cli` |
 | `dkk_validate` | Schema + cross-reference validation |
 
 The server reuses the same in-process modules the CLI uses, so the output is identical and there's no shell-escaping fragility.
+
+`dkk_prime` is deliberately lean — it carries only the behavioural contract an agent can't discover through a tool call. When the agent needs the full YAML structure, the change workflow, or the federation guide, it calls `dkk_guide` with the relevant topic, so that reference material is paid for only when used rather than injected into every session.
 
 ### Hooks (one-shot install)
 

@@ -278,9 +278,11 @@ Output:
 
 ## `init`
 
-Create or update `AGENTS.md` with a DKK onboarding section, then print conditional next-step guidance based on the current repo state.
+Create or update `AGENTS.md` with a DKK onboarding section, register the MCP server via a committed `.mcp.json`, then print conditional next-step guidance based on the current repo state.
 
 The DKK section is delimited by `<!-- dkk:start -->` / `<!-- dkk:end -->` HTML comment markers, making the operation idempotent — re-running replaces the section in place. `dkk init` does **not** scaffold `.dkk/domain/`; the domain is the project's business and is created deliberately with [`dkk new domain`](#new).
+
+By default init also writes a project-scoped `.mcp.json` registering the `dkk` MCP server (skip with `--no-mcp`). Because it's committed, every clone of the repo gets the server automatically — you don't run `dkk mcp` yourself; Claude Code spawns it on session start. Existing `.mcp.json` entries are preserved, and an existing `dkk` entry is left untouched. See [AI Agent Integration → MCP server](ai-agent-integration.md#mcp-server).
 
 After writing AGENTS.md, init prints a "Next steps" block tuned to whichever state it detects:
 
@@ -292,15 +294,17 @@ After writing AGENTS.md, init prints a "Next steps" block tuned to whichever sta
 | `.dkk/domain/` exists but loader throws | "Run `dkk validate` to see what's wrong." |
 
 ```bash
-dkk init                  # AGENTS.md + next-step guidance
+dkk init                  # AGENTS.md + .mcp.json + next-step guidance
 dkk init --claude         # also install Claude Code config under .claude/
 dkk init --skills         # also install agent skills into .github/skills/
+dkk init --no-mcp         # skip writing .mcp.json
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--claude` | — | Also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands). |
 | `--skills` | — | Also install DKK skill files into `.github/skills/`. |
+| `--no-mcp` | MCP on | Don't write the `.mcp.json` MCP server registration. |
 | `--force` | — | Overwrite existing files under `.claude/` or `.github/skills/`. |
 | `-r, --root <path>` | repo root | Override repository root. |
 
@@ -326,7 +330,7 @@ Pipeline:
 3. **Re-exec** — after upgrade, re-launch the freshly-installed binary so subsequent steps read the **new** bundled templates.
 4. **Artifact diff** — compute add / replace / remove against the bundled template, print, and confirm. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
 5. **Settings prune + merge** — remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning.
-6. **MCP register** — if no `dkk` MCP server is already registered (project `.mcp.json` or `claude mcp list`), run `claude mcp add dkk -- dkk mcp`. Falls back to writing `.mcp.json` if the `claude` CLI is unavailable.
+6. **MCP register** — if the project's `.mcp.json` doesn't already declare a `dkk` server, write a committed entry into it (preserving any other servers). A committed `.mcp.json` is shared with the whole team, so the server is registered once for everyone rather than per-machine. Global installs get `command: dkk`; local devDependency installs get `npx dkk mcp`.
 7. **AGENTS.md refresh** — replaces the DKK section in place.
 
 | Flag | Default | Description |
@@ -344,11 +348,21 @@ Pipeline:
 
 ## `prime`
 
-Output comprehensive DKK agent context to stdout. Designed for AI agent consumption — covers project overview, core principles, domain structure, retrieval workflow, change workflow, ID conventions, CLI reference, and file conventions.
+Output the **lean** DKK agent context to stdout, followed by a live "Current Domain Summary". Designed for AI agent consumption: the behavioural rules, the MCP-first retrieval pointer, the mutation-only CLI commands, ID/naming conventions, and a compact model layout — about a quarter the size of the old dump (~5 KB vs ~20 KB), so the SessionStart hook injects far less per session.
+
+Deep reference (full YAML structure, the update/review/federation workflows, the full CLI reference) is fetched on demand via the `dkk_guide` MCP tool — or printed in full with `--full`.
 
 ```bash
-dkk prime
+dkk prime                 # lean contract + current domain summary
+dkk prime --full          # complete reference (everything the old prime printed)
+dkk prime --static-only   # skip the dynamic domain summary
 ```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--full` | lean | Print the full reference (YAML structure, workflows, full CLI reference). |
+| `--static-only` | — | Output only the static instructions; skip the current domain summary. |
+| `-r, --root <path>` | repo root | Override repository root. |
 
 → See [AI Agent Integration](ai-agent-integration.md) for details.
 
