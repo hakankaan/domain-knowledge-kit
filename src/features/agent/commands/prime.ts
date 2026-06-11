@@ -412,6 +412,8 @@ const GUIDE_FEDERATION = `## Federation Workflow
 
 When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every reachable peer's domain into \`model.peers\`. Reading commands and the MCP tools (\`dkk_show\`, \`dkk_search\`, \`dkk_related\`, \`dkk_peers\`, \`dkk_consumers\`) transparently span peers.
 
+**When to federate (and when not to).** Federation crosses **repo / ownership boundaries** — reach for it when a service lives in its own repository (or will soon) and a *separate* repo needs to reference its domain. Within a **single repo** — including a monorepo of many apps — do **not** federate: model each area as a **bounded context** under one \`.dkk/\`. Contexts already give you cross-context refs, flows, and blast radius across the whole repo as one coherent graph with one search index; federating inside one repo only adds N service manifests, N indexes, per-app \`dkk\` invocations, and the friction that bare refs never resolve across the boundary — all for no gain. Rule of thumb: **one \`.dkk/\` per repository, one bounded context per module within it.**
+
 1. **Inspect peer state**:
    \`\`\`bash
    dkk peers list                    # quick overview
