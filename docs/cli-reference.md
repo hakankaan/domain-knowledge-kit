@@ -227,6 +227,37 @@ dkk stats
 
 ---
 
+## `drift`
+
+Git-aware model/code freshness checks driven by `code_refs` bindings (repo-relative globs on `context.yml` linking a context to the source paths it models). `dkk validate` measures only the pack's *internal* consistency; `drift` answers whether the pack still matches the code.
+
+```bash
+dkk drift                        # report (exit 0 — advisory)
+dkk drift --strict               # exit 1 on findings (CI gate)
+dkk drift --threshold 10         # commits touching bound code before "stale"
+dkk drift ack ordering           # record "reviewed, still accurate" at HEAD
+dkk drift map apps/api/src/x.ts  # which context binds this file?
+```
+
+Findings reported:
+- **Stale contexts** — ≥ threshold commits touched a context's bound paths since its model directory last changed (or since its last `ack`).
+- **Dead bindings** — a `code_refs` glob matches no files (bound code deleted or moved).
+- **Uncovered source dirs** — top-level source units (`apps/*`, `packages/*`, `libs/*`, `services/*`, `src` by default; override with `source_roots` in `.dkk/drift.yml`) that no context's bindings reach.
+- **Unbound contexts** — contexts without `code_refs`, i.e. invisible to drift.
+
+`dkk drift ack <context…>` records the current HEAD SHA in `.dkk/drift.yml` so "I reviewed it, the model is still accurate" doesn't require a meaningless YAML touch. Commit `.dkk/drift.yml` with your change.
+
+Without git, staleness checks are skipped (dead bindings + coverage still run).
+
+| Flag (on `drift`) | Default | Description |
+|------|---------|-------------|
+| `--threshold <n>` | `5` | Commits touching bound code before a context counts as stale |
+| `--strict` | — | Exit non-zero when drift is found (CI gate) |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
 ## `validate`
 
 Run schema validation (JSON Schema) and cross-reference checks on the entire domain model.
@@ -234,6 +265,7 @@ Run schema validation (JSON Schema) and cross-reference checks on the entire dom
 ```bash
 dkk validate
 dkk validate ordering.OrderPlaced
+dkk validate --file .dkk/domain/contexts/ordering/events/OrderPlaced.yml
 dkk validate --json --minify
 ```
 
@@ -241,9 +273,14 @@ Checks performed:
 - **Schema conformance** — Each YAML file is validated against its JSON Schema in `tools/dkk/schema/`.
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
 - **Context registration** — Every context directory in `.dkk/domain/contexts/` is registered in `.dkk/domain/index.yml`.
+- **ADR supersession consistency** — `superseded_by` and `status: superseded` must appear together (warns when they disagree).
+- **`code_refs` liveness** — a context binding glob that matches no files warns.
+
+`--file <path>` validates **one** file against its schema only — no cross-reference checks — so it never false-fails on refs to files not yet written. This is the per-edit gate used by the shipped PostToolUse hook; run the full `dkk validate` (or `dkk render`) once a multi-file change is complete.
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--file <path>` | — | Schema-only validation of a single file (skips cross-refs; not combinable with an id filter) |
 | `--warn-missing-fields` | — | Warn about events/commands with no `fields` defined |
 | `--federation <mode>` | `lenient` | Federation strictness: `lenient` (unreachable peers warn) or `strict` (errors). Use `strict` in CI gates. |
 | `--json` | — | Output as JSON |
@@ -426,7 +463,7 @@ dkk new adr "<title>"
 |-------------|-------------|-------|
 | `domain` | Scaffold `.dkk/domain/` with `index.yml`, `actors.yml`, and a sample bounded context. Errors if `.dkk/domain/` already exists unless `--force` is passed (which deletes the existing directory entirely). | `--json`, `--minify`, `-r, --root <path>`, `--force` |
 | `context` | Scaffold a new bounded context with its metadata and subdirectories. | `--json`, `--minify`, `-d, --description <text>`, `-r, --root <path>` |
-| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `-s, --status <status>`, `-r, --root <path>` |
+| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. `--supersedes adr-NNNN[,adr-NNNN…]` flips each old ADR to `status: superseded` with `superseded_by` pointing at the new one. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `--supersedes <ids>`, `-s, --status <status>`, `-r, --root <path>` |
 
 ---
 

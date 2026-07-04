@@ -63,6 +63,10 @@ export function registerNewContext(program: Cmd): void {
       const contextYaml = `# Bounded context metadata and glossary.
 name: ${name}
 description: ${description}
+# Bind this context to the source paths it models so \`dkk drift\` can
+# detect when code moves on without the model (repo-relative globs):
+# code_refs:
+#   - apps/<app>/src/${name}/**
 `;
       writeFileSync(join(ctxDir, "context.yml"), contextYaml, "utf-8");
 

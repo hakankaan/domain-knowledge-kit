@@ -141,6 +141,7 @@ function loadPerItemContext(ctxDir: string): DomainContext | null {
     description: meta.description,
   };
   if (meta.glossary?.length) ctx.glossary = meta.glossary;
+  if (meta.code_refs?.length) ctx.code_refs = meta.code_refs;
   if (events.length) ctx.events = events;
   if (commands.length) ctx.commands = commands;
   if (policies.length) ctx.policies = policies;

@@ -29,12 +29,14 @@ import {
   primeContent,
   fullPrimeContent,
   buildDomainSummary,
+  buildStalenessHeadline,
   guideSection,
   GUIDE_TOPICS,
 } from "../agent/commands/prime.js";
 import type { Flow } from "../../shared/types/domain.js";
 import { loadFederation, resolvePeerRoot, peerEnvKey } from "../federation/loader.js";
 import { findConsumers } from "../federation/commands/consumers.js";
+import { analyzeDrift, mapFileToContext } from "../audit/commands/drift.js";
 import { repoRoot } from "../../shared/paths.js";
 
 /** JSON-stringify a payload for tool output. */
@@ -389,8 +391,11 @@ export function buildServer(rootOpt?: string): McpServer {
       },
     },
     async ({ staticOnly, verbose, root }) => {
+      const r = root ?? defaultRoot;
       let text = verbose ? fullPrimeContent() : primeContent();
-      if (!staticOnly) text += buildDomainSummary(root ?? defaultRoot);
+      if (!staticOnly) {
+        text = buildStalenessHeadline(r) + text + buildDomainSummary(r);
+      }
       return { content: [{ type: "text", text }] };
     },
   );
@@ -474,6 +479,35 @@ export function buildServer(rootOpt?: string): McpServer {
     },
   );
 
+  // ── drift ───────────────────────────────────────────────────────────
+  server.registerTool(
+    "dkk_drift",
+    {
+      description:
+        "Model/code drift report from `code_refs` bindings + git history: stale contexts (bound code changed since the model did), dead bindings (bound paths no longer exist), and uncovered source dirs. Pass `file` to instead map one source file to its owning context (with staleness and linked ADRs). The validator only measures internal consistency — use this to ask whether the model still matches the code.",
+      inputSchema: {
+        file: z
+          .string()
+          .optional()
+          .describe("Map this source file to its owning context instead of running the full report."),
+        threshold: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Commits touching bound code before a context counts as stale (default 5)."),
+        root: z.string().optional().describe("Override repository root."),
+      },
+    },
+    async ({ file, threshold, root }) => {
+      const r = root ?? defaultRoot;
+      const payload = file
+        ? mapFileToContext(file, { root: r })
+        : analyzeDrift({ root: r, threshold });
+      return { content: [{ type: "text", text: asText(payload) }] };
+    },
+  );
+
   // ── validate ────────────────────────────────────────────────────────
   server.registerTool(
     "dkk_validate",
@@ -488,7 +522,7 @@ export function buildServer(rootOpt?: string): McpServer {
     },
     async ({ id, warnMissingFields, root }) => {
       const model = loadDomainModel({ root: root ?? defaultRoot });
-      const result = validateDomainModel(model, { warnMissingFields });
+      const result = validateDomainModel(model, { warnMissingFields, root: root ?? defaultRoot });
       let { valid, errors, warnings } = result;
 
       if (id) {

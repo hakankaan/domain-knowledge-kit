@@ -185,6 +185,12 @@ export interface ContextMetaFile {
   description: string;
   /** Ubiquitous-language terms scoped to this context. */
   glossary?: GlossaryEntry[];
+  /**
+   * Repo-relative POSIX glob patterns binding this context to the
+   * source paths it models (e.g. "apps/api/src/billing/**"). Consumed
+   * by `dkk drift` for freshness/coverage checks.
+   */
+  code_refs?: string[];
 }
 
 // ── Bounded Context ───────────────────────────────────────────────────
@@ -197,6 +203,8 @@ export interface DomainContext {
   description: string;
   /** Ubiquitous-language terms scoped to this context. */
   glossary?: GlossaryEntry[];
+  /** Repo-relative glob patterns binding this context to source paths (see ContextMetaFile.code_refs). */
+  code_refs?: string[];
   /** Domain events raised within this context. */
   events?: DomainEvent[];
   /** Commands handled within this context. */

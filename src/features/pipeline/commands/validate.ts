@@ -6,7 +6,7 @@
  */
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
-import { validateDomainModel } from "../validator.js";
+import { validateDomainModel, validateSingleFile } from "../validator.js";
 
 /** Register the `validate` subcommand. */
 export function registerValidate(program: Cmd): void {
@@ -19,12 +19,17 @@ export function registerValidate(program: Cmd): void {
       "Federation strictness: lenient (default — unreachable peers warn) or strict (errors)",
       "lenient",
     )
+    .option(
+      "--file <path>",
+      "Schema-only validation of a single file (no cross-reference checks — safe mid-batch)",
+    )
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
     .action((id: string | undefined, opts: {
       warnMissingFields?: boolean;
       federation?: string;
+      file?: string;
       json?: boolean;
       minify?: boolean;
       root?: string;
@@ -34,11 +39,20 @@ export function registerValidate(program: Cmd): void {
         console.error(`Error: --federation must be "lenient" or "strict" (got "${fedMode}").`);
         process.exit(1);
       }
-      const model = loadDomainModel({ root: opts.root });
-      const result = validateDomainModel(model, {
-        warnMissingFields: opts.warnMissingFields,
-        federation: fedMode as "lenient" | "strict" | undefined,
-      });
+      // The [id] filter matches item paths (context:…, adr:…), which never
+      // appear in --file results — combining them would silently filter
+      // every finding away and report a false "passed".
+      if (opts.file && id) {
+        console.error("Error: --file cannot be combined with an item id filter.");
+        process.exit(1);
+      }
+      const result = opts.file
+        ? validateSingleFile(opts.file, { root: opts.root })
+        : validateDomainModel(loadDomainModel({ root: opts.root }), {
+            warnMissingFields: opts.warnMissingFields,
+            federation: fedMode as "lenient" | "strict" | undefined,
+            root: opts.root,
+          });
 
       let { valid, errors, warnings } = result;
 

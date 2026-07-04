@@ -81,6 +81,9 @@ dkk rm <id>                           # Remove item safely
 
 # Audit
 dkk stats                             # Domain statistics + orphaned items
+dkk drift                             # Model/code drift report (code_refs bindings + git; --strict for CI)
+dkk drift ack <context>               # Mark a flagged context reviewed-and-accurate at HEAD
+dkk drift map <file>                  # Which context binds a source file (staleness + ADRs)
 
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section + print next steps

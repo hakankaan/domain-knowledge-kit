@@ -214,6 +214,13 @@ export function updateAdrFrontmatter(
   const fm = parseYaml<Record<string, unknown>>(match[1]);
   if (!fn(fm)) return false;
 
+  // js-yaml parses `date: 2026-07-04` into a Date object; re-serialising
+  // that emits a full timestamp, which breaks the schema's `format: date`.
+  // Normalise back to YYYY-MM-DD before writing.
+  if (fm["date"] instanceof Date) {
+    fm["date"] = fm["date"].toISOString().slice(0, 10);
+  }
+
   const newFm = stringifyYaml(fm).trimEnd();
   const afterFm = content.slice(match.index + match[0].length);
   const newContent = `---\n${newFm}\n---${afterFm}`;

@@ -25,7 +25,7 @@ export function registerRender(program: Cmd): void {
       // 1. Validate (unless skipped)
       if (!opts.skipValidation) {
         if (!opts.json) console.log("Validating domain model…");
-        const result = validateDomainModel(model);
+        const result = validateDomainModel(model, { root: opts.root });
 
         if (!opts.json) {
           for (const w of result.warnings) {

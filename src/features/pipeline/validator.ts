@@ -13,8 +13,9 @@
  * and warnings (non-blocking, informational).
  */
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { basename, join } from "node:path";
+import fg from "fast-glob";
 import type {
   DomainModel,
   DomainEvent,
@@ -27,6 +28,9 @@ import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
 import type { ItemType } from "../../shared/item-visitor.js";
 import { didYouMean } from "../../shared/similarity.js";
 import { parseRef } from "../../shared/refs.js";
+import { parseYaml } from "../../shared/yaml.js";
+import { parseAdrFrontmatter } from "../../shared/adr-parser.js";
+import { repoRoot, repoRelative } from "../../shared/paths.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
 // under both tsc (Node16 resolution) and tsx (ESM runtime).
@@ -82,6 +86,12 @@ export interface ValidatorOptions {
    *    gates that must guarantee every cross-service ref resolves.
    */
   federation?: "lenient" | "strict";
+
+  /**
+   * Repository root used to resolve `code_refs` globs against the
+   * filesystem. Defaults to the auto-detected repo root.
+   */
+  root?: string;
 }
 
 // ── Schema bootstrap ──────────────────────────────────────────────────
@@ -107,6 +117,32 @@ function err(issues: ValidationIssue[], message: string, path?: string): void {
 
 function warn(issues: ValidationIssue[], message: string, path?: string): void {
   issues.push({ severity: "warning", message, path });
+}
+
+/**
+ * Hint text for an unresolved ADR ref.
+ *
+ * A fuzzy "did you mean adr-0006?" is actively dangerous when the missing
+ * ref is `adr-0016` that simply hasn't been written yet (mid-batch
+ * authoring): an agent obeying the hint would link the wrong decision.
+ * When the ref is a well-formed `adr-NNNN` numbered ABOVE every existing
+ * ADR, treat it as pending-creation and say so instead of fuzzy-matching.
+ * Gaps below the max (likely typos) keep the fuzzy suggestion.
+ */
+function adrRefHint(key: string, adrIds: Set<string>): string {
+  const m = /^adr-(\d{4})$/.exec(key);
+  if (m) {
+    let max = 0;
+    for (const id of adrIds) {
+      const mm = /^adr-(\d{4})$/.exec(id);
+      if (mm) max = Math.max(max, parseInt(mm[1], 10));
+    }
+    if (parseInt(m[1], 10) > max) {
+      const highest = max > 0 ? `"adr-${String(max).padStart(4, "0")}"` : "none";
+      return ` No ADR with this id exists yet (highest existing: ${highest}). If it is part of the change you are authoring, create it with \`dkk new adr\` — do NOT re-link to a different ADR.`;
+    }
+  }
+  return didYouMean(key, adrIds);
 }
 
 // ── Phase 1: Schema validation ────────────────────────────────────────
@@ -553,7 +589,7 @@ function validateCrossRefs(
       const verdict = resolveForeignRef(ref, "adr", path);
       if (verdict.kind !== "local") continue;
       if (!adrIds.has(verdict.key)) {
-        err(issues, `adr_ref "${ref}" does not resolve to any ADR.${didYouMean(verdict.key, adrIds)}`, path);
+        err(issues, `adr_ref "${ref}" does not resolve to any ADR.${adrRefHint(verdict.key, adrIds)}`, path);
       }
     }
   }
@@ -581,8 +617,26 @@ function validateCrossRefs(
     if (adr.superseded_by) {
       const verdict = resolveForeignRef(adr.superseded_by, "adr", `adr:${id}`);
       if (verdict.kind === "local" && !adrIds.has(verdict.key)) {
-        err(issues, `ADR superseded_by "${adr.superseded_by}" does not resolve to any ADR.${didYouMean(verdict.key, adrIds)}`, `adr:${id}`);
+        err(issues, `ADR superseded_by "${adr.superseded_by}" does not resolve to any ADR.${adrRefHint(verdict.key, adrIds)}`, `adr:${id}`);
       }
+    }
+
+    // Supersession lifecycle consistency. Both halves of the link are
+    // easy to forget by hand; a stale `accepted` on a superseded ADR is
+    // exactly the drift that misleads agents consulting decisions.
+    if (adr.superseded_by && adr.status !== "superseded") {
+      warn(
+        issues,
+        `ADR "${id}" has superseded_by "${adr.superseded_by}" but status "${adr.status}" — set status: superseded`,
+        `adr:${id}`,
+      );
+    }
+    if (adr.status === "superseded" && !adr.superseded_by) {
+      warn(
+        issues,
+        `ADR "${id}" has status "superseded" but no superseded_by — record the superseding ADR id so the chain stays machine-readable`,
+        `adr:${id}`,
+      );
     }
   }
 
@@ -765,6 +819,58 @@ function validateCrossRefs(
   }
 }
 
+// ── Phase 3: code_refs binding validation ─────────────────────────────
+
+/**
+ * Validate `code_refs` globs against the filesystem.
+ *
+ * A glob that matches nothing is a *dead binding*: either the bound code
+ * was deleted/moved (the model likely describes something that no longer
+ * exists — the exact failure `dkk drift` exists to catch) or the glob
+ * was mistyped. Warning severity: the model itself is still internally
+ * consistent, and CI environments may check out a subset of the tree.
+ */
+function validateCodeRefs(
+  model: DomainModel,
+  options: ValidatorOptions,
+  issues: ValidationIssue[],
+): void {
+  let cwd: string;
+  try {
+    cwd = repoRoot(options.root);
+  } catch {
+    return;
+  }
+
+  for (const [name, ctx] of model.contexts) {
+    for (const glob of ctx.code_refs ?? []) {
+      let matches: string[];
+      try {
+        matches = fg.sync(glob, {
+          cwd,
+          ignore: ["**/node_modules/**", "**/.git/**"],
+          dot: false,
+          onlyFiles: true,
+        });
+      } catch {
+        err(
+          issues,
+          `context "${name}" code_refs pattern "${glob}" is not a valid glob`,
+          `context:${name}`,
+        );
+        continue;
+      }
+      if (matches.length === 0) {
+        warn(
+          issues,
+          `context "${name}" code_refs glob "${glob}" matches no files — the bound code may have been deleted or moved; update the binding (and check whether the model itself is stale)`,
+          `context:${name}`,
+        );
+      }
+    }
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────
 
 /**
@@ -794,6 +900,7 @@ export function validateDomainModel(
 
   validateSchemas(model, ajv, issues);
   validateCrossRefs(model, options, issues);
+  validateCodeRefs(model, options, issues);
 
   const errors = issues.filter((i) => i.severity === "error");
   const warnings = issues.filter((i) => i.severity === "warning");
@@ -803,4 +910,117 @@ export function validateDomainModel(
     errors,
     warnings,
   };
+}
+
+// ── Single-file schema validation ─────────────────────────────────────
+
+/**
+ * Map a domain file path to the JSON Schema that governs it.
+ * Returns `null` for files DKK does not own (not an error).
+ */
+function schemaIdForFile(filePath: string): string | null {
+  const p = filePath.replace(/\\/g, "/");
+  const name = basename(p);
+
+  if (/\.dkk\/adr\/[^/]+\.md$/.test(p)) return "adr-frontmatter.schema.json";
+  if (/\.dkk\/domain\/index\.ya?ml$/.test(p)) return "index.schema.json";
+  if (/\.dkk\/domain\/actors\.ya?ml$/.test(p)) return "actors.schema.json";
+  if (/\.dkk\/service\.ya?ml$/.test(p)) return "service.schema.json";
+  if (/\.dkk\/federation\.ya?ml$/.test(p)) return "federation.schema.json";
+
+  const ctxMatch = /\.dkk\/domain\/contexts\/[^/]+\/(?:([a-z-]+)\/)?[^/]+\.ya?ml$/.exec(p);
+  if (!ctxMatch) return null;
+  const subdir = ctxMatch[1];
+  if (!subdir) {
+    return name.replace(/\.ya?ml$/, "") === "context" ? "context.schema.json" : null;
+  }
+  switch (subdir) {
+    case "events": return "event.schema.json";
+    case "commands": return "command.schema.json";
+    case "policies": return "policy.schema.json";
+    case "aggregates": return "aggregate.schema.json";
+    case "read-models": return "read-model.schema.json";
+    default: return null;
+  }
+}
+
+/**
+ * Validate ONE domain file against its JSON Schema — no model load, no
+ * cross-reference checks.
+ *
+ * This is the correct per-edit gate: a logically-atomic change (new
+ * aggregate + commands + events + ADR) spans several files, so running
+ * *cross-reference* validation after each individual edit fails N−1
+ * times on refs to files that simply haven't been written yet. Schema
+ * validation cannot false-positive that way. Full cross-ref validation
+ * belongs at batch boundaries (the Stop hook, `dkk render`, CI).
+ *
+ * Files DKK does not recognise return valid with a warning.
+ */
+export function validateSingleFile(
+  filePath: string,
+  options: ValidatorOptions = {},
+): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const rel = (() => {
+    try {
+      return repoRelative(filePath, options.root);
+    } catch {
+      return filePath;
+    }
+  })();
+
+  const done = (): ValidationResult => ({
+    valid: issues.every((i) => i.severity !== "error"),
+    errors: issues.filter((i) => i.severity === "error"),
+    warnings: issues.filter((i) => i.severity === "warning"),
+  });
+
+  if (!existsSync(filePath)) {
+    err(issues, `File not found: ${filePath}`, rel);
+    return done();
+  }
+
+  const schemaId = schemaIdForFile(filePath);
+  if (!schemaId) {
+    warn(issues, `Not a recognised domain file — nothing to validate: ${rel}`, rel);
+    return done();
+  }
+
+  let data: unknown;
+  try {
+    const text = readFileSync(filePath, "utf-8");
+    if (schemaId === "adr-frontmatter.schema.json") {
+      const record = parseAdrFrontmatter(text);
+      if (!record) {
+        err(
+          issues,
+          `ADR file has no valid YAML frontmatter (--- block with id, title, status, date): ${rel}`,
+          rel,
+        );
+        return done();
+      }
+      const { body: _, ...frontmatter } = record;
+      data = frontmatter;
+    } else {
+      data = parseYaml(text);
+    }
+  } catch (e) {
+    err(issues, `Failed to parse ${rel}: ${e instanceof Error ? e.message : String(e)}`, rel);
+    return done();
+  }
+
+  const ajv = buildAjv(options.schemaDir ?? defaultSchemaDir());
+  const validate = ajv.getSchema(schemaId);
+  if (!validate) {
+    err(issues, `Schema "${schemaId}" not found`, rel);
+    return done();
+  }
+  if (!validate(data)) {
+    for (const e of validate.errors ?? []) {
+      const loc = e.instancePath ? ` ${e.instancePath}` : "";
+      err(issues, `Schema "${schemaId}"${loc}: ${e.message}`, rel);
+    }
+  }
+  return done();
 }

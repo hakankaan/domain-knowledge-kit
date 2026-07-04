@@ -12,7 +12,13 @@
       "Bash(dkk story:*)",
       "Bash(dkk validate:*)",
       "Bash(dkk stats:*)",
-      "Bash(dkk prime:*)"
+      "Bash(dkk drift:*)",
+      "Bash(dkk prime:*)",
+      "Bash(dkk add:*)",
+      "Bash(dkk new:*)",
+      "Bash(dkk rename:*)",
+      "Bash(dkk move:*)",
+      "Bash(dkk render:*)"
     ]
   },
   "hooks": {

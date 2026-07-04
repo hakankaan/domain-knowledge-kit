@@ -20,6 +20,12 @@
       "items": { "$ref": "glossary.schema.json" },
       "description": "Ubiquitous-language terms scoped to this context"
     },
+    "code_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "POSIX glob patterns (repo-relative) binding this context to the source paths it models (e.g. apps/api/src/billing/**). Used by `dkk drift` to detect model/code drift; not a statement about architecture."
+    },
     "events": {
       "type": "array",
       "items": { "$ref": "event.schema.json" },

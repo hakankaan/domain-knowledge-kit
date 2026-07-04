@@ -20,7 +20,8 @@ import type { Command as Cmd } from "commander";
 import { existsSync } from "node:fs";
 import { loadDomainModel } from "../../../shared/loader.js";
 import { forEachItem, type ItemType } from "../../../shared/item-visitor.js";
-import { domainDir } from "../../../shared/paths.js";
+import { domainDir, repoRoot } from "../../../shared/paths.js";
+import { isGitRepo, lastCommitTouching, countCommitsSince } from "../../../shared/git.js";
 import type { DomainModel, Aggregate } from "../../../shared/types/domain.js";
 
 /**
@@ -62,6 +63,7 @@ For all read/query operations, call the DKK MCP tools rather than shelling out t
 | \`dkk_list\` | List items by context/type |
 | \`dkk_story\` | A flow's full story context |
 | \`dkk_stats\` | Counts + orphan detection |
+| \`dkk_drift\` | Model/code drift report (\`code_refs\` + git); pass \`file\` to map a source file to its context |
 | \`dkk_validate\` | Schema + cross-reference validation |
 | \`dkk_guide\` | On-demand deep reference: \`yaml\`, \`update\`, \`federation\`, \`review\`, \`cli\` |
 
@@ -181,6 +183,7 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 | Command                       | Purpose                                              |
 |-------------------------------|------------------------------------------------------|
 | \`dkk validate\`                | Schema + cross-reference validation                  |
+| \`dkk validate --file <path>\`  | Schema-only check of one file (safe mid-batch — no cross-refs) |
 | \`dkk render\`                  | Validate → render docs → rebuild search index        |
 
 ### Scaffold
@@ -201,9 +204,12 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 
 ### Audit
 
-| Command       | Purpose                                                  |
-|---------------|----------------------------------------------------------|
-| \`dkk stats\`  | Print domain model statistics and potential orphaned items |
+| Command                  | Purpose                                                  |
+|--------------------------|----------------------------------------------------------|
+| \`dkk stats\`             | Print domain model statistics and potential orphaned items |
+| \`dkk drift\`             | Model/code drift report from \`code_refs\` bindings + git (\`--strict\` for CI) |
+| \`dkk drift ack <ctx>\`   | Mark a flagged context reviewed-and-accurate at HEAD     |
+| \`dkk drift map <file>\`  | Which context binds a source file, with staleness + ADRs |
 
 ### Agent
 
@@ -261,7 +267,9 @@ When modifying the domain model or proposing architectural refactors:
    - Add \`domain_refs\` to the ADR frontmatter for new items.
    - Add \`adr_refs\` to new/modified domain items pointing to relevant ADRs.
    - Consider creating a new ADR if the change introduces a significant decision.
-7. **Run quality gates:** \`dkk render\` (validates → renders docs → rebuilds the search index).
+   - Superseding a decision? \`dkk new adr "<title>" --supersedes adr-NNNN\` flips the old ADR's status and \`superseded_by\` automatically.
+7. **Keep \`code_refs\` bindings current** — when a change adds, moves, or deletes an app/module, update the owning context's \`code_refs\` globs (and bind brand-new areas to a context) so \`dkk drift\` keeps seeing the code.
+8. **Run quality gates:** \`dkk render\` (validates → renders docs → rebuilds the search index).
 
 ## Validation
 
@@ -270,7 +278,11 @@ The validator (\`dkk_validate\` / \`dkk validate\` / \`dkk render\`) checks:
 - **Schema conformance** — Each YAML file is validated against its JSON Schema. \`.dkk/service.yml\` and \`.dkk/federation.yml\` are validated at load time.
 - **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly, including federated forms.
 - **Context registration** — Every context directory in \`.dkk/domain/contexts/\` is registered in \`.dkk/domain/index.yml\`.
+- **ADR supersession consistency** — \`superseded_by\` and \`status: superseded\` must appear together (warning when they disagree).
+- **\`code_refs\` liveness** — a binding glob that matches no files warns (the bound code was deleted/moved, or the glob is stale).
 - **Federation strictness** (\`--federation strict\`): unreachable peers escalate from warnings to errors; refs to non-exported peer contexts always warn.
+
+Mid-batch note: \`dkk validate --file <path>\` checks ONE file against its schema only (no cross-refs) — it will not fail on refs to files you haven't written yet. Use it per-edit; run the full \`dkk validate\` / \`dkk render\` once the batch is complete.
 
 ## Generated Documentation
 
@@ -289,6 +301,8 @@ description: Handles customer order lifecycle.
 glossary:
   - term: Order
     definition: A customer's request to purchase items.
+code_refs:                # optional: repo-relative globs binding this context
+  - apps/api/src/ordering/**   # to the source it models — powers \`dkk drift\`
 \`\`\`
 
 **Event** (\`.dkk/domain/contexts/<name>/events/OrderPlaced.yml\`):
@@ -452,6 +466,43 @@ When the local repo has a \`.dkk/federation.yml\`, the loader hydrates every rea
 - A **service-prefixed** ref (\`ordering:ordering.OrderPlaced\`) resolves only against \`model.peers.get(<service>)\`. If the service equals the local service name, it's treated as a local ref (self-prefix is harmless).
 - An **unreachable peer** produces a warning by default. CI gates that must guarantee resolution should run \`dkk validate --federation strict\`.
 `;
+
+// ── Pack freshness headline ──────────────────────────────────────────
+
+/**
+ * One-line pack-freshness signal computed from git alone, emitted as the
+ * FIRST line of `dkk prime` output so it survives any downstream
+ * truncation by an agent harness (the domain summary at the tail is the
+ * part that gets cut).
+ *
+ * A pack can be internally valid yet stale relative to the code: every
+ * `dkk validate` gate measures self-consistency only. This headline is
+ * the cheapest possible drift signal — "the model last changed N days /
+ * M commits ago" — and needs no `code_refs` bindings.
+ *
+ * Returns "" (silent) when: not a git repo, git unavailable, `.dkk/`
+ * has no commits yet, or there is no model to be stale.
+ */
+export function buildStalenessHeadline(root?: string): string {
+  const cwd = repoRoot(root);
+  if (!existsSync(domainDir(root))) return "";
+  if (!isGitRepo(cwd)) return "";
+
+  const last = lastCommitTouching(cwd, [".dkk/domain", ".dkk/adr"]);
+  if (!last) return "";
+
+  const commitsSince = countCommitsSince(cwd, last.sha) ?? 0;
+  const days = Math.floor((Date.now() / 1000 - last.timestamp) / 86_400);
+  const age = days === 0 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
+
+  // Fresh pack, quiet line; aging pack with real commit traffic, warning.
+  const marker = commitsSince > 0 && days >= 14 ? "⚠" : "ℹ";
+  const nudge =
+    commitsSince > 0
+      ? " If any of those commits changed domain behaviour, the pack may be stale — verify before trusting it, and update it as part of your change."
+      : "";
+  return `> ${marker} **Pack freshness:** domain model last changed ${age}; ${commitsSince} commit(s) have landed since.${nudge}\n\n`;
+}
 
 // ── Dynamic domain summary ───────────────────────────────────────────
 
@@ -637,6 +688,9 @@ export function registerPrime(program: Cmd): void {
     .option("--full", "Output the full reference (YAML structure, workflows, full CLI reference)")
     .option("--static-only", "Output only the static instructions (skip the current domain summary)")
     .action((opts: { root?: string; full?: boolean; staticOnly?: boolean }) => {
+      if (!opts.staticOnly) {
+        process.stdout.write(buildStalenessHeadline(opts.root));
+      }
       process.stdout.write(opts.full ? fullPrimeContent() : primeContent());
       if (!opts.staticOnly) {
         process.stdout.write(buildDomainSummary(opts.root));

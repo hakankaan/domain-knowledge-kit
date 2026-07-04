@@ -24,6 +24,10 @@ Architectural decisions aren't born in a vacuum. Understanding *why* a choice wa
 
 Knowledge that lives next to the code is knowledge that gets used. DKK colocates your domain model, ADRs, and generated docs inside the repository itself. AI agents can discover, query, and traverse this knowledge without leaving the codebase — making every interaction domain-aware.
 
+### A model that cannot tell when it is stale will silently rot
+
+Validation alone only measures a pack's *internal* consistency — a model frozen for weeks stays green while the code moves on. DKK binds contexts to the source paths they model (`code_refs` globs) and correlates both histories in git: `dkk drift` reports contexts whose bound code changed since the model did, bindings whose code no longer exists, and source directories no context covers. The shipped agent hooks close the loop from the code side too — editing a bound file injects a one-line reminder of which context models it and how stale that model is.
+
 ### One domain model can span many repositories
 
 In enterprise architectures each service lives in its own repo, but the domain it participates in does not. DKK supports **multi-repo federation**: a repo declares itself a service with `.dkk/service.yml`, lists peer services in `.dkk/federation.yml` (by filesystem path or git URL + branch), and the loader transparently merges peer domain models into the local one. Cross-service references use the additive grammar `<service>:<context>.<Item>` — bare refs stay local-only. No CI required, no publish step, no orphan branches: a peer's raw `.dkk/` directory is the artifact. The AI assistant in any repo can answer "what does `ordering:OrderPlaced` contain, and who else consumes it?" without leaving the current working directory.
