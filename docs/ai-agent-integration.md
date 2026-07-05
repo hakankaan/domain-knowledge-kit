@@ -54,11 +54,19 @@ The injected AGENTS.md section tells AI agents:
 When a newer release of `dkk` ships new skills, hooks, slash commands, or MCP wiring, `dkk update` is the canonical way to pull them in:
 
 ```bash
-dkk update            # bump npm + refresh .claude/, .github/skills/, MCP, AGENTS.md
+dkk update            # bump npm + refresh .claude/, .github/skills/, Copilot, MCP, AGENTS.md
 dkk update --check    # preview the diff without applying
 ```
 
-It runs the npm install for you (global or local install — `npx` is refused), re-execs onto the freshly-installed binary, then sweeps every `dkk-*` artifact in `.claude/{skills,agents,commands}/` plus the DKK-owned hook scripts and replaces them with the current template. Stale paths from older releases are removed cleanly. `.claude/settings.json` is mutated additively: DKK-owned `permissions.allow` and `hooks.*` entries are pruned and re-added from the new template, while user-authored entries are preserved untouched. If the DKK MCP server isn't registered yet, `update` registers it via `claude mcp add` (falling back to writing `.mcp.json`).
+It runs the npm install for you (global or local install — `npx` is refused), re-execs onto the freshly-installed binary, then refreshes the DKK-managed artifacts. `AGENTS.md` and the repo-root `.mcp.json` are the **universal base** — every `dkk init` writes them, so `update` always refreshes them.
+
+Everything else is **adoption-gated**: `update` refreshes a surface only if the repo already installed it, so it never pushes a toolchain you didn't opt into.
+
+- **Claude** (`.claude/`) — when adopted: sweeps every `dkk-*` artifact in `.claude/{skills,agents,commands}/` plus the DKK-owned hook scripts and replaces them with the current template; stale paths from older releases are removed cleanly. `.claude/settings.json` is mutated additively: DKK-owned `permissions.allow` and `hooks.*` entries are pruned and re-added from the new template, while user-authored entries are preserved untouched.
+- **Portable skills** (`.github/skills/dkk-*`) — refreshed when present.
+- **Copilot** — when adopted: refreshes `.github/prompts/dkk-*.prompt.md`, `.github/agents/dkk-*.agent.md`, the `.github/copilot-instructions.md` DKK section, and `.vscode/mcp.json`.
+
+So a Claude-only repo is never given Copilot files, a Copilot-only repo is never given a `.claude/` tree, and a bare `dkk init` repo gets only the `AGENTS.md` + `.mcp.json` refresh.
 
 ## `dkk prime` — Full Agent Context
 
@@ -227,6 +235,32 @@ Re-run with `--force` to overwrite local edits. The scaffolder creates:
 - **`.claude/hooks/stop-validate.mjs`** (`Stop`) — runs `dkk validate` as a quality gate before the agent finishes a turn; an invalid model returns exit 2 with the error report so the agent must fix it before declaring the work done.
 
 Each hook script auto-detects whether it's running inside the DKK source repo (where it uses `npx tsx src/cli.ts`) or in a downstream consumer repo (where it uses the published `dkk` binary). They work unchanged in both contexts.
+
+## GitHub Copilot Integration
+
+GitHub Copilot is a first-class target alongside Claude Code. One command installs the full Copilot surface:
+
+```bash
+dkk init --copilot   # (or `dkk init --all` for Claude Code + Copilot together)
+```
+
+This scaffolds:
+
+- **`.github/copilot-instructions.md`** — the DKK agent context, embedded in a marker-delimited section (`<!-- dkk:start -->` / `<!-- dkk:end -->`) so re-runs and hand edits both survive. Copilot has no session-start hook, so unlike Claude Code (whose hook runs `dkk prime` dynamically) DKK bakes the **static** contract into this file. For the *live* domain summary the agent runs `dkk prime` or calls the `dkk_prime` MCP tool. `dkk update` refreshes the section so it never drifts from the installed tool version.
+- **`.github/prompts/dkk-*.prompt.md`** — six reusable prompt files (`/dkk-prime`, `/dkk-impact`, `/dkk-review`, `/dkk-adr`, `/dkk-implement`, `/dkk-story`), the Copilot equivalents of the `.claude/commands/` slash commands.
+- **`.github/agents/dkk-domain-reviewer.agent.md`** — a read-only custom agent that reviews a diff/PR for domain impact (blast radius, broken refs, ADR drift), mirroring the Claude subagent.
+- **`.github/skills/dkk-*/skill.md`** — the portable, CLI-first Agent Skills (`dkk-adr-author`, `dkk-flow-implementer`, `dkk-story-analyst`).
+- **`.vscode/mcp.json`** — registers the same `dkk` MCP server for VS Code Copilot:
+
+  ```json
+  { "servers": { "dkk": { "type": "stdio", "command": "dkk", "args": ["mcp"] } } }
+  ```
+
+  `dkk init --copilot` writes **both** `.vscode/mcp.json` and the repo-root `.mcp.json`, so the server is discoverable by VS Code Copilot and by Claude Code / other MCP clients. The server is client-agnostic — the exact same `dkk mcp` process and 14 `dkk_*` tools serve every client.
+
+  > If your repo's `.gitignore` excludes `.vscode/`, add an exception so the registration is shared with the team: `!.vscode/mcp.json`. Otherwise each teammate has to run `dkk init --copilot` themselves.
+
+Re-run with `--force` to overwrite local edits. Copilot has no hook mechanism, so the `SessionStart`/validate-gate behaviors from the Claude Code hooks have no direct Copilot equivalent — the static instructions file is the substitute for session-start priming.
 
 ## What's Next?
 

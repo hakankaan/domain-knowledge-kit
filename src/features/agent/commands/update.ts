@@ -31,21 +31,26 @@ import { formatCliError } from "../../../shared/errors.js";
 import { pkgVersion, pkgName } from "../../../version.js";
 import {
   installClaudeConfig,
+  installCopilotConfig,
   installSkills,
   mergeClaudeSettings,
   refreshAgentsMd,
+  refreshCopilotInstructions,
   type ClaudeSettings,
 } from "./init.js";
 import {
   computeArtifactDiff,
   dkkHookBasenames,
   dkkPermissionAllowEntries,
+  hasClaudeAdoption,
+  hasCopilotAdoption,
+  hasGithubSkillsAdoption,
   scanInstalledArtifacts,
   type ArtifactDiff,
 } from "../dkk-artifacts.js";
 import { detectInstallMode, fetchLatestVersion, type InstallInfo } from "../install-mode.js";
 import { pruneDkkEntries } from "../settings-prune.js";
-import { ensureMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
+import { ensureMcpRegistered, ensureVscodeMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
 
 interface UpdateOpts {
   root?: string;
@@ -136,6 +141,14 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
     }
   }
 
+  // Capture which agent surfaces the repo adopted BEFORE Phase D touches
+  // anything. `dkk update` refreshes only what's already installed, so it
+  // never pushes a toolchain onto a repo that didn't opt in (a Copilot-only
+  // repo gets no `.claude/`, a Claude-only repo gets no `.github/` Copilot).
+  const claudeAdopted = hasClaudeAdoption(root);
+  const githubSkillsAdopted = hasGithubSkillsAdoption(root);
+  const copilotAdopted = hasCopilotAdoption(root);
+
   // ── Phase D: Artifact diff + sweep + reinstall ──────────────────────
   let diffSummary = { added: 0, replaced: 0, removed: 0 };
   // Track whether settings.json existed before the install path; if it
@@ -163,30 +176,41 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
         }
       }
       sweepRemovedArtifacts(root);
-      installClaudeConfig(root, /*force*/ true, { skipSettings: true });
-      installSkills(root, /*force*/ true);
+      if (claudeAdopted) installClaudeConfig(root, /*force*/ true, { skipSettings: true });
+      if (githubSkillsAdopted) installSkills(root, /*force*/ true);
+      // Copilot prompts/agents. Skills are handled by the line above;
+      // instructions + MCP are handled by Phases G/F below — skip all three.
+      if (copilotAdopted) {
+        installCopilotConfig(root, /*force*/ true, { skipInstructions: true, skipMcp: true, skipSkills: true });
+      }
       diffSummary = { added: diff.toAdd.length, replaced: diff.toReplace.length, removed: diff.toRemove.length };
     }
   }
 
-  // ── Phase E: settings.json prune + remerge ──────────────────────────
-  const settingsResult = pruneAndRemergeSettings(root, opts, settingsExistedBefore);
+  // ── Phase E: settings.json prune + remerge (Claude only) ────────────
+  const settingsResult = claudeAdopted
+    ? pruneAndRemergeSettings(root, opts, settingsExistedBefore)
+    : { status: "skipped" as const, pruned: 0, added: 0, mixedWarnings: [] };
 
   // ── Phase F: MCP auto-register ──────────────────────────────────────
   let mcpOutcome: McpRegisterOutcome | { status: "skipped"; reason: string } =
     { status: "skipped", reason: "--skip-mcp" };
   if (!opts.skipMcp && !opts.check) {
     mcpOutcome = ensureMcpRegistered(root);
+    // Copilot's VS Code MCP config, only for repos that opted into Copilot.
+    if (copilotAdopted) ensureVscodeMcpRegistered(root);
   }
 
-  // ── Phase G: AGENTS.md refresh ──────────────────────────────────────
+  // ── Phase G: AGENTS.md + copilot-instructions.md refresh ────────────
   let agentsStatus: "created" | "updated" | "appended" | "skipped" = "skipped";
+  let copilotStatus: "created" | "updated" | "appended" | "not-adopted" = "not-adopted";
   if (!opts.check) {
     agentsStatus = refreshAgentsMd(root);
+    if (copilotAdopted) copilotStatus = refreshCopilotInstructions(root);
   }
 
   // ── Phase H: Summary report ─────────────────────────────────────────
-  printSummary(diffSummary, settingsResult, mcpOutcome, agentsStatus);
+  printSummary(diffSummary, settingsResult, mcpOutcome, agentsStatus, copilotStatus);
 }
 
 // ── Phase A helpers ───────────────────────────────────────────────────
@@ -343,6 +367,7 @@ function printSummary(
   settings: SettingsResult,
   mcp: McpRegisterOutcome | { status: "skipped"; reason: string },
   agents: "created" | "updated" | "appended" | "skipped",
+  copilot: "created" | "updated" | "appended" | "not-adopted",
 ): void {
   console.log("");
   console.log("── Summary ────────────────────────────────────────────────────────");
@@ -351,6 +376,7 @@ function printSummary(
   console.log(`settings.json ${formatSettingsResult(settings)}`);
   console.log(`MCP server    ${formatMcpResult(mcp)}`);
   console.log(`AGENTS.md     ${agents}`);
+  console.log(`Copilot       ${copilot === "not-adopted" ? "not installed (run `dkk init --copilot`)" : copilot}`);
   console.log("");
   console.log("Next: run `dkk render` to validate the domain model.");
 }

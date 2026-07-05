@@ -76,7 +76,9 @@ This creates `.dkk/domain/` with `index.yml`, `actors.yml`, and a sample bounded
 Optional flags for the init step layer in additional integrations:
 
 - `dkk init --claude` — also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands)
+- `dkk init --copilot` — also install GitHub Copilot config under `.github/` (prompts, agent, skills, `copilot-instructions.md`) plus `.vscode/mcp.json`
 - `dkk init --skills` — also install agent skills under `.github/skills/`
+- `dkk init --all` — install both Claude Code and GitHub Copilot config
 
 ## Step 2: Create a Bounded Context
 

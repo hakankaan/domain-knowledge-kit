@@ -7,10 +7,10 @@
  *   3. Already-registered `dkk` entry → left untouched (idempotent, no clobber).
  *   4. Corrupt `.mcp.json` → reported as a failure, file untouched.
  */
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ensureMcpRegistered } from "../mcp-register.js";
+import { ensureMcpRegistered, ensureVscodeMcpRegistered } from "../mcp-register.js";
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +91,70 @@ console.log("\n=== mcp-register: reports failure on corrupt .mcp.json ===");
   const outcome = ensureMcpRegistered(root);
   assert("status is failed", outcome.status === "failed");
   assert("file left untouched", readFileSync(join(root, ".mcp.json"), "utf-8") === "{ this is not json");
+}
+
+// ── .vscode/mcp.json (VS Code Copilot) ────────────────────────────────
+
+interface VscodeMcpJson {
+  servers?: Record<string, { type?: string; command?: string; args?: string[] }>;
+  [k: string]: unknown;
+}
+function readVscodeMcp(root: string): VscodeMcpJson {
+  return JSON.parse(readFileSync(join(root, ".vscode", "mcp.json"), "utf-8")) as VscodeMcpJson;
+}
+
+console.log("\n=== mcp-register: creates .vscode/mcp.json in a fresh repo ===");
+{
+  const root = makeRoot();
+  const outcome = ensureVscodeMcpRegistered(root);
+  assert("status is registered", outcome.status === "registered");
+  assert(".vscode/mcp.json exists", existsSync(join(root, ".vscode", "mcp.json")));
+  const cfg = readVscodeMcp(root);
+  assert("declares dkk server under `servers`", Boolean(cfg.servers?.dkk));
+  assert("dkk entry is stdio", cfg.servers?.dkk?.type === "stdio", `type=${cfg.servers?.dkk?.type}`);
+  const last = cfg.servers?.dkk?.args?.at(-1);
+  assert("dkk command runs `mcp`", last === "mcp", `args=${JSON.stringify(cfg.servers?.dkk?.args)}`);
+}
+
+console.log("\n=== mcp-register: merges into existing .vscode/mcp.json, preserving other servers ===");
+{
+  const root = makeRoot();
+  const dir = join(root, ".vscode");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "mcp.json"),
+    JSON.stringify({ servers: { other: { type: "stdio", command: "other-bin", args: ["serve"] } } }, null, 2),
+    "utf-8",
+  );
+  const outcome = ensureVscodeMcpRegistered(root);
+  assert("status is registered", outcome.status === "registered");
+  const cfg = readVscodeMcp(root);
+  assert("preserves the other server", cfg.servers?.other?.command === "other-bin");
+  assert("adds the dkk server", Boolean(cfg.servers?.dkk));
+}
+
+console.log("\n=== mcp-register: idempotent when dkk already in .vscode/mcp.json ===");
+{
+  const root = makeRoot();
+  const dir = join(root, ".vscode");
+  mkdirSync(dir, { recursive: true });
+  const custom = { type: "stdio", command: "custom-dkk", args: ["mcp", "--root", "/elsewhere"] };
+  writeFileSync(join(dir, "mcp.json"), JSON.stringify({ servers: { dkk: custom } }, null, 2), "utf-8");
+  const outcome = ensureVscodeMcpRegistered(root);
+  assert("status is already-registered", outcome.status === "already-registered");
+  const cfg = readVscodeMcp(root);
+  assert("leaves the custom entry untouched", cfg.servers?.dkk?.command === "custom-dkk");
+}
+
+console.log("\n=== mcp-register: reports failure on corrupt .vscode/mcp.json ===");
+{
+  const root = makeRoot();
+  const dir = join(root, ".vscode");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "mcp.json"), "{ nope", "utf-8");
+  const outcome = ensureVscodeMcpRegistered(root);
+  assert("status is failed", outcome.status === "failed");
+  assert("file left untouched", readFileSync(join(dir, "mcp.json"), "utf-8") === "{ nope");
 }
 
 // ── Teardown ──────────────────────────────────────────────────────────

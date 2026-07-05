@@ -18,11 +18,13 @@
 import type { Command as Cmd } from "commander";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { repoRoot, packageSkillsDir, packageClaudeDir, domainDir } from "../../../shared/paths.js";
+import { repoRoot, packageSkillsDir, packageClaudeDir, packageCopilotDir, domainDir } from "../../../shared/paths.js";
 import { loadDomainModel } from "../../../shared/loader.js";
-import { ensureMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
+import { isPathGitIgnored } from "../../../shared/git.js";
+import { ensureMcpRegistered, ensureVscodeMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
+import { primeContent } from "./prime.js";
 
-const START_MARKER = "<!-- dkk:start -->";
+export const START_MARKER = "<!-- dkk:start -->";
 const END_MARKER = "<!-- dkk:end -->";
 
 /**
@@ -88,15 +90,17 @@ dkk drift map <file>                  # Which context binds a source file (stale
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section + print next steps
 dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
+dkk init --copilot                    # Also scaffold GitHub Copilot config (.github/ prompts, agent, skills, copilot-instructions.md, .vscode/mcp.json)
 dkk init --skills                     # Also install agent skills into .github/skills/
-dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
+dkk init --all                        # Install both Claude Code and Copilot config
+dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills/Copilot artifacts + MCP
 dkk prime                             # Output full agent context
-dkk mcp                               # MCP server entrypoint — auto-spawned by Claude Code via .mcp.json (do not run by hand)
+dkk mcp                               # MCP server entrypoint — auto-spawned by the client via .mcp.json / .vscode/mcp.json (do not run by hand)
 \`\`\`
 
 ### Model Context Protocol (MCP)
 
-\`dkk init\` writes a committed \`.mcp.json\` registering the **dkk** MCP server. Once it's committed, every clone gets the server automatically — Claude Code spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (\`dkk_search\`, \`dkk_show\`, \`dkk_summary\`, \`dkk_related\`, \`dkk_list\`, \`dkk_story\`, \`dkk_validate\`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
+\`dkk init\` writes a committed \`.mcp.json\` registering the **dkk** MCP server (\`dkk init --copilot\` also writes \`.vscode/mcp.json\` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (\`dkk_search\`, \`dkk_show\`, \`dkk_summary\`, \`dkk_related\`, \`dkk_list\`, \`dkk_story\`, \`dkk_validate\`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
 
 ### Quality Gates
 
@@ -119,7 +123,7 @@ function delimitedSection(): string {
  * Copy all skill files from the DKK package's `.github/skills/` directory
  * into the target project's `.github/skills/` directory.
  *
- * Each skill lives in a subdirectory (e.g. `story-analyst/skill.md`).
+ * Each skill lives in a subdirectory (e.g. `dkk-story-analyst/skill.md`).
  * Files are skipped if they already exist, unless `force` is true.
  */
 export function installSkills(root: string, force: boolean): void {
@@ -427,26 +431,104 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
 }
 
 /**
- * Create or refresh the DKK section in `AGENTS.md` at the repo root.
+ * Copy the bundled GitHub Copilot config from the DKK package into the
+ * consumer project's `.github/` directory, install the portable skills, write
+ * the `.github/copilot-instructions.md` DKK section, and register the MCP
+ * server in `.vscode/mcp.json`.
  *
- * Three outcomes, mirrored in the returned status:
- * - `created`: no `AGENTS.md` existed; one was written with a default header.
- * - `updated`: file existed and contained the delimited DKK section; the
- *   section was replaced in place.
- * - `appended`: file existed without DKK markers; the section was appended.
+ * Layout produced:
+ *   .github/
+ *     copilot-instructions.md    (static DKK context section — marker-delimited)
+ *     prompts/dkk-<name>.prompt.md
+ *     agents/dkk-domain-reviewer.agent.md
+ *     skills/dkk-<skill>/skill.md
+ *   .vscode/mcp.json             (dkk MCP server, `servers` key)
  *
- * Used by both `dkk init` and `dkk update`.
+ * `.mcp.json` is written separately by the caller (`dkk init`'s default MCP
+ * step), so `dkk init --copilot` ends up with both MCP config files.
  */
-export function refreshAgentsMd(root: string): "created" | "updated" | "appended" {
-  const agentsPath = join(root, "AGENTS.md");
-  const section = delimitedSection();
+export interface InstallCopilotOpts {
+  /** Skip writing/merging `.vscode/mcp.json`. Used by `dkk update` (its MCP
+   *  phase handles registration) and by `--no-mcp`. Defaults to false. */
+  skipMcp?: boolean;
+  /** Skip refreshing `.github/copilot-instructions.md`. Used by `dkk update`
+   *  so its refresh phase owns the section. Defaults to false. */
+  skipInstructions?: boolean;
+  /** Skip installing the portable `.github/skills/`. Used by `dkk update`,
+   *  which already installs the skills once in its artifact phase, to avoid a
+   *  redundant second copy. Defaults to false. */
+  skipSkills?: boolean;
+}
 
-  if (!existsSync(agentsPath)) {
-    writeFileSync(agentsPath, `# Agent Instructions\n\n${section}`, "utf-8");
+export function installCopilotConfig(root: string, force: boolean, opts: InstallCopilotOpts = {}): void {
+  const srcDir = packageCopilotDir();
+
+  if (!existsSync(srcDir)) {
+    console.warn(`Warning: DKK package Copilot template not found at ${srcDir}`);
+  } else {
+    // prompts/<name>.prompt.md (flat)
+    copyFlatDir({
+      srcDir: join(srcDir, "prompts"),
+      destDir: join(root, ".github", "prompts"),
+      relSubpath: ".github/prompts",
+      force,
+    });
+    // agents/<name>.agent.md (flat)
+    copyFlatDir({
+      srcDir: join(srcDir, "agents"),
+      destDir: join(root, ".github", "agents"),
+      relSubpath: ".github/agents",
+      force,
+    });
+  }
+
+  // Portable skills (the same set installed by `--skills`).
+  if (!opts.skipSkills) installSkills(root, force);
+
+  // .github/copilot-instructions.md — static DKK context section.
+  if (!opts.skipInstructions) {
+    const status = refreshCopilotInstructions(root);
+    if (status === "created") console.log(`Created  .github/copilot-instructions.md`);
+    else if (status === "updated") console.log(`Updated  .github/copilot-instructions.md (DKK section refreshed)`);
+    else console.log(`Appended DKK section to .github/copilot-instructions.md`);
+  }
+
+  // .vscode/mcp.json — VS Code Copilot MCP registration.
+  if (!opts.skipMcp) {
+    const outcome = ensureVscodeMcpRegistered(root);
+    printVscodeMcpOutcome(outcome);
+    // The whole point of a committed .vscode/mcp.json is team sharing; warn if
+    // .vscode/ is git-ignored (common) so the registration doesn't silently
+    // fail to reach teammates.
+    if (outcome.status !== "failed" && isPathGitIgnored(root, ".vscode/mcp.json")) {
+      console.warn(`         Note: .vscode/ looks git-ignored — add \`!.vscode/mcp.json\` to .gitignore so teammates inherit the dkk server.`);
+    }
+  }
+}
+
+/**
+ * Insert, replace, or append a marker-delimited section in a markdown file.
+ *
+ * Three outcomes:
+ * - `created`: the file did not exist; it was written with `header` + section.
+ * - `updated`: the file existed and contained the delimited section; it was
+ *   replaced in place.
+ * - `appended`: the file existed without markers; the section was appended.
+ *
+ * Shared by `refreshAgentsMd` (AGENTS.md) and `refreshCopilotInstructions`
+ * (.github/copilot-instructions.md).
+ */
+function upsertDelimitedSection(
+  filePath: string,
+  section: string,
+  header: string,
+): "created" | "updated" | "appended" {
+  if (!existsSync(filePath)) {
+    writeFileSync(filePath, `${header}${section}`, "utf-8");
     return "created";
   }
 
-  const existing = readFileSync(agentsPath, "utf-8");
+  const existing = readFileSync(filePath, "utf-8");
   const startIdx = existing.indexOf(START_MARKER);
   const endIdx = existing.indexOf(END_MARKER);
 
@@ -454,13 +536,57 @@ export function refreshAgentsMd(root: string): "created" | "updated" | "appended
     const markerEnd = endIdx + END_MARKER.length;
     const before = existing.slice(0, startIdx);
     const after = existing.slice(existing[markerEnd] === "\n" ? markerEnd + 1 : markerEnd);
-    writeFileSync(agentsPath, `${before}${section}${after}`, "utf-8");
+    writeFileSync(filePath, `${before}${section}${after}`, "utf-8");
     return "updated";
   }
 
   const separator = existing.endsWith("\n") ? "\n" : "\n\n";
-  writeFileSync(agentsPath, `${existing}${separator}${section}`, "utf-8");
+  writeFileSync(filePath, `${existing}${separator}${section}`, "utf-8");
   return "appended";
+}
+
+/**
+ * Create or refresh the DKK section in `AGENTS.md` at the repo root.
+ *
+ * Used by both `dkk init` and `dkk update`.
+ */
+export function refreshAgentsMd(root: string): "created" | "updated" | "appended" {
+  return upsertDelimitedSection(join(root, "AGENTS.md"), delimitedSection(), "# Agent Instructions\n\n");
+}
+
+/**
+ * The DKK section embedded in `.github/copilot-instructions.md`.
+ *
+ * Unlike Claude Code (whose SessionStart hook runs `dkk prime` dynamically),
+ * GitHub Copilot has no session hook — so we bake the **static** agent
+ * contract (`primeContent()`) into the instructions file and point at
+ * `dkk prime` / the `dkk_prime` MCP tool for the live domain summary. The
+ * section is refreshed by `dkk update`, so it never drifts from the tool.
+ */
+function copilotSection(): string {
+  return `${primeContent()}
+> **Live domain summary:** the context above is the *static* DKK contract, refreshed by \`dkk update\`. For the current model (contexts, items, ADRs) run \`dkk prime\` in the terminal, or call the \`dkk\` MCP server's \`prime\` tool. Prefer the \`dkk_*\` MCP tools for all queries; use the \`dkk\` CLI for mutations. Ready-made prompts live in \`.github/prompts/dkk-*.prompt.md\` (invoke as \`/dkk-review\`, \`/dkk-impact\`, …), and the \`dkk-domain-reviewer\` custom agent lives in \`.github/agents/\`.
+`;
+}
+
+/** Build the full delimited Copilot block. */
+function delimitedCopilotSection(): string {
+  return `${START_MARKER}\n${copilotSection()}${END_MARKER}\n`;
+}
+
+/**
+ * Create or refresh the DKK section in `.github/copilot-instructions.md`.
+ * Mirrors {@link refreshAgentsMd}; ensures `.github/` exists first.
+ *
+ * Used by both `dkk init --copilot` and `dkk update`.
+ */
+export function refreshCopilotInstructions(root: string): "created" | "updated" | "appended" {
+  mkdirSync(join(root, ".github"), { recursive: true });
+  return upsertDelimitedSection(
+    join(root, ".github", "copilot-instructions.md"),
+    delimitedCopilotSection(),
+    "# Copilot Instructions\n\n",
+  );
 }
 
 /**
@@ -513,6 +639,26 @@ function printMcpOutcome(outcome: McpRegisterOutcome): void {
 }
 
 /**
+ * Report the result of writing the `.vscode/mcp.json` registration (VS Code
+ * GitHub Copilot). Same vocabulary as {@link printMcpOutcome}.
+ */
+function printVscodeMcpOutcome(outcome: McpRegisterOutcome): void {
+  switch (outcome.status) {
+    case "registered":
+      console.log(`Created  .vscode/mcp.json (registered dkk MCP server: \`${outcome.command}\`)`);
+      console.log(`         → Commit it; VS Code Copilot will offer to start the "dkk" server.`);
+      break;
+    case "already-registered":
+      console.log(`Skipped  .vscode/mcp.json (dkk MCP server already registered)`);
+      break;
+    case "failed":
+      console.warn(`Warning: could not write .vscode/mcp.json (${outcome.reason}).`);
+      console.warn(`         Add it manually: {"servers":{"dkk":{"type":"stdio","command":"dkk","args":["mcp"]}}}`);
+      break;
+  }
+}
+
+/**
  * Print a "Next steps" block tuned to what the repo currently looks like.
  * Called at the end of `dkk init` so users always get an actionable nudge
  * regardless of whether they just ran init for the first time or are
@@ -557,11 +703,17 @@ export function registerInit(program: Cmd): void {
     .description("Create or update AGENTS.md with DKK onboarding section + print next-step guidance")
     .option("--skills", "Also install DKK skill files into .github/skills/")
     .option("--claude", "Also install Claude Code config (.claude/ settings, hooks, skills, agents, commands)")
-    .option("--no-mcp", "Don't write the .mcp.json MCP server registration")
-    .option("--force", "Overwrite existing skill or Claude files (applies with --skills or --claude)")
+    .option("--copilot", "Also install GitHub Copilot config (.github/ prompts, agent, skills, copilot-instructions.md, .vscode/mcp.json)")
+    .option("--all", "Install both Claude Code and GitHub Copilot config (implies --skills and MCP registration)")
+    .option("--no-mcp", "Don't write the .mcp.json / .vscode/mcp.json MCP server registration")
+    .option("--force", "Overwrite existing skill, Claude, or Copilot files (applies with --skills/--claude/--copilot/--all)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { root?: string; skills?: boolean; claude?: boolean; mcp?: boolean; force?: boolean }) => {
+    .action((opts: { root?: string; skills?: boolean; claude?: boolean; copilot?: boolean; all?: boolean; mcp?: boolean; force?: boolean }) => {
       const root = repoRoot(opts.root);
+      const force = opts.force ?? false;
+      const wantClaude = Boolean(opts.claude || opts.all);
+      const wantCopilot = Boolean(opts.copilot || opts.all);
+      const wantSkills = Boolean(opts.skills || opts.all);
 
       // AGENTS.md — create, refresh in place, or append the DKK section.
       const status = refreshAgentsMd(root);
@@ -569,12 +721,16 @@ export function registerInit(program: Cmd): void {
       else if (status === "updated") console.log(`Updated  AGENTS.md (DKK section refreshed)`);
       else console.log(`Appended DKK section to AGENTS.md`);
 
-      if (opts.skills) {
-        installSkills(root, opts.force ?? false);
+      if (wantClaude) {
+        installClaudeConfig(root, force);
       }
 
-      if (opts.claude) {
-        installClaudeConfig(root, opts.force ?? false);
+      if (wantCopilot) {
+        // installCopilotConfig also installs the portable skills, so a
+        // separate installSkills call would just re-report "Skipped".
+        installCopilotConfig(root, force, { skipMcp: opts.mcp === false });
+      } else if (wantSkills) {
+        installSkills(root, force);
       }
 
       // MCP registration — commander sets `mcp` false only when `--no-mcp`

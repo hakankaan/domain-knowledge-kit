@@ -44,7 +44,7 @@ All technical details, CLI references, and integration guides live in the [`docs
 | **[Domain Modeling](docs/domain-modeling.md)** | YAML structure, item types, naming conventions |
 | **[CLI Reference](docs/cli-reference.md)** | Every command and flag |
 | **[ADR Guide](docs/adr-guide.md)** | Writing, linking, and querying ADRs |
-| **[AI Agent Integration](docs/ai-agent-integration.md)** | Onboarding agents, context-efficient retrieval |
+| **[AI Agent Integration](docs/ai-agent-integration.md)** | Onboarding agents (Claude Code + GitHub Copilot), MCP server, context-efficient retrieval |
 | **[Way of Working](docs/way-of-working.md)** | Team adoption practices, PR review, CI, governance |
 | **[Iterative Modeling](docs/iterative-modeling.md)** | Decision patterns, modeling phases, external constraints |
 

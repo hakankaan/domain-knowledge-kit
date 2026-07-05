@@ -20,8 +20,8 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { packageClaudeDir, packageSkillsDir } from "../../shared/paths.js";
-import { extractHookBasename, type ClaudeSettings } from "./commands/init.js";
+import { packageClaudeDir, packageCopilotDir, packageSkillsDir } from "../../shared/paths.js";
+import { START_MARKER, extractHookBasename, type ClaudeSettings } from "./commands/init.js";
 
 /**
  * Repo-relative paths that previous DKK versions installed but the current
@@ -69,6 +69,104 @@ export function dkkGithubSkillDirs(): string[] {
   const src = packageSkillsDir();
   if (!existsSync(src)) return [];
   return listDirsIfDir(src);
+}
+
+export interface CopilotArtifactInventory {
+  /** `.github/prompts/<name>.prompt.md` filenames the bundled template installs. */
+  prompts: string[];
+  /** `.github/agents/<name>.agent.md` filenames the bundled template installs. */
+  agents: string[];
+}
+
+/**
+ * Walk `tools/dkk/copilot/` in the running DKK package and return the set of
+ * Copilot artifact filenames the template currently ships. Derived at runtime
+ * so future template additions don't require code changes here.
+ */
+export function dkkCopilotFiles(): CopilotArtifactInventory {
+  const inv: CopilotArtifactInventory = { prompts: [], agents: [] };
+  const src = packageCopilotDir();
+  if (!existsSync(src)) return inv;
+  inv.prompts = listFilesIfDir(join(src, "prompts"));
+  inv.agents = listFilesIfDir(join(src, "agents"));
+  return inv;
+}
+
+/**
+ * True if the repo has opted into the GitHub Copilot integration — i.e. any
+ * DKK-managed Copilot artifact is already present. `dkk update` uses this to
+ * decide whether to refresh the Copilot surface, so it never pushes Copilot
+ * files onto a Claude-only repo.
+ *
+ * Signals (any one suffices): a `dkk-*.prompt.md`, a `dkk-*.agent.md`, a
+ * `dkk` server in `.vscode/mcp.json`, or a DKK marker section in
+ * `.github/copilot-instructions.md`.
+ */
+export function hasCopilotAdoption(root: string): boolean {
+  if (listDkkFilesWithSuffix(join(root, ".github", "prompts"), ".prompt.md").length > 0) return true;
+  if (listDkkFilesWithSuffix(join(root, ".github", "agents"), ".agent.md").length > 0) return true;
+
+  const vscodeMcp = join(root, ".vscode", "mcp.json");
+  if (existsSync(vscodeMcp)) {
+    try {
+      const cfg = JSON.parse(readFileSync(vscodeMcp, "utf-8")) as { servers?: Record<string, unknown> };
+      if (cfg.servers && "dkk" in cfg.servers) return true;
+    } catch { /* ignore malformed */ }
+  }
+
+  const instructions = join(root, ".github", "copilot-instructions.md");
+  if (existsSync(instructions)) {
+    try {
+      if (readFileSync(instructions, "utf-8").includes(START_MARKER)) return true;
+    } catch { /* ignore */ }
+  }
+
+  return false;
+}
+
+/**
+ * True if the repo has opted into the Claude Code integration — any
+ * DKK-managed `.claude/` artifact is present. `dkk update` uses this so it
+ * never pushes a `.claude/` tree onto a repo that only adopted Copilot (or a
+ * bare `dkk init`).
+ *
+ * Signals (any one suffices): a `dkk-*` skill/agent/command under `.claude/`, a
+ * DKK hook script under `.claude/hooks/`, or DKK-owned permission/hook entries
+ * merged into `.claude/settings.json`.
+ */
+export function hasClaudeAdoption(root: string): boolean {
+  const scan = scanInstalledArtifacts(root);
+  if (scan.dkkPrefixedClaude.length > 0 || scan.dkkHooks.length > 0) return true;
+
+  // settings.json can carry DKK entries even when no other .claude/ files
+  // remain (e.g. a user pruned skills) — treat that as adoption too.
+  const settingsPath = join(root, ".claude", "settings.json");
+  if (existsSync(settingsPath)) {
+    try {
+      const s = JSON.parse(readFileSync(settingsPath, "utf-8")) as ClaudeSettings;
+      const dkkAllow = new Set(dkkPermissionAllowEntries());
+      if ((s.permissions?.allow ?? []).some((e) => dkkAllow.has(e))) return true;
+      const dkkHooks = new Set(dkkHookBasenames());
+      for (const entries of Object.values(s.hooks ?? {})) {
+        for (const entry of entries) {
+          for (const h of entry.hooks ?? []) {
+            const b = extractHookBasename(h.command);
+            if (b && dkkHooks.has(b)) return true;
+          }
+        }
+      }
+    } catch { /* ignore malformed */ }
+  }
+  return false;
+}
+
+/** True if the repo has any `.github/skills/dkk-*` directory installed. */
+export function hasGithubSkillsAdoption(root: string): boolean {
+  try {
+    return readdirSync(join(root, ".github", "skills")).some((n) => n.startsWith("dkk-"));
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -131,6 +229,23 @@ function listDirsIfDir(dir: string): string[] {
 }
 
 /**
+ * Absolute paths of files in `dir` named `dkk-*<suffix>` (e.g. `dkk-*.prompt.md`).
+ * Returns `[]` if the directory is absent, unreadable, or is actually a file
+ * (a `readdirSync` on a non-directory throws `ENOTDIR` — swallow it).
+ */
+function listDkkFilesWithSuffix(dir: string, suffix: string): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((n) => n.startsWith("dkk-") && n.endsWith(suffix))
+    .map((n) => join(dir, n));
+}
+
+/**
  * Result of scanning a target repo for every DKK-managed artifact path.
  * Paths are absolute. Use {@link computeArtifactDiff} for the add / replace /
  * remove triage.
@@ -142,6 +257,10 @@ export interface InstalledArtifactScan {
   dkkHooks: string[];
   // Top-level `.github/skills/dkk-<name>` directories.
   githubSkillDirs: string[];
+  // Files in `.github/prompts/` matching `dkk-*.prompt.md`.
+  copilotPrompts: string[];
+  // Files in `.github/agents/` matching `dkk-*.agent.md`.
+  copilotAgents: string[];
   // Any LEGACY_DKK_PATHS entry that still exists.
   legacy: string[];
 }
@@ -156,6 +275,8 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
     dkkPrefixedClaude: [],
     dkkHooks: [],
     githubSkillDirs: [],
+    copilotPrompts: [],
+    copilotAgents: [],
     legacy: [],
   };
 
@@ -193,6 +314,10 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
     }
   }
 
+  // .github/prompts/dkk-*.prompt.md and .github/agents/dkk-*.agent.md
+  scan.copilotPrompts = listDkkFilesWithSuffix(join(root, ".github", "prompts"), ".prompt.md");
+  scan.copilotAgents = listDkkFilesWithSuffix(join(root, ".github", "agents"), ".agent.md");
+
   // Legacy paths.
   for (const legacyRel of LEGACY_DKK_PATHS) {
     const abs = join(root, legacyRel);
@@ -221,12 +346,53 @@ export interface ArtifactDiff {
  */
 export function computeArtifactDiff(root: string): ArtifactDiff {
   const diff: ArtifactDiff = { toAdd: [], toReplace: [], toRemove: [] };
-  const claudeSrc = packageClaudeDir();
-  const skillsSrc = packageSkillsDir();
-  const inv = dkkClaudeFiles();
   const installed = scanInstalledArtifacts(root);
-
   const expectedInstalled = new Set<string>();
+
+  // Each agent surface is diffed (and later refreshed) only if the repo has
+  // already adopted it, so `dkk update` never pushes a toolchain onto a repo
+  // that didn't opt in — a Copilot-only repo must not sprout a `.claude/`
+  // tree, and a Claude-only repo must not sprout `.github/` Copilot files.
+  const claudeAdopted = hasClaudeAdoption(root);
+  const githubSkillsAdopted = hasGithubSkillsAdoption(root);
+  const copilotAdopted = hasCopilotAdoption(root);
+
+  if (claudeAdopted) diffClaudeArtifacts(root, diff, expectedInstalled);
+  if (githubSkillsAdopted) diffGithubSkills(root, diff, expectedInstalled);
+  if (copilotAdopted) diffCopilotArtifacts(root, diff, expectedInstalled);
+
+  // toRemove: any installed dkk-managed path (for an adopted surface) not
+  // present in `expectedInstalled`, plus everything in `legacy` (no longer
+  // shipped). Files for a surface the repo did NOT adopt are excluded —
+  // otherwise their absence from `expectedInstalled` would flag every stray
+  // dkk-* file for deletion. De-duplicate because a legacy path can match both
+  // the `dkk-*` prefix predicate AND the LEGACY_DKK_PATHS list.
+  const seenRemove = new Set<string>();
+  const candidates = [
+    ...(claudeAdopted ? [...installed.dkkPrefixedClaude, ...installed.dkkHooks] : []),
+    ...(githubSkillsAdopted ? installed.githubSkillDirs : []),
+    ...(copilotAdopted ? [...installed.copilotPrompts, ...installed.copilotAgents] : []),
+    ...installed.legacy,
+  ];
+  for (const path of candidates) {
+    if (expectedInstalled.has(path)) continue;
+    if (seenRemove.has(path)) continue;
+    seenRemove.add(path);
+    diff.toRemove.push(toRel(root, path));
+  }
+
+  return diff;
+}
+
+/**
+ * Diff the bundled `.claude/` template (hooks, skills, agents, commands)
+ * against the target repo. `settings.json` is intentionally excluded — the
+ * prune+merge phase owns it, and its content always differs from a fresh
+ * template (user customisations + additive merge state).
+ */
+function diffClaudeArtifacts(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
+  const claudeSrc = packageClaudeDir();
+  const inv = dkkClaudeFiles();
 
   // Hooks: flat files.
   for (const name of inv.hooks) {
@@ -240,12 +406,6 @@ export function computeArtifactDiff(root: string): ArtifactDiff {
     }
   }
 
-  // settings.json is intentionally left out of the diff: the prune+merge
-  // phase handles it independently and its content always differs from a
-  // fresh template (user customisations + additive merge state). Including
-  // it here would either always show "replace" on every run (noisy) or
-  // misleadingly suggest the file will be force-overwritten.
-
   // Skills: nested (skill/<file>).
   for (const skillName of inv.skills) {
     const skillSrc = join(claudeSrc, "skills", skillName);
@@ -253,17 +413,9 @@ export function computeArtifactDiff(root: string): ArtifactDiff {
     expectedInstalled.add(skillDest);
     if (!existsSync(skillDest)) {
       diff.toAdd.push(toRel(root, skillDest));
-      continue;
+    } else if (dirContentsDiffer(skillSrc, skillDest)) {
+      diff.toReplace.push(toRel(root, skillDest));
     }
-    // Compare each file inside the skill dir.
-    let anyDiff = false;
-    for (const fileName of readdirSync(skillSrc)) {
-      const f = join(skillSrc, fileName);
-      try { if (!statSync(f).isFile()) continue; } catch { continue; }
-      const df = join(skillDest, fileName);
-      if (!existsSync(df) || !filesEqual(f, df)) { anyDiff = true; break; }
-    }
-    if (anyDiff) diff.toReplace.push(toRel(root, skillDest));
   }
 
   // Agents + commands: flat files.
@@ -279,47 +431,50 @@ export function computeArtifactDiff(root: string): ArtifactDiff {
       }
     }
   }
+}
 
-  // .github/skills/<dkk-*>
-  if (existsSync(skillsSrc)) {
-    for (const skillName of dkkGithubSkillDirs()) {
-      const skillSrcDir = join(skillsSrc, skillName);
-      const skillDestDir = join(root, ".github", "skills", skillName);
-      expectedInstalled.add(skillDestDir);
-      if (!existsSync(skillDestDir)) {
-        diff.toAdd.push(toRel(root, skillDestDir));
-        continue;
-      }
-      let anyDiff = false;
-      for (const fileName of readdirSync(skillSrcDir)) {
-        const f = join(skillSrcDir, fileName);
-        try { if (!statSync(f).isFile()) continue; } catch { continue; }
-        const df = join(skillDestDir, fileName);
-        if (!existsSync(df) || !filesEqual(f, df)) { anyDiff = true; break; }
-      }
-      if (anyDiff) diff.toReplace.push(toRel(root, skillDestDir));
+/** Diff the bundled `.github/skills/dkk-*` template against the target repo. */
+function diffGithubSkills(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
+  const skillsSrc = packageSkillsDir();
+  if (!existsSync(skillsSrc)) return;
+  for (const skillName of dkkGithubSkillDirs()) {
+    const skillSrcDir = join(skillsSrc, skillName);
+    const skillDestDir = join(root, ".github", "skills", skillName);
+    expectedInstalled.add(skillDestDir);
+    if (!existsSync(skillDestDir)) {
+      diff.toAdd.push(toRel(root, skillDestDir));
+    } else if (dirContentsDiffer(skillSrcDir, skillDestDir)) {
+      diff.toReplace.push(toRel(root, skillDestDir));
     }
   }
+}
 
-  // toRemove: any installed dkk-managed path not present in `expectedInstalled`,
-  // plus everything in `legacy` (which by definition is no longer shipped).
-  // De-duplicate because a legacy path can match both the `dkk-*` prefix
-  // predicate AND the LEGACY_DKK_PATHS list.
-  const seenRemove = new Set<string>();
-  const candidates = [
-    ...installed.dkkPrefixedClaude,
-    ...installed.dkkHooks,
-    ...installed.githubSkillDirs,
-    ...installed.legacy,
-  ];
-  for (const path of candidates) {
-    if (expectedInstalled.has(path)) continue;
-    if (seenRemove.has(path)) continue;
-    seenRemove.add(path);
-    diff.toRemove.push(toRel(root, path));
+/** Diff the bundled `.github/{prompts,agents}/dkk-*` Copilot template. */
+function diffCopilotArtifacts(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
+  const copilotInv = dkkCopilotFiles();
+  for (const [sub, names] of [["prompts", copilotInv.prompts], ["agents", copilotInv.agents]] as const) {
+    for (const name of names) {
+      const srcPath = join(packageCopilotDir(), sub, name);
+      const destPath = join(root, ".github", sub, name);
+      expectedInstalled.add(destPath);
+      if (!existsSync(destPath)) {
+        diff.toAdd.push(toRel(root, destPath));
+      } else if (!filesEqual(srcPath, destPath)) {
+        diff.toReplace.push(toRel(root, destPath));
+      }
+    }
   }
+}
 
-  return diff;
+/** True if any file in `srcDir` is missing from or differs against `destDir`. */
+function dirContentsDiffer(srcDir: string, destDir: string): boolean {
+  for (const fileName of readdirSync(srcDir)) {
+    const f = join(srcDir, fileName);
+    try { if (!statSync(f).isFile()) continue; } catch { continue; }
+    const df = join(destDir, fileName);
+    if (!existsSync(df) || !filesEqual(f, df)) return true;
+  }
+  return false;
 }
 
 function filesEqual(a: string, b: string): boolean {

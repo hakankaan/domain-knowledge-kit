@@ -6,6 +6,10 @@ Future directions and requirements for the Domain Knowledge Kit. Records **what 
 
 ## Completed
 
+### First-Class GitHub Copilot Support (2026-07-04)
+
+Promoted GitHub Copilot to a first-class agent target alongside Claude Code. `dkk init --copilot` (or `--all`) installs the full Copilot surface: a static domain-context section in `.github/copilot-instructions.md`, prompt files under `.github/prompts/` mirroring the Claude slash commands, a `dkk-domain-reviewer` custom agent, the complete portable skill set, and MCP registration in `.vscode/mcp.json` (plus the repo-root `.mcp.json`). `dkk update` maintains the Copilot surface for repos that opted in and leaves Claude-only repos untouched. See [ADR-0004](.dkk/adr/adr-0004.md).
+
 ### Multi-Repo Federation (2026-05-13)
 
 Added cross-repository federation so one domain model can span many service repositories. A repo declares itself a service with `.dkk/service.yml` and lists peer services in `.dkk/federation.yml`. Peer `.dkk/` trees are merged read-only into the loaded model and the additive `<service>:<context>.<Item>` ref grammar is accepted everywhere a bare ref is. No CI, publish step, or orphan branch is required — a peer's raw `.dkk/` is the artifact. Two source types: filesystem path (read live) and git URL + branch (sparse-checkout into a gitignored cache, lockfile-pinned). The validator, indexer, graph, search, MCP server, and a new `dkk consumers` reverse-lookup all become federation-aware transparently. See [ADR-0003](.dkk/adr/adr-0003.md).

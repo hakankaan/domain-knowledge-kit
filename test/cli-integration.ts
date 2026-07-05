@@ -685,6 +685,47 @@ try {
     assert("no .mcp.json written", !existsSync(join(root, ".mcp.json")));
   }
 
+  console.log("\n=== init: --copilot installs the Copilot surface + both MCP files ===");
+  {
+    const root = makeTempRoot("init-copilot");
+    tempRoots.push(root);
+    const result = run(["init", "--copilot"], { root });
+    assert("init --copilot exits 0", result.exitCode === 0);
+    assert(
+      "writes copilot-instructions.md",
+      existsSync(join(root, ".github", "copilot-instructions.md")),
+    );
+    assert(
+      "copilot-instructions.md has DKK section",
+      readFileSync(join(root, ".github", "copilot-instructions.md"), "utf-8").includes("<!-- dkk:start -->"),
+    );
+    assert(
+      "installs a prompt file",
+      existsSync(join(root, ".github", "prompts", "dkk-review.prompt.md")),
+    );
+    assert(
+      "installs the domain-reviewer agent",
+      existsSync(join(root, ".github", "agents", "dkk-domain-reviewer.agent.md")),
+    );
+    assert(
+      "installs the adr-author skill",
+      existsSync(join(root, ".github", "skills", "dkk-adr-author", "skill.md")),
+    );
+    assert("writes .vscode/mcp.json", existsSync(join(root, ".vscode", "mcp.json")));
+    const vscodeMcp = JSON.parse(readFileSync(join(root, ".vscode", "mcp.json"), "utf-8"));
+    assert(".vscode/mcp.json declares dkk under servers", Boolean(vscodeMcp.servers?.dkk));
+    assert("also writes repo-root .mcp.json", existsSync(join(root, ".mcp.json")));
+  }
+
+  console.log("\n=== init: default (no --copilot) leaves Copilot untouched ===");
+  {
+    const root = makeTempRoot("init-no-copilot");
+    tempRoots.push(root);
+    run(["init"], { root });
+    assert("no .github/copilot-instructions.md", !existsSync(join(root, ".github", "copilot-instructions.md")));
+    assert("no .vscode/mcp.json", !existsSync(join(root, ".vscode", "mcp.json")));
+  }
+
   console.log("\n=== init: appends to existing AGENTS.md ===");
   {
     const root = makeTempRoot("init-append");
@@ -1276,15 +1317,30 @@ try {
   // ═══════════════════════════════════════════════════════════════════
   // 20. update command — diff, sweep, prune, idempotency
   // ═══════════════════════════════════════════════════════════════════
-  console.log("\n=== update: --check exits 0 with diff for fresh repo ===");
+  console.log("\n=== update: --check on a bare repo proposes no changes (nothing adopted) ===");
   {
-    const root = makeTempRoot("update-check");
+    const root = makeTempRoot("update-check-bare");
     tempRoots.push(root);
     const result = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
     assert("update --check exits 0", result.exitCode === 0);
     assert("update --check shows artifact diff header", result.stdout.includes("Artifact diff"));
-    assert("update --check lists at least one add", result.stdout.includes("+ add"));
+    // Nothing adopted → update must not push any toolchain.
+    assert("update --check proposes no adds on a bare repo", !result.stdout.includes("+ add"));
     assert("update --check does NOT write files", !existsSync(join(root, ".claude", "settings.json")));
+  }
+
+  console.log("\n=== update: --check lists adds for an adopted repo missing a template file ===");
+  {
+    const root = makeTempRoot("update-check-adopted");
+    tempRoots.push(root);
+    run(["init", "--claude"], { root });                                  // adopt Claude
+    rmSync(join(root, ".claude", "commands", "dkk-review.md"), { force: true }); // drop one file
+    const result = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("update --check exits 0", result.exitCode === 0);
+    assert(
+      "update --check lists the missing adopted file as an add",
+      result.stdout.includes("+ add") && result.stdout.includes("dkk-review.md"),
+    );
   }
 
   console.log("\n=== update: errors when no .dkk/ in target root ===");
@@ -1300,10 +1356,12 @@ try {
     );
   }
 
-  console.log("\n=== update: --yes applies, removes legacy artifact, idempotent on re-run ===");
+  console.log("\n=== update: --yes refreshes adopted surfaces, removes legacy, idempotent on re-run ===");
   {
     const root = makeTempRoot("update-apply");
     tempRoots.push(root);
+    // Adopt Claude + portable skills so `update` refreshes them.
+    run(["init", "--claude", "--skills"], { root });
     // Seed a legacy artifact that previous DKK versions installed.
     const legacyDir = join(root, ".github", "skills", "dkk-domain-knowledge");
     mkdirSync(legacyDir, { recursive: true });
@@ -1324,7 +1382,7 @@ try {
       existsSync(join(root, ".claude", "hooks", "session-start-prime.mjs")),
     );
     assert(
-      "settings.json created from template",
+      "settings.json present",
       existsSync(join(root, ".claude", "settings.json")),
     );
     assert("AGENTS.md refreshed", existsSync(join(root, "AGENTS.md")));
@@ -1333,6 +1391,26 @@ try {
     const rerun = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
     assert("update re-run --check exits 0", rerun.exitCode === 0);
     assert("update re-run reports no changes", rerun.stdout.includes("(no changes)"));
+  }
+
+  console.log("\n=== update: symmetric gating — never pushes an un-adopted toolchain ===");
+  {
+    // Claude-only repo: update must not create any Copilot surface.
+    const claudeRoot = makeTempRoot("update-sym-claude");
+    tempRoots.push(claudeRoot);
+    run(["init", "--claude"], { root: claudeRoot });
+    run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root: claudeRoot });
+    assert("claude-only: no .github/prompts", !existsSync(join(claudeRoot, ".github", "prompts")));
+    assert("claude-only: no .vscode/mcp.json", !existsSync(join(claudeRoot, ".vscode", "mcp.json")));
+    assert("claude-only: no copilot-instructions.md", !existsSync(join(claudeRoot, ".github", "copilot-instructions.md")));
+
+    // Copilot-only repo: update must not create a .claude/ tree.
+    const copilotRoot = makeTempRoot("update-sym-copilot");
+    tempRoots.push(copilotRoot);
+    run(["init", "--copilot", "--no-mcp"], { root: copilotRoot });
+    run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root: copilotRoot });
+    assert("copilot-only: no .claude/ tree", !existsSync(join(copilotRoot, ".claude")));
+    assert("copilot-only: prompts still present", existsSync(join(copilotRoot, ".github", "prompts")));
   }
 
   console.log("\n=== update: preserves user-authored settings.json entries ===");

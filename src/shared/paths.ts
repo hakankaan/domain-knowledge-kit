@@ -165,6 +165,19 @@ export function packageClaudeDir(): string {
 }
 
 /**
+ * Absolute path to the `tools/dkk/copilot/` directory bundled inside the
+ * DKK package installation.
+ *
+ * Holds the GitHub Copilot config template (prompt files + custom agent)
+ * used by `dkk init --copilot` to scaffold Copilot integration in a
+ * consumer's repo. The portable skills it installs alongside live under
+ * `packageSkillsDir()`.
+ */
+export function packageCopilotDir(): string {
+  return join(packageRoot(), "tools", "dkk", "copilot");
+}
+
+/**
  * Turn an absolute path into a repo-relative POSIX path
  * (forward slashes, no leading `./`).
  */

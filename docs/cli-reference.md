@@ -333,16 +333,20 @@ After writing AGENTS.md, init prints a "Next steps" block tuned to whichever sta
 ```bash
 dkk init                  # AGENTS.md + .mcp.json + next-step guidance
 dkk init --claude         # also install Claude Code config under .claude/
+dkk init --copilot        # also install GitHub Copilot config under .github/ + .vscode/mcp.json
+dkk init --all            # install both Claude Code and Copilot config
 dkk init --skills         # also install agent skills into .github/skills/
-dkk init --no-mcp         # skip writing .mcp.json
+dkk init --no-mcp         # skip writing .mcp.json / .vscode/mcp.json
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--claude` | — | Also install Claude Code config under `.claude/` (settings, hooks, skills, agents, commands). |
+| `--copilot` | — | Also install GitHub Copilot config under `.github/` (prompts, agent, skills, `copilot-instructions.md`) plus `.vscode/mcp.json`. |
+| `--all` | — | Install both Claude Code and GitHub Copilot config (implies `--skills` and MCP registration). |
 | `--skills` | — | Also install DKK skill files into `.github/skills/`. |
-| `--no-mcp` | MCP on | Don't write the `.mcp.json` MCP server registration. |
-| `--force` | — | Overwrite existing files under `.claude/` or `.github/skills/`. |
+| `--no-mcp` | MCP on | Don't write the `.mcp.json` / `.vscode/mcp.json` MCP server registration. |
+| `--force` | — | Overwrite existing files under `.claude/`, `.github/`, or `.github/skills/`. |
 | `-r, --root <path>` | repo root | Override repository root. |
 
 → See [AI Agent Integration](ai-agent-integration.md) for the full agent onboarding workflow.
@@ -351,7 +355,13 @@ dkk init --no-mcp         # skip writing .mcp.json
 
 ## `update`
 
-Upgrade `dkk` to the latest npm release **and** refresh every DKK-managed AI assistant artifact in this project — `.claude/skills/dkk-*`, `.claude/agents/dkk-*.md`, `.claude/commands/dkk-*.md`, `.claude/hooks/*`, `.github/skills/dkk-*`, the DKK section of `AGENTS.md`, and the DKK MCP server registration.
+Upgrade `dkk` to the latest npm release **and** refresh the DKK-managed AI assistant artifacts in this project. `AGENTS.md` and the repo-root `.mcp.json` are always refreshed (the universal base every `dkk init` writes). Every other surface is **adoption-gated** — refreshed only if already installed, so `update` never pushes a toolchain you didn't opt into:
+
+- **Claude** (`.claude/skills/dkk-*`, `.claude/agents/dkk-*.md`, `.claude/commands/dkk-*.md`, `.claude/hooks/*`, `.claude/settings.json`) — when a DKK `.claude/` artifact is present.
+- **Portable skills** (`.github/skills/dkk-*`) — when present.
+- **Copilot** (`.github/prompts/dkk-*.prompt.md`, `.github/agents/dkk-*.agent.md`, `.github/copilot-instructions.md`, `.vscode/mcp.json`) — when the repo opted in via `dkk init --copilot`.
+
+So a Claude-only repo keeps no Copilot files, a Copilot-only repo keeps no `.claude/` tree, and a bare `dkk init` repo gets only the base refresh.
 
 ```bash
 dkk update                  # default: upgrade + apply
@@ -365,10 +375,10 @@ Pipeline:
 1. **Pre-flight** — verify `.dkk/` exists; detect global vs. local install (`npx` is refused).
 2. **npm upgrade** — `npm install -g domain-knowledge-kit@latest` (or `--save-dev` for local installs). Skipped on `--skip-npm` or when already on the latest version.
 3. **Re-exec** — after upgrade, re-launch the freshly-installed binary so subsequent steps read the **new** bundled templates.
-4. **Artifact diff** — compute add / replace / remove against the bundled template, print, and confirm. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
-5. **Settings prune + merge** — remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning.
-6. **MCP register** — if the project's `.mcp.json` doesn't already declare a `dkk` server, write a committed entry into it (preserving any other servers). A committed `.mcp.json` is shared with the whole team, so the server is registered once for everyone rather than per-machine. Global installs get `command: dkk`; local devDependency installs get `npx dkk mcp`.
-7. **AGENTS.md refresh** — replaces the DKK section in place.
+4. **Artifact diff** — compute add / replace / remove against the bundled template, print, and confirm. Only surfaces the repo already adopted (Claude, portable skills, Copilot) are included, so nothing is proposed for a toolchain you didn't opt into. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
+5. **Settings prune + merge** — for Claude-adopted repos: remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning.
+6. **MCP register** — if the project's `.mcp.json` doesn't already declare a `dkk` server, write a committed entry into it (preserving any other servers). A committed `.mcp.json` is shared with the whole team, so the server is registered once for everyone rather than per-machine. Global installs get `command: dkk`; local devDependency installs get `npx dkk mcp`. Copilot-adopted repos also get `.vscode/mcp.json`.
+7. **AGENTS.md + Copilot refresh** — replaces the DKK section in `AGENTS.md` in place, and (for Copilot-adopted repos) the DKK section in `.github/copilot-instructions.md`.
 
 | Flag | Default | Description |
 |------|---------|-------------|

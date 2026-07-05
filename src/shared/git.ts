@@ -31,6 +31,18 @@ export function isGitRepo(cwd: string): boolean {
   return git(cwd, ["rev-parse", "--is-inside-work-tree"]) === "true";
 }
 
+/**
+ * True only when `relPath` is git-ignored in `cwd`. `git check-ignore -q`
+ * exits 0 when the path is ignored, 1 when not, and 128 on any error (git
+ * missing, not a repo). We treat *only* a clean exit 0 as "ignored", so every
+ * other outcome — including non-git environments — returns false and callers
+ * act only on a confident positive.
+ */
+export function isPathGitIgnored(cwd: string, relPath: string): boolean {
+  const res = spawnSync("git", ["check-ignore", "-q", relPath], { cwd });
+  return !res.error && res.status === 0;
+}
+
 /** SHA of HEAD, or null. */
 export function headSha(cwd: string): string | null {
   return git(cwd, ["rev-parse", "HEAD"]);

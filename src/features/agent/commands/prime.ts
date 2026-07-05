@@ -218,9 +218,11 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 | \`dkk init\`            | Create/update AGENTS.md + \`.mcp.json\` + print next-step guidance |
 | \`dkk init --skills\`   | Also install agent skills into \`.github/skills/\`     |
 | \`dkk init --claude\`   | Also scaffold \`.claude/\` (settings, hooks, skills, agents, commands) |
-| \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, MCP, and AGENTS.md |
+| \`dkk init --copilot\`  | Also scaffold GitHub Copilot config (\`.github/\` prompts, agent, skills, copilot-instructions.md, \`.vscode/mcp.json\`) |
+| \`dkk init --all\`      | Install both Claude Code and Copilot config          |
+| \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, Copilot artifacts, MCP, and AGENTS.md |
 | \`dkk prime\`           | Output the lean agent context (\`--full\` for everything) |
-| \`dkk mcp\`             | MCP server entrypoint (auto-spawned by Claude Code via .mcp.json) |
+| \`dkk mcp\`             | MCP server entrypoint (auto-spawned by the client via .mcp.json / .vscode/mcp.json) |
 
 ### Federation
 
