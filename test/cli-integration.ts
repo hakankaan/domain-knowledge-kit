@@ -8,7 +8,7 @@
  * Uses temporary directories with the --root flag to isolate each test.
  */
 import { execFileSync, spawnSync, type ExecFileSyncOptions } from "node:child_process";
-import { mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -727,7 +727,10 @@ try {
     );
     assert(
       "installs the adr-author skill",
-      existsSync(join(root, ".github", "skills", "dkk-adr-author", "skill.md")),
+      // readdirSync, not existsSync: the spec requires `SKILL.md` exactly, and
+      // existsSync answers case-insensitively on APFS/NTFS — so a lowercase
+      // regression would pass on macOS and only fail on Linux.
+      readdirSync(join(root, ".github", "skills", "dkk-adr-author")).includes("SKILL.md"),
     );
     assert("writes .vscode/mcp.json", existsSync(join(root, ".vscode", "mcp.json")));
     const vscodeMcp = JSON.parse(readFileSync(join(root, ".vscode", "mcp.json"), "utf-8"));
