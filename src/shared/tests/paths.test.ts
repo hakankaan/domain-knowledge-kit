@@ -5,7 +5,14 @@
 import { mkdirSync, rmSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { repoRoot, findDkkRoot, serviceFile, federationFile, importedServiceDir } from "../paths.js";
+import {
+  repoRoot,
+  findDkkRoot,
+  serviceFile,
+  federationFile,
+  feedbackFile,
+  importedServiceDir,
+} from "../paths.js";
 
 let passed = 0;
 let failed = 0;
@@ -110,6 +117,10 @@ try {
   assert(
     "importedServiceDir",
     importedServiceDir("payments", REPO) === join(REPO, ".dkk", "imports", "payments"),
+  );
+  assert(
+    "feedbackFile",
+    feedbackFile(REPO) === join(REPO, ".dkk", "feedback.yml"),
   );
 
   // ── findDkkRoot — direct walk-up search ───────────────────────────────

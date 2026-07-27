@@ -80,6 +80,9 @@ When you're about to author or edit YAML, call \`dkk_guide\` topic \`yaml\`; bef
 | \`dkk rename <old-id> <new-id>\` | Rename an item + update all refs |
 | \`dkk rm <id>\` | Remove an item safely |
 | \`dkk render\` | Validate → render docs → rebuild index |
+| \`dkk feedback add "<summary>" --kind <k>\` | Record friction with **dkk itself** (local file, never transmitted) |
+
+Run \`dkk feedback add\` only when the user hits a bug, confusing error, or missing capability in dkk itself, or asks you to record one — offer it, never file feedback unprompted.
 
 ## ID & Naming Conventions
 
@@ -223,6 +226,17 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 | \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, Copilot artifacts, MCP, and AGENTS.md |
 | \`dkk prime\`           | Output the lean agent context (\`--full\` for everything) |
 | \`dkk mcp\`             | MCP server entrypoint (auto-spawned by the client via .mcp.json / .vscode/mcp.json) |
+
+### Feedback (about dkk itself, not the domain)
+
+| Command                                      | Purpose                                              |
+|----------------------------------------------|------------------------------------------------------|
+| \`dkk feedback add "<summary>"\`               | Record a note in \`.dkk/feedback.yml\` (\`--kind bug\\|friction\\|idea\\|docs\`, \`--detail\`, \`--command\`) |
+| \`dkk feedback\`                               | List what's been recorded (\`--kind\`, \`--unshared\`)  |
+| \`dkk feedback export\`                        | Paste-ready Markdown report on **stdout** (\`--all\`, \`--mark-shared\`) |
+| \`dkk feedback rm <id…>\`                      | Drop an entry — the redaction escape hatch          |
+
+Nothing is transmitted: \`export\` prints to stdout and a human decides where it goes. Capture the failing invocation with \`--command\` and the error output with \`--detail\` — those two fields are what make a report reproducible. Never include secrets, and show the user the draft before recording it.
 
 ### Federation
 

@@ -154,15 +154,32 @@ dkk rm <id>                           # Remove item safely
 
 # Audit
 dkk stats                             # Domain statistics + orphaned items
+dkk drift                             # Model/code drift report (code_refs bindings + git; --strict for CI)
+dkk drift ack <context>               # Mark a flagged context reviewed-and-accurate at HEAD
+dkk drift map <file>                  # Which context binds a source file (staleness + ADRs)
 
 # Agent
 dkk init                              # Create/update AGENTS.md with DKK section + print next steps
 dkk init --claude                     # Also scaffold .claude/ (settings, hooks, skills, agents, commands)
+dkk init --copilot                    # Also scaffold GitHub Copilot config (.github/ prompts, agent, skills, copilot-instructions.md, .vscode/mcp.json)
 dkk init --skills                     # Also install agent skills into .github/skills/
-dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills artifacts + MCP
+dkk init --all                        # Install both Claude Code and Copilot config
+dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills/Copilot artifacts + MCP
 dkk prime                             # Output full agent context
-dkk mcp                               # Run the DKK MCP server (stdio) for Claude Code etc.
+dkk mcp                               # MCP server entrypoint — auto-spawned by the client via .mcp.json / .vscode/mcp.json (do not run by hand)
+
+# Feedback (about dkk itself, not this project's domain)
+dkk feedback add "<summary>"          # Record friction with dkk (--kind bug|friction|idea|docs, --detail, --command)
+dkk feedback                          # List recorded feedback (--kind, --unshared)
+dkk feedback export                   # Paste-ready Markdown report on stdout (--all, --mark-shared)
+dkk feedback rm <id>                  # Drop an entry (redaction escape hatch)
 ```
+
+Feedback is a local file (`.dkk/feedback.yml`) — nothing is transmitted. Offer to record it when the user hits a dkk bug or rough edge; never file it unprompted.
+
+### Model Context Protocol (MCP)
+
+`dkk init` writes a committed `.mcp.json` registering the **dkk** MCP server (`dkk init --copilot` also writes `.vscode/mcp.json` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (`dkk_search`, `dkk_show`, `dkk_summary`, `dkk_related`, `dkk_list`, `dkk_story`, `dkk_validate`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
 
 ### Quality Gates
 

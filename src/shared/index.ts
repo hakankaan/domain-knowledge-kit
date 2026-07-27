@@ -42,6 +42,7 @@ export {
   templatesDir,
   schemaDir,
   repoRelative,
+  feedbackFile,
   serviceFile,
   federationFile,
   federationLockFile,

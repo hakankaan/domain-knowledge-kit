@@ -883,7 +883,7 @@ try {
     const result = run(["--help"]);
     assert("--help exits 0", result.exitCode === 0);
     const helpText = result.stdout;
-    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "init", "prime", "adr", "new"];
+    const topLevelCommands = ["list", "show", "search", "related", "validate", "render", "init", "prime", "adr", "new", "feedback"];
     for (const cmd of topLevelCommands) {
       assert(`--help lists '${cmd}' command`, helpText.includes(cmd));
     }
@@ -1468,6 +1468,196 @@ try {
       (e.hooks ?? []).some((h) => h.command === "echo my-custom-hook"),
     );
     assert("user-authored hook entry preserved", Boolean(userHook));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 21. feedback — capture, list, export, rm
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== feedback: empty state teaches instead of reporting nothing ===");
+  {
+    const root = makeTempRoot("feedback-empty");
+    tempRoots.push(root);
+    // Bare `dkk feedback` must resolve to the default `list` subcommand.
+    const result = run(["feedback"], { root });
+    assert("bare feedback exits 0", result.exitCode === 0);
+    assert("empty state teaches", result.stdout.includes("No feedback recorded yet"));
+    assert("empty state shows a runnable example", result.stdout.includes("dkk feedback add"));
+    assert(
+      "empty state states nothing is transmitted",
+      result.stdout.includes("Nothing leaves this repo"),
+    );
+    assert("bare feedback does not create the file", !existsSync(join(root, ".dkk", "feedback.yml")));
+  }
+
+  console.log("\n=== feedback add: records, auto-numbers, persists across processes ===");
+  {
+    const root = makeTempRoot("feedback-add");
+    tempRoots.push(root);
+
+    const first = run(
+      [
+        "feedback", "add", "dkk render crashes on an empty context",
+        "--kind", "bug", "--command", "dkk render",
+        "--detail", "TypeError when context.yml exists but no item dirs.",
+        "--json", "--minify",
+      ],
+      { root },
+    );
+    assert("feedback add exits 0", first.exitCode === 0);
+    const added = JSON.parse(first.stdout) as { id: string; kind: string; total: number };
+    assert("first entry is fb-0001", added.id === "fb-0001", added.id);
+    assert("kind echoed back so a mislabel is visible", added.kind === "bug");
+    assert("feedback file created", existsSync(join(root, ".dkk", "feedback.yml")));
+
+    const raw = readFileSync(join(root, ".dkk", "feedback.yml"), "utf-8");
+    assert("file carries the redaction header", raw.includes("Nothing leaves this repo"));
+    assert("file records the provoking command", raw.includes("command: dkk render"));
+
+    // Numbering must survive a fresh process — i.e. it really persisted.
+    const second = run(["feedback", "add", "want dkk diff", "--kind", "idea", "--json", "--minify"], { root });
+    const added2 = JSON.parse(second.stdout) as { id: string; total: number };
+    assert("second entry is fb-0002", added2.id === "fb-0002", added2.id);
+    assert("total reflects both", added2.total === 2);
+
+    const bad = run(["feedback", "add", "x", "--kind", "wishlist"], { root });
+    assert("invalid kind exits 1", bad.exitCode === 1);
+    assert("invalid kind lists the valid ones", bad.stderr.includes("bug, friction, idea, docs"));
+  }
+
+  console.log("\n=== feedback list: filters ===");
+  {
+    const root = makeTempRoot("feedback-list");
+    tempRoots.push(root);
+    run(["feedback", "add", "a bug", "--kind", "bug"], { root });
+    run(["feedback", "add", "an idea", "--kind", "idea"], { root });
+
+    const all = JSON.parse(
+      run(["feedback", "list", "--json", "--minify"], { root }).stdout,
+    ) as { total: number; unshared: number; entries: unknown[] };
+    assert("list --json reports totals", all.total === 2 && all.unshared === 2);
+
+    const byKind = JSON.parse(
+      run(["feedback", "list", "--kind", "bug", "--json", "--minify"], { root }).stdout,
+    ) as { entries: Array<{ id: string }> };
+    assert("list --kind narrows", byKind.entries.length === 1);
+
+    const badFilter = run(["feedback", "list", "--kind", "nonsense"], { root });
+    assert("invalid --kind filter exits 1", badFilter.exitCode === 1);
+  }
+
+  console.log("\n=== feedback export: stdout is the artifact, framing goes to stderr ===");
+  {
+    const root = makeTempRoot("feedback-export");
+    tempRoots.push(root);
+    run(["feedback", "add", "a bug", "--kind", "bug", "--detail", "boom"], { root });
+    run(["feedback", "add", "an idea", "--kind", "idea"], { root });
+
+    const exported = run(["feedback", "export"], { root });
+    assert("export exits 0", exported.exitCode === 0);
+    assert("stdout carries the report", exported.stdout.includes("## DKK feedback"));
+    // The whole point of the split: `| pbcopy` and `--body-file -` must
+    // receive Markdown and nothing else.
+    assert("stdout carries NO hints or URLs", !exported.stdout.includes("github.com"));
+    assert("stderr carries the issue URL", exported.stderr.includes("issues/new"));
+    assert("stderr warns to review before pasting", exported.stderr.includes("Review the report"));
+    assert("stderr offers the gh one-liner", exported.stderr.includes("gh issue create"));
+
+    // Read-only by default: piping must not mutate state.
+    const stillUnshared = JSON.parse(
+      run(["feedback", "list", "--json", "--minify"], { root }).stdout,
+    ) as { unshared: number };
+    assert("export without --mark-shared does not mutate", stillUnshared.unshared === 2);
+
+    run(["feedback", "export", "--mark-shared"], { root });
+    const afterMark = JSON.parse(
+      run(["feedback", "list", "--json", "--minify"], { root }).stdout,
+    ) as { unshared: number; total: number };
+    assert("--mark-shared flips the exported entries", afterMark.unshared === 0 && afterMark.total === 2);
+
+    const nothing = run(["feedback", "export"], { root });
+    assert("re-export exits 0", nothing.exitCode === 0);
+    assert("re-export writes nothing to stdout", nothing.stdout === "");
+    assert("re-export explains on stderr", nothing.stderr.includes("already marked shared"));
+
+    const reExport = run(["feedback", "export", "--all"], { root });
+    assert("--all re-exports everything", reExport.stdout.includes("2 item(s)"));
+  }
+
+  console.log("\n=== feedback rm: the redaction escape hatch ===");
+  {
+    const root = makeTempRoot("feedback-rm");
+    tempRoots.push(root);
+    run(["feedback", "add", "keep me"], { root });
+    run(["feedback", "add", "drop me"], { root });
+    run(["feedback", "add", "keep me too"], { root });
+
+    const removed = run(["feedback", "rm", "fb-0002"], { root });
+    assert("rm exits 0", removed.exitCode === 0);
+    const after = JSON.parse(
+      run(["feedback", "list", "--json", "--minify"], { root }).stdout,
+    ) as { total: number; entries: Array<{ id: string }> };
+    assert("rm removes only the named entry", after.total === 2);
+    assert(
+      "rm leaves the others alone",
+      after.entries.map((e) => e.id).join() === "fb-0001,fb-0003",
+      after.entries.map((e) => e.id).join(),
+    );
+
+    // max+1, not count+1: with a hole in the middle, count+1 would collide
+    // with the surviving fb-0003.
+    const next = JSON.parse(
+      run(["feedback", "add", "numbering", "--json", "--minify"], { root }).stdout,
+    ) as { id: string };
+    assert("next id never collides with a survivor", next.id === "fb-0004", next.id);
+
+    const missing = run(["feedback", "rm", "fb-0099"], { root });
+    assert("rm on an unknown id exits 1", missing.exitCode === 1);
+    assert("rm on an unknown id says so", missing.stderr.includes('No entry with id "fb-0099"'));
+  }
+
+  console.log("\n=== feedback: a hand-broken file never loses what was captured ===");
+  {
+    const root = makeTempRoot("feedback-broken");
+    tempRoots.push(root);
+
+    // Unparseable YAML must be an error, not a silent empty log — this file
+    // holds the only copy of something a human wrote.
+    writeFileSync(join(root, ".dkk", "feedback.yml"), "entries: [oops\n", "utf-8");
+    const unparseable = run(["feedback", "list"], { root });
+    assert("unparseable file exits 1", unparseable.exitCode === 1);
+    assert("unparseable file explains the fix", unparseable.stderr.includes("could not be parsed"));
+
+    // Parseable but partly malformed: reads warn and degrade, writes refuse.
+    writeFileSync(
+      join(root, ".dkk", "feedback.yml"),
+      "version: 1\nentries:\n  - id: fb-0001\n    summary: survivor\n  - nope\n",
+      "utf-8",
+    );
+    const degraded = run(["feedback", "list"], { root });
+    assert("partly-malformed file still lists the survivors", degraded.exitCode === 0);
+    assert("partly-malformed file warns", degraded.stdout.includes("Skipped 1 malformed"));
+
+    const refused = run(["feedback", "add", "should refuse"], { root });
+    assert("writing over a partly-malformed file exits 1", refused.exitCode === 1);
+    assert("refusal explains why", refused.stderr.includes("Refusing to write"));
+  }
+
+  console.log("\n=== feedback: agent mode + model independence ===");
+  {
+    const root = makeValidDomain("feedback-agent");
+    tempRoots.push(root);
+
+    // --json/--minify declared → auto-enrolled in agent mode by cli.ts.
+    const agentMode = run(["--agent", "feedback", "add", "via agent mode"], { root });
+    assert("agent mode exits 0", agentMode.exitCode === 0);
+    const parsed = JSON.parse(agentMode.stdout) as { id: string };
+    assert("agent mode emits JSON without --json", parsed.id === "fb-0001");
+    assert("agent mode minifies", !agentMode.stdout.includes("\n  \""));
+
+    // feedback.yml is not part of the domain model: it must never affect
+    // a consumer's validation gate.
+    const stillValid = run(["validate"], { root });
+    assert("validate ignores .dkk/feedback.yml", stillValid.exitCode === 0, stillValid.stderr);
   }
 
 } finally {

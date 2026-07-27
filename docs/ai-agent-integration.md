@@ -247,7 +247,7 @@ dkk init --copilot   # (or `dkk init --all` for Claude Code + Copilot together)
 This scaffolds:
 
 - **`.github/copilot-instructions.md`** — the DKK agent context, embedded in a marker-delimited section (`<!-- dkk:start -->` / `<!-- dkk:end -->`) so re-runs and hand edits both survive. Copilot has no session-start hook, so unlike Claude Code (whose hook runs `dkk prime` dynamically) DKK bakes the **static** contract into this file. For the *live* domain summary the agent runs `dkk prime` or calls the `dkk_prime` MCP tool. `dkk update` refreshes the section so it never drifts from the installed tool version.
-- **`.github/prompts/dkk-*.prompt.md`** — six reusable prompt files (`/dkk-prime`, `/dkk-impact`, `/dkk-review`, `/dkk-adr`, `/dkk-implement`, `/dkk-story`), the Copilot equivalents of the `.claude/commands/` slash commands.
+- **`.github/prompts/dkk-*.prompt.md`** — eight reusable prompt files (`/dkk-prime`, `/dkk-impact`, `/dkk-review`, `/dkk-adr`, `/dkk-implement`, `/dkk-story`, `/dkk-feedback`, `/dkk-feedback-export`), the Copilot equivalents of the `.claude/commands/` slash commands.
 - **`.github/agents/dkk-domain-reviewer.agent.md`** — a read-only custom agent that reviews a diff/PR for domain impact (blast radius, broken refs, ADR drift), mirroring the Claude subagent.
 - **`.github/skills/dkk-*/skill.md`** — the portable, CLI-first Agent Skills (`dkk-adr-author`, `dkk-flow-implementer`, `dkk-story-analyst`).
 - **`.vscode/mcp.json`** — registers the same `dkk` MCP server for VS Code Copilot:
@@ -261,6 +261,21 @@ This scaffolds:
   > If your repo's `.gitignore` excludes `.vscode/`, add an exception so the registration is shared with the team: `!.vscode/mcp.json`. Otherwise each teammate has to run `dkk init --copilot` themselves.
 
 Re-run with `--force` to overwrite local edits. Copilot has no hook mechanism, so the `SessionStart`/validate-gate behaviors from the Claude Code hooks have no direct Copilot equivalent — the static instructions file is the substitute for session-start priming.
+
+## Reporting DKK Issues
+
+When dkk itself misbehaves, the friction is felt mid-task inside an agent session — and by the time you'd file an issue, the details are gone. `dkk feedback` captures it where it happens:
+
+```bash
+/dkk-feedback              # Claude Code (or the dkk-feedback prompt in Copilot)
+/dkk-feedback-export       # produce the paste-ready report
+```
+
+The agent drafts the entry from what it just observed — the failing invocation, the actual error output — shows you the draft, and records it only after you confirm. `dkk feedback export` then prints a Markdown report for https://github.com/hakankaan/domain-knowledge-kit/issues.
+
+**Nothing is transmitted.** Entries live in `.dkk/feedback.yml` in your repo; export writes to stdout and you decide where it goes. The auto-captured context is dkk version, Node version, platform, agent, and pack size **as counts only** — never a context, item, actor, ADR, or flow name.
+
+`dkk feedback` is a CLI command with no MCP tool, deliberately. Every mutation in DKK goes through the CLI and the MCP server stays read-only; the agent shells out, gated by the `Bash(dkk feedback:*)` permission that `dkk init --claude` installs. See [ADR-0005](../.dkk/adr/adr-0005.md) and the [CLI reference](cli-reference.md#feedback).
 
 ## What's Next?
 

@@ -6,6 +6,10 @@ Future directions and requirements for the Domain Knowledge Kit. Records **what 
 
 ## Completed
 
+### In-Repo Feedback Capture (2026-07-27)
+
+Added `dkk feedback` so friction with dkk *itself* can be recorded where it is felt — inside an agent session — instead of being lost before anyone files an issue. `dkk feedback add` writes a note to `.dkk/feedback.yml`; `dkk feedback export` prints a paste-ready Markdown report on stdout (framing on stderr, so `| pbcopy` and `gh issue create --body-file -` both work); `dkk feedback rm` is the redaction escape hatch. `/dkk-feedback` and `/dkk-feedback-export` (with Copilot prompt mirrors) let the agent draft the write-up from what it just observed, subject to user confirmation. DKK still makes no network calls: the log is a committed local file and a human decides what leaves the machine. Auto-captured context is counts-only — never a context, item, actor, ADR, or flow name. See [ADR-0005](.dkk/adr/adr-0005.md).
+
 ### First-Class GitHub Copilot Support (2026-07-04)
 
 Promoted GitHub Copilot to a first-class agent target alongside Claude Code. `dkk init --copilot` (or `--all`) installs the full Copilot surface: a static domain-context section in `.github/copilot-instructions.md`, prompt files under `.github/prompts/` mirroring the Claude slash commands, a `dkk-domain-reviewer` custom agent, the complete portable skill set, and MCP registration in `.vscode/mcp.json` (plus the repo-root `.mcp.json`). `dkk update` maintains the Copilot surface for repos that opted in and leaves Claude-only repos untouched. See [ADR-0004](.dkk/adr/adr-0004.md).

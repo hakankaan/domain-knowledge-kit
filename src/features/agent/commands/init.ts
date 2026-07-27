@@ -96,7 +96,15 @@ dkk init --all                        # Install both Claude Code and Copilot con
 dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills/Copilot artifacts + MCP
 dkk prime                             # Output full agent context
 dkk mcp                               # MCP server entrypoint — auto-spawned by the client via .mcp.json / .vscode/mcp.json (do not run by hand)
+
+# Feedback (about dkk itself, not this project's domain)
+dkk feedback add "<summary>"          # Record friction with dkk (--kind bug|friction|idea|docs, --detail, --command)
+dkk feedback                          # List recorded feedback (--kind, --unshared)
+dkk feedback export                   # Paste-ready Markdown report on stdout (--all, --mark-shared)
+dkk feedback rm <id>                  # Drop an entry (redaction escape hatch)
 \`\`\`
+
+Feedback is a local file (\`.dkk/feedback.yml\`) — nothing is transmitted. Offer to record it when the user hits a dkk bug or rough edge; never file it unprompted.
 
 ### Model Context Protocol (MCP)
 

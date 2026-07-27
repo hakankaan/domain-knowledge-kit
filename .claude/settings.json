@@ -18,7 +18,8 @@
       "Bash(dkk new:*)",
       "Bash(dkk rename:*)",
       "Bash(dkk move:*)",
-      "Bash(dkk render:*)"
+      "Bash(dkk render:*)",
+      "Bash(dkk feedback:*)"
     ]
   },
   "hooks": {

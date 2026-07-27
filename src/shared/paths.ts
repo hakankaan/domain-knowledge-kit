@@ -185,6 +185,15 @@ export function repoRelative(absPath: string, root?: string): string {
   return relative(repoRoot(root), absPath).replace(/\\/g, "/");
 }
 
+/**
+ * Absolute path to `.dkk/feedback.yml` (notes about the dkk tool itself).
+ *
+ * Not part of the domain model — the loader and validator never read it.
+ */
+export function feedbackFile(root?: string): string {
+  return join(repoRoot(root), ".dkk", "feedback.yml");
+}
+
 // ── Federation paths ─────────────────────────────────────────────────
 
 /** Absolute path to `.dkk/service.yml` (service identity manifest). */

@@ -48,7 +48,11 @@ console.log("\n=== copilot-install: full install into a fresh repo ===");
   installCopilotConfig(root, /*force*/ false);
 
   const inv = dkkCopilotFiles();
-  assert("template ships prompt files", inv.prompts.length === 6, `prompts=${inv.prompts.length}`);
+  // Not an exact count: dkkCopilotFiles() walks the template dir at runtime,
+  // so adding a `dkk-*` prompt would otherwise break this every time. The
+  // guard that matters is "the walk found something" — each file it found is
+  // then individually asserted installed below.
+  assert("template ships prompt files", inv.prompts.length > 0, `prompts=${inv.prompts.length}`);
   for (const name of inv.prompts) {
     assert(`installed prompt ${name}`, existsSync(join(root, ".github", "prompts", name)));
   }

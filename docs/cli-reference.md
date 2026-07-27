@@ -415,6 +415,50 @@ dkk prime --static-only   # skip the dynamic domain summary
 
 ---
 
+## `feedback`
+
+Record friction with **dkk itself** — bugs, confusing errors, missing capabilities — and export it for the maintainers. This is not about your domain model; domain observations belong in the model or an ADR.
+
+Notes land in `.dkk/feedback.yml`. **Nothing is transmitted.** `dkk feedback export` prints a report to stdout and you decide where it goes; dkk makes no network calls.
+
+```bash
+dkk feedback add "dkk rename leaves ADR domain_refs stale" --kind bug \
+  --detail "Renamed the item; validate then failed on adr-0003." \
+  --command "dkk rename ordering.OrderPlaced ordering.OrderConfirmed"
+
+dkk feedback                     # list what's recorded (default subcommand)
+dkk feedback --unshared          # only what hasn't been reported yet
+dkk feedback export              # paste-ready Markdown report on stdout
+dkk feedback export --mark-shared | gh issue create \
+  --repo hakankaan/domain-knowledge-kit --title "DKK feedback" --body-file -
+dkk feedback rm fb-0002          # drop an entry you'd rather not share
+```
+
+`export` puts **only** the Markdown on stdout — every hint goes to stderr — so `| pbcopy`, `> report.md`, and `--body-file -` all receive a clean artifact. It is read-only unless you pass `--mark-shared`, so piping it can't quietly mutate the file.
+
+Each entry auto-captures the dkk version, Node version, platform, best-effort agent, and **pack size as counts only**. Context, item, actor, ADR, and flow *names* are never recorded — that data is your business domain and the report is destined for a public tracker. See [ADR-0005](../.dkk/adr/adr-0005.md).
+
+Commit `.dkk/feedback.yml` with your change so the whole team accumulates one log. Two people appending at once produce one merge conflict; keep both entries — ids are display-only and the next `add` renumbers past the highest survivor. Teams that hit this often can add `.dkk/feedback.yml merge=union` to `.gitattributes`.
+
+The file is safe to hand-edit. Unparseable YAML is an error rather than a silent empty log, and a partially-malformed file will list what survives but refuse to be written over — it holds the only copy of something you wrote.
+
+| Subcommand | Purpose |
+|------------|---------|
+| `add <summary>` | Record a note (`--kind`, `--detail`, `--command`) |
+| `list` *(default)* | List recorded feedback (`--kind`, `--unshared`) |
+| `export` | Markdown report on stdout (`--all`, `--kind`, `--mark-shared`) |
+| `rm <ids...>` | Remove entries — the redaction escape hatch |
+
+| Flag (on `add`) | Default | Description |
+|------|---------|-------------|
+| `-k, --kind <kind>` | `friction` | `bug`, `friction`, `idea`, or `docs` |
+| `-d, --detail <text>` | — | What you ran, expected, and got — paste the real error output |
+| `--command <cmd>` | — | The `dkk` invocation that provoked it |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+---
+
 ## `show <id>`
 
 Display the YAML frontmatter of an Architecture Decision Record.

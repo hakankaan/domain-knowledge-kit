@@ -29,6 +29,7 @@ import { registerRm } from "./features/refactor/commands/rm.js";
 import { registerMove } from "./features/refactor/commands/move.js";
 import { registerStats } from "./features/audit/commands/stats.js";
 import { registerDrift } from "./features/audit/commands/drift.js";
+import { registerFeedback } from "./features/feedback/commands/feedback.js";
 import { registerMcp } from "./features/mcp/commands/serve.js";
 import { formatCliError } from "./shared/errors.js";
 
@@ -75,6 +76,7 @@ registerRm(program);
 registerMove(program);
 registerStats(program);
 registerDrift(program);
+registerFeedback(program);
 registerMcp(program);
 
 // "new" sub-command group
