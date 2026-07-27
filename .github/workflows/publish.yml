@@ -14,10 +14,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
+      # v5 is the first major on the Node 24 runtime. Held at v5 rather than
+      # the latest: v6/v7 change caching defaults and drop setup-node's dummy
+      # NODE_AUTH_TOKEN export, which sits on the Trusted Publishing auth path
+      # this workflow only exercises at release time.
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'

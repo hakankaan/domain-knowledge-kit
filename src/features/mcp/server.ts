@@ -38,6 +38,7 @@ import { loadFederation, resolvePeerRoot, peerEnvKey } from "../federation/loade
 import { findConsumers } from "../federation/commands/consumers.js";
 import { analyzeDrift, mapFileToContext } from "../audit/commands/drift.js";
 import { repoRoot } from "../../shared/paths.js";
+import { pkgVersion } from "../../version.js";
 
 /** JSON-stringify a payload for tool output. */
 function asText(payload: unknown): string {
@@ -48,7 +49,10 @@ function asText(payload: unknown): string {
 export function buildServer(rootOpt?: string): McpServer {
   const server = new McpServer({
     name: "dkk",
-    version: "0.2.15",
+    // Read from package.json rather than hardcoded: a stale value here is
+    // invisible locally but is what every MCP client reports as the server
+    // version, so it silently misidentifies the build during triage.
+    version: pkgVersion,
   });
 
   // Optional override for the repo root (each tool can also take its own).
