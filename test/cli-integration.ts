@@ -34,6 +34,24 @@ function assert(label: string, condition: boolean, detail?: string) {
   }
 }
 
+/**
+ * Read a (possibly nested) field off a `JSON.parse` result.
+ *
+ * `JSON.parse` returns `unknown` and these assertions only ever probe one
+ * or two fields, so a narrow accessor beats casting at every call site.
+ * Returns `undefined` for any missing or non-object link in the path, which
+ * is what the assertions want — a wrong shape fails the comparison rather
+ * than throwing and taking the whole run down.
+ */
+function field<T>(parsed: unknown, ...path: string[]): T | undefined {
+  let current: unknown = parsed;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current as T | undefined;
+}
+
 interface RunResult {
   stdout: string;
   stderr: string;
@@ -231,7 +249,7 @@ try {
       parsed = null;
     }
     assert("validate --json produces valid JSON", parsed !== null);
-    assert("validate --json has valid: true", (parsed as any)?.valid === true);
+    assert("validate --json has valid: true", field<boolean>(parsed, "valid") === true);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -268,7 +286,7 @@ try {
       parsed = null;
     }
     assert("show --json produces valid JSON", parsed !== null);
-    assert("show --json has id field", (parsed as any)?.id === "ordering.OrderPlaced");
+    assert("show --json has id field", field<string>(parsed, "id") === "ordering.OrderPlaced");
   }
 
   console.log("\n=== show: --json for unknown ID ===");
@@ -283,7 +301,7 @@ try {
     } catch {
       parsed = null;
     }
-    assert("show --json unknown produces JSON error", (parsed as any)?.error?.includes("not found"));
+    assert("show --json unknown produces JSON error", field<string>(parsed, "error")?.includes("not found") === true);
   }
 
   console.log("\n=== show: actor by ID ===");
@@ -353,7 +371,7 @@ try {
       parsed = null;
     }
     assert("related --json produces valid JSON", parsed !== null);
-    assert("related --json has id field", (parsed as any)?.id === "ordering.OrderPlaced");
+    assert("related --json has id field", field<string>(parsed, "id") === "ordering.OrderPlaced");
   }
 
   console.log("\n=== related: --json for unknown node ===");
@@ -368,7 +386,7 @@ try {
     } catch {
       parsed = null;
     }
-    assert("related --json unknown produces JSON error", (parsed as any)?.error?.includes("not found"));
+    assert("related --json unknown produces JSON error", field<string>(parsed, "error")?.includes("not found") === true);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -429,7 +447,7 @@ try {
       parsed = null;
     }
     assert("list --json produces valid JSON array", Array.isArray(parsed));
-    assert("list --json has items", (parsed as any[])?.length > 0);
+    assert("list --json has items", Array.isArray(parsed) && parsed.length > 0);
   }
 
   console.log("\n=== list: --type filter with no matches ===");
@@ -493,7 +511,7 @@ try {
       parsed = null;
     }
     assert("adr show --json produces valid JSON", parsed !== null);
-    assert("adr show --json has title", (parsed as any)?.data?.title === "Use YAML for domain models" || (parsed as any)?.data?.title === "Adopt Vertical Slice Architecture");
+    assert("adr show --json has title", field<string>(parsed, "data", "title") === "Use YAML for domain models" || field<string>(parsed, "data", "title") === "Adopt Vertical Slice Architecture");
   }
 
   console.log("\n=== adr show: --json for unknown ID ===");
@@ -508,7 +526,7 @@ try {
     } catch {
       parsed = null;
     }
-    assert("adr show --json unknown has error", (parsed as any)?.error?.includes("not found"));
+    assert("adr show --json unknown has error", field<string>(parsed, "error")?.includes("not found") === true);
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -563,7 +581,7 @@ try {
       parsed = null;
     }
     assert("adr related --json produces valid JSON", parsed !== null);
-    assert("adr related --json has id", (parsed as any)?.id === "adr-0001");
+    assert("adr related --json has id", field<string>(parsed, "id") === "adr-0001");
   }
 
   console.log("\n=== adr related: --json for unknown ADR ===");
@@ -578,7 +596,7 @@ try {
     } catch {
       parsed = null;
     }
-    assert("adr related --json unknown has error", (parsed as any)?.error?.includes("not found"));
+    assert("adr related --json unknown has error", field<string>(parsed, "error")?.includes("not found") === true);
   }
 
   console.log("\n=== adr related: domain item → ADR direction ===");
