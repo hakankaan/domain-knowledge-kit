@@ -16,7 +16,7 @@
  * integrations.
  */
 import type { Command as Cmd } from "commander";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, chmodSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { repoRoot, packageSkillsDir, packageClaudeDir, packageCopilotDir, domainDir } from "../../../shared/paths.js";
 import { loadDomainModel } from "../../../shared/loader.js";
@@ -128,10 +128,42 @@ function delimitedSection(): string {
 }
 
 /**
+ * Delete any entry in `dir` whose name matches `fileName` case-insensitively
+ * but not exactly (e.g. a stale `skill.md` next to the required `SKILL.md`).
+ *
+ * On a case-insensitive filesystem (APFS, NTFS) writing `SKILL.md` over an
+ * existing `skill.md` truncates the same inode but **leaves the directory
+ * entry spelled the old way**, so the file stays invisible to every agent
+ * that requires the canonical casing. Removing the variant first forces a
+ * fresh entry with the correct name on both filesystem families.
+ */
+function removeCaseVariants(dir: string, fileName: string): void {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry === fileName) continue;
+    if (entry.toLowerCase() !== fileName.toLowerCase()) continue;
+    try {
+      rmSync(join(dir, entry), { force: true });
+      console.log(`Removed  ${entry} (wrong case — canonical name is ${fileName})`);
+    } catch {
+      /* best effort; the write below still reports its own outcome */
+    }
+  }
+}
+
+/**
  * Copy all skill files from the DKK package's `.github/skills/` directory
  * into the target project's `.github/skills/` directory.
  *
- * Each skill lives in a subdirectory (e.g. `dkk-story-analyst/skill.md`).
+ * Each skill lives in a subdirectory (e.g. `dkk-story-analyst/SKILL.md`).
+ * The `SKILL.md` filename is **case-sensitive** per the Agent Skills spec —
+ * a lowercase `skill.md` is silently ignored by every consumer on a
+ * case-sensitive filesystem, so stale case variants are removed on the way in.
  * Files are skipped if they already exist, unless `force` is true.
  */
 export function installSkills(root: string, force: boolean): void {
@@ -143,7 +175,7 @@ export function installSkills(root: string, force: boolean): void {
     return;
   }
 
-  // Walk one level of subdirectories (skill-name/skill.md)
+  // Walk one level of subdirectories (skill-name/SKILL.md)
   for (const skillName of readdirSync(srcDir)) {
     const skillSrcDir = join(srcDir, skillName);
     if (!statSync(skillSrcDir).isDirectory()) continue;
@@ -154,6 +186,8 @@ export function installSkills(root: string, force: boolean): void {
     for (const fileName of readdirSync(skillSrcDir)) {
       const srcFile = join(skillSrcDir, fileName);
       if (!statSync(srcFile).isFile()) continue;
+
+      removeCaseVariants(skillDestDir, fileName);
 
       const destFile = join(skillDestDir, fileName);
       const relPath = `.github/skills/${skillName}/${fileName}`;
@@ -449,7 +483,7 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
  *     copilot-instructions.md    (static DKK context section — marker-delimited)
  *     prompts/dkk-<name>.prompt.md
  *     agents/dkk-domain-reviewer.agent.md
- *     skills/dkk-<skill>/skill.md
+ *     skills/dkk-<skill>/SKILL.md
  *   .vscode/mcp.json             (dkk MCP server, `servers` key)
  *
  * `.mcp.json` is written separately by the caller (`dkk init`'s default MCP
@@ -495,10 +529,7 @@ export function installCopilotConfig(root: string, force: boolean, opts: Install
 
   // .github/copilot-instructions.md — static DKK context section.
   if (!opts.skipInstructions) {
-    const status = refreshCopilotInstructions(root);
-    if (status === "created") console.log(`Created  .github/copilot-instructions.md`);
-    else if (status === "updated") console.log(`Updated  .github/copilot-instructions.md (DKK section refreshed)`);
-    else console.log(`Appended DKK section to .github/copilot-instructions.md`);
+    printSectionOutcome(refreshCopilotInstructions(root), root, ".github/copilot-instructions.md");
   }
 
   // .vscode/mcp.json — VS Code Copilot MCP registration.
@@ -515,13 +546,61 @@ export function installCopilotConfig(root: string, force: boolean, opts: Install
 }
 
 /**
+ * Locate every occurrence of `marker` that stands **alone on its own line**
+ * (leading/trailing whitespace allowed). Returns `[start, end)` offsets for
+ * each match, in document order.
+ *
+ * Line-anchoring is the whole point: a bare `indexOf` also matches a marker
+ * quoted inside prose or a code span — e.g. documentation that *describes*
+ * the marker convention. Splicing on such a match rewrites the surrounding
+ * sentence and destroys everything up to the next marker-shaped substring.
+ */
+function markerLineSpans(text: string, marker: string): Array<{ start: number; end: number }> {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^[ \\t]*${escaped}[ \\t]*$`, "gm");
+  const spans: Array<{ start: number; end: number }> = [];
+  for (const m of text.matchAll(re)) {
+    spans.push({ start: m.index, end: m.index + m[0].length });
+  }
+  return spans;
+}
+
+/**
+ * True when `text` contains exactly one well-formed, line-anchored DKK
+ * marker section — i.e. the splicer can safely replace it in place.
+ */
+export function hasDkkMarkerSection(text: string): boolean {
+  const starts = markerLineSpans(text, START_MARKER);
+  const ends = markerLineSpans(text, END_MARKER);
+  return starts.length === 1 && ends.length === 1 && ends[0].start > starts[0].start;
+}
+
+/**
+ * True when `text` carries any line-anchored DKK marker at all.
+ *
+ * This is the *adoption* signal, deliberately weaker than
+ * {@link hasDkkMarkerSection}: a half-written or duplicated marker still
+ * proves DKK wrote to the file, even though it is not safe to splice. The
+ * line anchoring is what matters here — prose that merely quotes the marker
+ * (documentation describing the convention) must not read as adoption.
+ */
+export function hasDkkMarkerLine(text: string): boolean {
+  return markerLineSpans(text, START_MARKER).length > 0 || markerLineSpans(text, END_MARKER).length > 0;
+}
+
+/**
  * Insert, replace, or append a marker-delimited section in a markdown file.
  *
- * Three outcomes:
+ * Four outcomes:
  * - `created`: the file did not exist; it was written with `header` + section.
- * - `updated`: the file existed and contained the delimited section; it was
- *   replaced in place.
- * - `appended`: the file existed without markers; the section was appended.
+ * - `updated`: the file existed and contained exactly one well-formed
+ *   delimited section; it was replaced in place.
+ * - `appended`: the file existed with no line-anchored markers at all; the
+ *   section was appended.
+ * - `skipped`: the markers are ambiguous or malformed (duplicated, orphaned,
+ *   or out of order). Nothing is written — splicing on a guess is how a
+ *   hand-authored file gets shredded. The caller reports it and the user
+ *   repairs the file by hand.
  *
  * Shared by `refreshAgentsMd` (AGENTS.md) and `refreshCopilotInstructions`
  * (.github/copilot-instructions.md).
@@ -530,27 +609,43 @@ function upsertDelimitedSection(
   filePath: string,
   section: string,
   header: string,
-): "created" | "updated" | "appended" {
+): "created" | "updated" | "appended" | "skipped" {
   if (!existsSync(filePath)) {
     writeFileSync(filePath, `${header}${section}`, "utf-8");
     return "created";
   }
 
   const existing = readFileSync(filePath, "utf-8");
-  const startIdx = existing.indexOf(START_MARKER);
-  const endIdx = existing.indexOf(END_MARKER);
+  const starts = markerLineSpans(existing, START_MARKER);
+  const ends = markerLineSpans(existing, END_MARKER);
 
-  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    const markerEnd = endIdx + END_MARKER.length;
-    const before = existing.slice(0, startIdx);
+  if (starts.length === 1 && ends.length === 1 && ends[0].start > starts[0].start) {
+    const before = existing.slice(0, starts[0].start);
+    const markerEnd = ends[0].end;
     const after = existing.slice(existing[markerEnd] === "\n" ? markerEnd + 1 : markerEnd);
     writeFileSync(filePath, `${before}${section}${after}`, "utf-8");
     return "updated";
   }
 
-  const separator = existing.endsWith("\n") ? "\n" : "\n\n";
-  writeFileSync(filePath, `${existing}${separator}${section}`, "utf-8");
-  return "appended";
+  if (starts.length === 0 && ends.length === 0) {
+    const separator = existing.endsWith("\n") ? "\n" : "\n\n";
+    writeFileSync(filePath, `${existing}${separator}${section}`, "utf-8");
+    return "appended";
+  }
+
+  return "skipped";
+}
+
+/** Human-readable reason a marker splice was refused, for the CLI report. */
+export function describeMarkerProblem(filePath: string): string {
+  if (!existsSync(filePath)) return "file missing";
+  const text = readFileSync(filePath, "utf-8");
+  const starts = markerLineSpans(text, START_MARKER).length;
+  const ends = markerLineSpans(text, END_MARKER).length;
+  if (starts === 0 && ends > 0) return `found ${ends} \`${END_MARKER}\` with no matching \`${START_MARKER}\``;
+  if (ends === 0 && starts > 0) return `found ${starts} \`${START_MARKER}\` with no matching \`${END_MARKER}\``;
+  if (starts > 1 || ends > 1) return `found ${starts} start / ${ends} end markers (expected 1 each)`;
+  return "end marker precedes start marker";
 }
 
 /**
@@ -558,8 +653,25 @@ function upsertDelimitedSection(
  *
  * Used by both `dkk init` and `dkk update`.
  */
-export function refreshAgentsMd(root: string): "created" | "updated" | "appended" {
+export type SectionOutcome = "created" | "updated" | "appended" | "skipped";
+
+export function refreshAgentsMd(root: string): SectionOutcome {
   return upsertDelimitedSection(join(root, "AGENTS.md"), delimitedSection(), "# Agent Instructions\n\n");
+}
+
+/**
+ * Print the outcome of a marker-section refresh, including the diagnostic
+ * for a refused splice. Shared by `dkk init` and `dkk update`.
+ */
+export function printSectionOutcome(outcome: SectionOutcome, root: string, relPath: string): void {
+  const label = relPath;
+  if (outcome === "created") console.log(`Created  ${label}`);
+  else if (outcome === "updated") console.log(`Updated  ${label} (DKK section refreshed)`);
+  else if (outcome === "appended") console.log(`Appended DKK section to ${label}`);
+  else {
+    console.warn(`Skipped  ${label} — ${describeMarkerProblem(join(root, relPath))}.`);
+    console.warn(`         Refusing to splice into an ambiguous file. Repair the markers by hand, then re-run.`);
+  }
 }
 
 /**
@@ -588,7 +700,7 @@ function delimitedCopilotSection(): string {
  *
  * Used by both `dkk init --copilot` and `dkk update`.
  */
-export function refreshCopilotInstructions(root: string): "created" | "updated" | "appended" {
+export function refreshCopilotInstructions(root: string): SectionOutcome {
   mkdirSync(join(root, ".github"), { recursive: true });
   return upsertDelimitedSection(
     join(root, ".github", "copilot-instructions.md"),
@@ -724,10 +836,7 @@ export function registerInit(program: Cmd): void {
       const wantSkills = Boolean(opts.skills || opts.all);
 
       // AGENTS.md — create, refresh in place, or append the DKK section.
-      const status = refreshAgentsMd(root);
-      if (status === "created") console.log(`Created  AGENTS.md`);
-      else if (status === "updated") console.log(`Updated  AGENTS.md (DKK section refreshed)`);
-      else console.log(`Appended DKK section to AGENTS.md`);
+      printSectionOutcome(refreshAgentsMd(root), root, "AGENTS.md");
 
       if (wantClaude) {
         installClaudeConfig(root, force);

@@ -383,13 +383,44 @@ Pipeline:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-y, --yes` | — | Skip interactive confirmation for the artifact diff. |
-| `--check` | — | Dry-run: print the diff and plan, make no changes. |
+| `--check` | — | Dry-run: print the diff and plan, make no changes. Skips the npm upgrade and re-exec entirely, so it works under `npx`. Always exits 0 — for a CI gate use [`artifacts check`](#artifacts-check). |
 | `--skip-npm` | — | Don't run npm upgrade (use the already-installed version). |
 | `--skip-artifacts` | — | Don't sweep/reinstall `.claude/` and `.github/skills/` files. |
 | `--skip-mcp` | — | Don't auto-register the DKK MCP server. |
 | `-r, --root <path>` | repo root | Override repository root. |
 
 → See [AI Agent Integration](ai-agent-integration.md) for the artifacts that `update` refreshes.
+
+---
+
+## `artifacts check`
+
+Read-only drift gate: exit non-zero when the DKK-managed artifacts installed in this repo no longer match the bundled template. Built for CI.
+
+```bash
+dkk artifacts check          # human-readable diff
+dkk artifacts check --json   # machine-readable
+```
+
+Unlike `update --check`, this command **never installs anything** — no npm upgrade, no re-exec, no install-mode requirement — so it is safe under `npx` and safe to run on every pull request.
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | Artifacts match the bundled template. |
+| `1` | Drift detected (missing, outdated, or stale files). |
+| `2` | The check itself failed (e.g. unreadable repo). |
+
+Same adoption gating as `update`: only surfaces the repo already opted into are compared, so a Claude-only repo is never told it's missing Copilot files.
+
+```yaml
+# .github/workflows/dkk.yml
+- run: npx dkk artifacts check
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | — | Emit the diff as JSON (`{drifted, toAdd, toReplace, toRemove}`). |
+| `-r, --root <path>` | repo root | Override repository root. |
 
 ---
 

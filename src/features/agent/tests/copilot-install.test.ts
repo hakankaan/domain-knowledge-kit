@@ -13,10 +13,10 @@
  * `.github/skills/` templates (present in the source repo and the published
  * package), writing into throwaway temp roots.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { installCopilotConfig, refreshCopilotInstructions } from "../commands/init.js";
+import { installCopilotConfig, installSkills, refreshCopilotInstructions } from "../commands/init.js";
 import { ensureVscodeMcpRegistered } from "../mcp-register.js";
 import { hasCopilotAdoption, dkkCopilotFiles } from "../dkk-artifacts.js";
 
@@ -62,7 +62,7 @@ console.log("\n=== copilot-install: full install into a fresh repo ===");
   );
   assert(
     "installed adr-author skill",
-    existsSync(join(root, ".github", "skills", "dkk-adr-author", "skill.md")),
+    existsSync(join(root, ".github", "skills", "dkk-adr-author", "SKILL.md")),
   );
 
   const instrPath = join(root, ".github", "copilot-instructions.md");
@@ -146,6 +146,75 @@ console.log("\n=== copilot-install: hasCopilotAdoption signals ===");
     "utf-8",
   );
   assert("marker-less instructions do not count", hasCopilotAdoption(plainInstructions) === false);
+
+  // Regression: a file that *documents* the marker convention in prose used to
+  // match `.includes(START_MARKER)` and read as adopted. The marker must stand
+  // alone on its own line to count.
+  const proseOnly = makeRoot();
+  mkdirSync(join(proseOnly, ".github"), { recursive: true });
+  writeFileSync(
+    join(proseOnly, ".github", "copilot-instructions.md"),
+    "# Contributor guide\n\nInjects a section (delimited by `" + START + "` / `<!-- dkk:end -->` markers).\n",
+    "utf-8",
+  );
+  assert("marker quoted in prose does not count as adopted", hasCopilotAdoption(proseOnly) === false);
+}
+
+// ── Marker splicing safety ────────────────────────────────────────────
+console.log("\n=== copilot-install: refuses to splice ambiguous markers ===");
+{
+  // Regression for the corruption this repo suffered: an inline marker inside a
+  // sentence was spliced against, replacing ~97 lines of hand-written prose.
+  const prose = makeRoot();
+  mkdirSync(join(prose, ".github"), { recursive: true });
+  const proseText =
+    "# Contributor guide\n\n1. `dkk init` — injects a section (delimited by `" +
+    START +
+    "` / `<!-- dkk:end -->` markers). Hardcoded in `init.ts`.\n";
+  writeFileSync(join(prose, ".github", "copilot-instructions.md"), proseText, "utf-8");
+
+  const status = refreshCopilotInstructions(prose);
+  const after = readFileSync(join(prose, ".github", "copilot-instructions.md"), "utf-8");
+  assert("inline markers are appended past, not spliced into", status === "appended", `got ${status}`);
+  assert("original prose sentence survives", after.includes("Hardcoded in `init.ts`."));
+
+  // An orphaned end marker (no start) is malformed: refuse rather than guess.
+  const orphan = makeRoot();
+  mkdirSync(join(orphan, ".github"), { recursive: true });
+  const orphanText = "# Guide\n\nsome content\n\n<!-- dkk:end -->\n\ntrailing content\n";
+  writeFileSync(join(orphan, ".github", "copilot-instructions.md"), orphanText, "utf-8");
+
+  const orphanStatus = refreshCopilotInstructions(orphan);
+  const orphanAfter = readFileSync(join(orphan, ".github", "copilot-instructions.md"), "utf-8");
+  assert("orphaned end marker is refused", orphanStatus === "skipped", `got ${orphanStatus}`);
+  assert("refused file is left byte-identical", orphanAfter === orphanText);
+}
+
+// ── Skill filename casing ─────────────────────────────────────────────
+console.log("\n=== copilot-install: skills use the canonical SKILL.md casing ===");
+{
+  // The Agent Skills spec requires `SKILL.md` exactly; a lowercase `skill.md`
+  // is invisible to every consumer on a case-sensitive filesystem.
+  const root = makeRoot();
+  installCopilotConfig(root, false, { skipMcp: true, skipInstructions: true });
+  const skillsRoot = join(root, ".github", "skills");
+  for (const skill of readdirSync(skillsRoot)) {
+    const entries = readdirSync(join(skillsRoot, skill));
+    assert(`${skill} ships SKILL.md`, entries.includes("SKILL.md"), entries.join(", "));
+    assert(`${skill} has no lowercase variant`, !entries.includes("skill.md"));
+  }
+
+  // Upgrading a repo that still carries the pre-0.7.0 lowercase file must end
+  // with the canonical name — on a case-insensitive filesystem an in-place
+  // overwrite would silently keep the old spelling.
+  const legacy = makeRoot();
+  const legacyDir = join(legacy, ".github", "skills", "dkk-adr-author");
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(join(legacyDir, "skill.md"), "stale\n", "utf-8");
+  installSkills(legacy, true);
+  const legacyEntries = readdirSync(legacyDir);
+  assert("legacy lowercase skill.md is replaced", !legacyEntries.includes("skill.md"), legacyEntries.join(", "));
+  assert("canonical SKILL.md written in its place", legacyEntries.includes("SKILL.md"));
 }
 
 // ── Teardown ──────────────────────────────────────────────────────────

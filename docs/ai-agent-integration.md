@@ -56,6 +56,7 @@ When a newer release of `dkk` ships new skills, hooks, slash commands, or MCP wi
 ```bash
 dkk update            # bump npm + refresh .claude/, .github/skills/, Copilot, MCP, AGENTS.md
 dkk update --check    # preview the diff without applying
+dkk artifacts check   # read-only drift gate for CI — exits 1 when out of sync
 ```
 
 It runs the npm install for you (global or local install — `npx` is refused), re-execs onto the freshly-installed binary, then refreshes the DKK-managed artifacts. `AGENTS.md` and the repo-root `.mcp.json` are the **universal base** — every `dkk init` writes them, so `update` always refreshes them.
@@ -249,7 +250,7 @@ This scaffolds:
 - **`.github/copilot-instructions.md`** — the DKK agent context, embedded in a marker-delimited section (`<!-- dkk:start -->` / `<!-- dkk:end -->`) so re-runs and hand edits both survive. Copilot has no session-start hook, so unlike Claude Code (whose hook runs `dkk prime` dynamically) DKK bakes the **static** contract into this file. For the *live* domain summary the agent runs `dkk prime` or calls the `dkk_prime` MCP tool. `dkk update` refreshes the section so it never drifts from the installed tool version.
 - **`.github/prompts/dkk-*.prompt.md`** — eight reusable prompt files (`/dkk-prime`, `/dkk-impact`, `/dkk-review`, `/dkk-adr`, `/dkk-implement`, `/dkk-story`, `/dkk-feedback`, `/dkk-feedback-export`), the Copilot equivalents of the `.claude/commands/` slash commands.
 - **`.github/agents/dkk-domain-reviewer.agent.md`** — a read-only custom agent that reviews a diff/PR for domain impact (blast radius, broken refs, ADR drift), mirroring the Claude subagent.
-- **`.github/skills/dkk-*/skill.md`** — the portable, CLI-first Agent Skills (`dkk-adr-author`, `dkk-flow-implementer`, `dkk-story-analyst`).
+- **`.github/skills/dkk-*/SKILL.md`** — the portable, CLI-first Agent Skills (`dkk-adr-author`, `dkk-flow-implementer`, `dkk-story-analyst`).
 - **`.vscode/mcp.json`** — registers the same `dkk` MCP server for VS Code Copilot:
 
   ```json
@@ -260,7 +261,28 @@ This scaffolds:
 
   > If your repo's `.gitignore` excludes `.vscode/`, add an exception so the registration is shared with the team: `!.vscode/mcp.json`. Otherwise each teammate has to run `dkk init --copilot` themselves.
 
-Re-run with `--force` to overwrite local edits. Copilot has no hook mechanism, so the `SessionStart`/validate-gate behaviors from the Claude Code hooks have no direct Copilot equivalent — the static instructions file is the substitute for session-start priming.
+Re-run with `--force` to overwrite local edits.
+
+### Hook parity — what Copilot can and cannot match
+
+Copilot has no repo-level hook mechanism, so the four Claude hooks have no configuration-level equivalent. The honest mapping:
+
+| Claude hook | Class | Closest Copilot substitute |
+|-------------|-------|----------------------------|
+| `SessionStart` → prime | context injection | `.github/copilot-instructions.md` — the **static** contract, refreshed by `dkk update`. Equivalent in spirit; not live. |
+| `PreToolUse` → block writes to `.dkk/docs/` | **preventive** | **None.** Nothing stops the write. |
+| `PostToolUse` → validate on YAML edit | in-loop feedback | CI, but out-of-session — the agent can't self-correct from it. |
+| `Stop` → validate before finishing | end-of-turn gate | CI, same caveat. |
+
+Add a CI job so Copilot-authored changes still hit a gate:
+
+```yaml
+# .github/workflows/dkk.yml
+- run: npx dkk validate
+- run: npx dkk artifacts check
+```
+
+This is **post-hoc detection, not parity.** A `PreToolUse` deny prevents a bad write; CI reports it after the branch is pushed. Don't drop the Claude hooks on the strength of the CI job — and note that a developer using Copilot locally without pushing gets no signal at all.
 
 ## Reporting DKK Issues
 

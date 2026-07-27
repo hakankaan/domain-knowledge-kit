@@ -34,9 +34,11 @@ import {
   installCopilotConfig,
   installSkills,
   mergeClaudeSettings,
+  printSectionOutcome,
   refreshAgentsMd,
   refreshCopilotInstructions,
   type ClaudeSettings,
+  type SectionOutcome,
 } from "./init.js";
 import {
   computeArtifactDiff,
@@ -96,12 +98,19 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
     process.exit(1);
   }
 
-  // Skip Phase A/B/C entirely if we're already in the re-exec'd child.
-  if (!opts.postUpgrade) {
+  // Skip Phase A/B/C entirely if we're already in the re-exec'd child, or
+  // when `--check` is set: a dry run must not install anything. Without this
+  // guard `--check` ran the npm self-upgrade and re-exec'd, so a command
+  // documented as "make no changes" mutated node_modules (or the global
+  // prefix) before printing its diff. `--check` also no longer needs an
+  // upgradable install mode, so it works under npx — which is how CI runs it.
+  const dryRun = Boolean(opts.check);
+  if (!opts.postUpgrade && !dryRun) {
     const install = detectInstallMode();
     if (install.mode === "npx") {
       console.error("Error: `dkk update` can't upgrade an npx-launched install.");
       console.error("Hint: install dkk globally (`npm i -g domain-knowledge-kit`) or as a devDependency, then re-run.");
+      console.error("Hint: for a read-only drift check in CI, use `dkk artifacts check` instead.");
       process.exit(1);
     }
 
@@ -202,11 +211,20 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
   }
 
   // ── Phase G: AGENTS.md + copilot-instructions.md refresh ────────────
-  let agentsStatus: "created" | "updated" | "appended" | "skipped" = "skipped";
-  let copilotStatus: "created" | "updated" | "appended" | "not-adopted" = "not-adopted";
+  // "not-run" is the --check sentinel; "skipped" is a *refused* splice
+  // (ambiguous markers). Keeping them distinct matters — one is expected,
+  // the other means a file needs manual repair.
+  let agentsStatus: SectionOutcome | "not-run" = "not-run";
+  let copilotStatus: SectionOutcome | "not-adopted" = "not-adopted";
   if (!opts.check) {
     agentsStatus = refreshAgentsMd(root);
-    if (copilotAdopted) copilotStatus = refreshCopilotInstructions(root);
+    if (agentsStatus === "skipped") printSectionOutcome(agentsStatus, root, "AGENTS.md");
+    if (copilotAdopted) {
+      copilotStatus = refreshCopilotInstructions(root);
+      if (copilotStatus === "skipped") {
+        printSectionOutcome(copilotStatus, root, ".github/copilot-instructions.md");
+      }
+    }
   }
 
   // ── Phase H: Summary report ─────────────────────────────────────────
@@ -366,8 +384,8 @@ function printSummary(
   diff: { added: number; replaced: number; removed: number },
   settings: SettingsResult,
   mcp: McpRegisterOutcome | { status: "skipped"; reason: string },
-  agents: "created" | "updated" | "appended" | "skipped",
-  copilot: "created" | "updated" | "appended" | "not-adopted",
+  agents: SectionOutcome | "not-run",
+  copilot: SectionOutcome | "not-adopted",
 ): void {
   console.log("");
   console.log("── Summary ────────────────────────────────────────────────────────");
@@ -375,10 +393,16 @@ function printSummary(
   console.log(`Artifacts     +${diff.added} added, ~${diff.replaced} replaced, -${diff.removed} removed`);
   console.log(`settings.json ${formatSettingsResult(settings)}`);
   console.log(`MCP server    ${formatMcpResult(mcp)}`);
-  console.log(`AGENTS.md     ${agents}`);
-  console.log(`Copilot       ${copilot === "not-adopted" ? "not installed (run `dkk init --copilot`)" : copilot}`);
+  console.log(`AGENTS.md     ${formatSectionOutcome(agents)}`);
+  console.log(`Copilot       ${copilot === "not-adopted" ? "not installed (run `dkk init --copilot`)" : formatSectionOutcome(copilot)}`);
   console.log("");
   console.log("Next: run `dkk render` to validate the domain model.");
+}
+
+function formatSectionOutcome(o: SectionOutcome | "not-run"): string {
+  if (o === "not-run") return "not refreshed (--check)";
+  if (o === "skipped") return "SKIPPED — ambiguous markers, repair by hand";
+  return o;
 }
 
 function formatSettingsResult(s: SettingsResult): string {

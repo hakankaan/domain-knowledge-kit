@@ -19,9 +19,9 @@
  *   removes them so users on old releases don't carry stale files forever.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { packageClaudeDir, packageCopilotDir, packageSkillsDir } from "../../shared/paths.js";
-import { START_MARKER, extractHookBasename, type ClaudeSettings } from "./commands/init.js";
+import { hasDkkMarkerLine, extractHookBasename, type ClaudeSettings } from "./commands/init.js";
 
 /**
  * Repo-relative paths that previous DKK versions installed but the current
@@ -31,6 +31,16 @@ import { START_MARKER, extractHookBasename, type ClaudeSettings } from "./comman
  */
 export const LEGACY_DKK_PATHS: readonly string[] = [
   ".github/skills/dkk-domain-knowledge",
+  // Releases through 0.6.1 shipped the portable skills as lowercase
+  // `skill.md`. The Agent Skills spec requires `SKILL.md` (case-sensitive),
+  // so the lowercase files are invisible to every consumer on a
+  // case-sensitive filesystem. Sweep runs before reinstall, so removing the
+  // stale entry lets the copier create a correctly-cased one — on a
+  // case-insensitive filesystem an in-place overwrite would have kept the
+  // old spelling.
+  ".github/skills/dkk-adr-author/skill.md",
+  ".github/skills/dkk-flow-implementer/skill.md",
+  ".github/skills/dkk-story-analyst/skill.md",
 ];
 
 export interface ClaudeArtifactInventory {
@@ -117,7 +127,10 @@ export function hasCopilotAdoption(root: string): boolean {
   const instructions = join(root, ".github", "copilot-instructions.md");
   if (existsSync(instructions)) {
     try {
-      if (readFileSync(instructions, "utf-8").includes(START_MARKER)) return true;
+      // Line-anchored: a file that merely *documents* the marker convention
+      // in prose must not read as an installed DKK section. A lone/duplicated
+      // marker still counts as adoption — it just isn't safe to splice.
+      if (hasDkkMarkerLine(readFileSync(instructions, "utf-8"))) return true;
     } catch { /* ignore */ }
   }
 
@@ -211,6 +224,25 @@ function readBundledSettings(): ClaudeSettings | null {
     return JSON.parse(readFileSync(path, "utf-8")) as ClaudeSettings;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Case-sensitive `existsSync`: true only when the parent directory contains
+ * an entry spelled exactly like `absPath`'s basename.
+ *
+ * `existsSync` delegates to the filesystem, so on APFS/NTFS it answers true
+ * for `skill.md` when only `SKILL.md` is present. Anywhere the exact spelling
+ * is load-bearing — legacy-path sweeps, canonical-filename checks — that
+ * false positive matters.
+ */
+function existsExact(absPath: string): boolean {
+  const parent = dirname(absPath);
+  const name = basename(absPath);
+  try {
+    return readdirSync(parent).includes(name);
+  } catch {
+    return false;
   }
 }
 
@@ -318,10 +350,14 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
   scan.copilotPrompts = listDkkFilesWithSuffix(join(root, ".github", "prompts"), ".prompt.md");
   scan.copilotAgents = listDkkFilesWithSuffix(join(root, ".github", "agents"), ".agent.md");
 
-  // Legacy paths.
+  // Legacy paths. Must be matched case-SENSITIVELY: on a case-insensitive
+  // filesystem `existsSync(".../skill.md")` also matches the canonical
+  // `SKILL.md` we just installed, which would park the current file in
+  // `toRemove` on every run — a permanently dirty diff and a delete/reinstall
+  // churn. Compare against the real directory entry instead.
   for (const legacyRel of LEGACY_DKK_PATHS) {
     const abs = join(root, legacyRel);
-    if (existsSync(abs)) scan.legacy.push(abs);
+    if (existsExact(abs)) scan.legacy.push(abs);
   }
 
   return scan;
