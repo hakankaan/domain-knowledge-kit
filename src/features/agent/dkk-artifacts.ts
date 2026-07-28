@@ -22,6 +22,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { packageClaudeDir, packageCopilotDir, packageSkillsDir } from "../../shared/paths.js";
 import { hasDkkMarkerLine, extractHookBasename, type ClaudeSettings } from "./commands/init.js";
+import { CONFLICT_SUFFIX, readArtifactLock, sha256, writeArtifactLock } from "./artifact-lock.js";
+import { findCaseVariants, type CaseRename } from "./case-rename.js";
 
 /**
  * Repo-relative paths that previous DKK versions installed but the current
@@ -313,11 +315,15 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
   };
 
   // .claude/skills, .claude/agents, .claude/commands — match dkk-* prefix.
+  // `<name>.new` files are conflict copies DKK wrote for the user to merge,
+  // not managed artifacts; scanning them in would flag them for deletion on
+  // the very next run, throwing away the template the user still needs.
   for (const sub of ["skills", "agents", "commands"] as const) {
     const dir = join(root, ".claude", sub);
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       if (!name.startsWith("dkk-")) continue;
+      if (name.endsWith(CONFLICT_SUFFIX)) continue;
       const path = join(dir, name);
       // skills/ is nested (one dir per skill); agents/ + commands/ are flat files.
       if (sub === "skills") {
@@ -342,6 +348,7 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
   if (existsSync(ghSkills)) {
     for (const name of readdirSync(ghSkills)) {
       if (!name.startsWith("dkk-")) continue;
+      if (name.endsWith(CONFLICT_SUFFIX)) continue;
       scan.githubSkillDirs.push(join(ghSkills, name));
     }
   }
@@ -363,55 +370,219 @@ export function scanInstalledArtifacts(root: string): InstalledArtifactScan {
   return scan;
 }
 
-export interface ArtifactDiff {
-  /** Files in the new template that aren't present in the target repo. */
-  toAdd: string[];
-  /** Files present in both but with different content. */
-  toReplace: string[];
-  /** Files present locally that DKK no longer ships (renamed/removed templates + legacy paths). */
-  toRemove: string[];
+/** Which agent surfaces a repo has opted into. */
+export interface AdoptedSurfaces {
+  claude: boolean;
+  githubSkills: boolean;
+  copilot: boolean;
 }
 
 /**
- * Compute the add / replace / remove triage between the bundled template
- * and a target repo. Paths are returned as repo-relative POSIX paths.
+ * Each surface is diffed (and later refreshed) only if the repo has already
+ * adopted it, so `dkk update` never pushes a toolchain onto a repo that
+ * didn't opt in — a Copilot-only repo must not sprout a `.claude/` tree, and
+ * a Claude-only repo must not sprout `.github/` Copilot files.
+ */
+export function detectAdoptedSurfaces(root: string): AdoptedSurfaces {
+  return {
+    claude: hasClaudeAdoption(root),
+    githubSkills: hasGithubSkillsAdoption(root),
+    copilot: hasCopilotAdoption(root),
+  };
+}
+
+/** One file the bundled template ships, paired with where it lands. */
+export interface ShippedArtifact {
+  /** Absolute path inside the DKK package. */
+  src: string;
+  /** Absolute destination path in the target repo. */
+  dest: string;
+  /** Repo-relative POSIX destination path — the identity used in the lock. */
+  rel: string;
+}
+
+export interface ShippedInventory {
+  /** Every shipped file, individually. */
+  files: ShippedArtifact[];
+  /**
+   * Install roots as {@link scanInstalledArtifacts} reports them: skill
+   * *directories* plus flat files. Kept separate from `files` because
+   * removal is decided per install root (a retired skill is swept as a
+   * directory) while add/replace/conflict is decided per file.
+   */
+  roots: Set<string>;
+}
+
+/**
+ * Enumerate every file the bundled template ships for the adopted surfaces.
  *
- * `toAdd` and `toReplace` are derived by enumerating the bundled template's
- * shipped files; `toRemove` is the set of installed DKK-managed paths that
- * have no counterpart in the new template.
+ * Per-file rather than per-directory: the lock hashes individual files, and
+ * a directory-granular diff cannot say *which* skill file a user edited —
+ * which is the whole point of telling a conflict from a stale copy.
+ *
+ * `.claude/settings.json` is intentionally absent: the prune+remerge phase
+ * owns it, and its content always differs from a fresh template (user
+ * customisations plus additive merge state).
+ */
+export function shippedArtifacts(root: string, surfaces: AdoptedSurfaces): ShippedInventory {
+  const files: ShippedArtifact[] = [];
+  const roots = new Set<string>();
+  const add = (src: string, dest: string) => files.push({ src, dest, rel: toRel(root, dest) });
+
+  if (surfaces.claude) {
+    const claudeSrc = packageClaudeDir();
+    const inv = dkkClaudeFiles();
+
+    for (const name of inv.hooks) {
+      const dest = join(root, ".claude", "hooks", name);
+      roots.add(dest);
+      add(join(claudeSrc, "hooks", name), dest);
+    }
+
+    for (const skillName of inv.skills) {
+      const skillSrc = join(claudeSrc, "skills", skillName);
+      const skillDest = join(root, ".claude", "skills", skillName);
+      roots.add(skillDest);
+      for (const fileName of listFilesIfDir(skillSrc)) {
+        add(join(skillSrc, fileName), join(skillDest, fileName));
+      }
+    }
+
+    for (const [sub, names] of [["agents", inv.agents], ["commands", inv.commands]] as const) {
+      for (const name of names) {
+        const dest = join(root, ".claude", sub, name);
+        roots.add(dest);
+        add(join(claudeSrc, sub, name), dest);
+      }
+    }
+  }
+
+  if (surfaces.githubSkills) {
+    const skillsSrc = packageSkillsDir();
+    for (const skillName of dkkGithubSkillDirs()) {
+      const skillSrcDir = join(skillsSrc, skillName);
+      const skillDestDir = join(root, ".github", "skills", skillName);
+      roots.add(skillDestDir);
+      for (const fileName of listFilesIfDir(skillSrcDir)) {
+        add(join(skillSrcDir, fileName), join(skillDestDir, fileName));
+      }
+    }
+  }
+
+  if (surfaces.copilot) {
+    const copilotInv = dkkCopilotFiles();
+    for (const [sub, names] of [["prompts", copilotInv.prompts], ["agents", copilotInv.agents]] as const) {
+      for (const name of names) {
+        const dest = join(root, ".github", sub, name);
+        roots.add(dest);
+        add(join(packageCopilotDir(), sub, name), dest);
+      }
+    }
+  }
+
+  return { files, roots };
+}
+
+export interface ArtifactDiff {
+  /** Files in the new template that aren't present in the target repo. */
+  toAdd: string[];
+  /**
+   * Files that differ from the template but whose content is provably the
+   * previous DKK version's — safe to overwrite silently.
+   */
+  toReplace: string[];
+  /**
+   * Files that differ from the template *and* from what DKK last wrote:
+   * somebody edited them. Overwriting destroys work, so `dkk update` keeps
+   * the local copy and writes the template alongside as `<path>.new`.
+   */
+  toConflict: string[];
+  /** Files present locally that DKK no longer ships (renamed/removed templates + legacy paths). */
+  toRemove: string[];
+  /** Entries on disk whose spelling differs from the shipped name by case alone. */
+  caseRenames: CaseRename[];
+  /**
+   * True when the repo has no readable `.dkk/artifacts.lock`, so a local edit
+   * cannot be distinguished from a stale copy. Everything that differs is
+   * reported as `toReplace` and callers must say why the distinction is
+   * missing rather than implying the overwrite is known-safe.
+   */
+  lockMissing: boolean;
+}
+
+/**
+ * Compute the add / replace / conflict / remove triage between the bundled
+ * template and a target repo. Paths are returned as repo-relative POSIX paths.
+ *
+ * `toAdd`, `toReplace` and `toConflict` are derived by enumerating the
+ * bundled template's shipped files; `toRemove` is the set of installed
+ * DKK-managed paths that have no counterpart in the new template.
  */
 export function computeArtifactDiff(root: string): ArtifactDiff {
-  const diff: ArtifactDiff = { toAdd: [], toReplace: [], toRemove: [] };
+  const diff: ArtifactDiff = {
+    toAdd: [],
+    toReplace: [],
+    toConflict: [],
+    toRemove: [],
+    caseRenames: [],
+    lockMissing: false,
+  };
+
   const installed = scanInstalledArtifacts(root);
-  const expectedInstalled = new Set<string>();
+  const surfaces = detectAdoptedSurfaces(root);
+  const inventory = shippedArtifacts(root, surfaces);
 
-  // Each agent surface is diffed (and later refreshed) only if the repo has
-  // already adopted it, so `dkk update` never pushes a toolchain onto a repo
-  // that didn't opt in — a Copilot-only repo must not sprout a `.claude/`
-  // tree, and a Claude-only repo must not sprout `.github/` Copilot files.
-  const claudeAdopted = hasClaudeAdoption(root);
-  const githubSkillsAdopted = hasGithubSkillsAdoption(root);
-  const copilotAdopted = hasCopilotAdoption(root);
+  const lock = readArtifactLock(root);
+  diff.lockMissing = lock === null;
 
-  if (claudeAdopted) diffClaudeArtifacts(root, diff, expectedInstalled);
-  if (githubSkillsAdopted) diffGithubSkills(root, diff, expectedInstalled);
-  if (copilotAdopted) diffCopilotArtifacts(root, diff, expectedInstalled);
+  for (const artifact of inventory.files) {
+    const template = readIfPresent(artifact.src);
+    if (template === null) continue;
+    const onDisk = readIfPresent(artifact.dest);
+
+    if (onDisk === null) {
+      diff.toAdd.push(artifact.rel);
+      continue;
+    }
+    if (onDisk === template) continue;
+
+    // Differs from the template. Whether that is an upgrade or a collision
+    // depends entirely on whether DKK recognises the local content as its own.
+    if (lock === null) {
+      // No provenance to consult. Preserve the historical behaviour rather
+      // than flagging every pre-lock repo as conflicted; `lockMissing` tells
+      // the caller to explain the limitation.
+      diff.toReplace.push(artifact.rel);
+    } else if (lock.artifacts[artifact.rel] === sha256(onDisk)) {
+      diff.toReplace.push(artifact.rel);
+    } else {
+      diff.toConflict.push(artifact.rel);
+    }
+  }
+
+  diff.caseRenames = findCaseVariants(root, inventory.files.map((f) => f.dest));
 
   // toRemove: any installed dkk-managed path (for an adopted surface) not
-  // present in `expectedInstalled`, plus everything in `legacy` (no longer
-  // shipped). Files for a surface the repo did NOT adopt are excluded —
-  // otherwise their absence from `expectedInstalled` would flag every stray
-  // dkk-* file for deletion. De-duplicate because a legacy path can match both
-  // the `dkk-*` prefix predicate AND the LEGACY_DKK_PATHS list.
+  // present in the shipped install roots, plus everything in `legacy` (no
+  // longer shipped). Files for a surface the repo did NOT adopt are excluded —
+  // otherwise their absence would flag every stray dkk-* file for deletion.
+  // De-duplicate because a legacy path can match both the `dkk-*` prefix
+  // predicate AND the LEGACY_DKK_PATHS list.
+  // A wrongly-cased entry is reclaimed by the rename, not deleted — counting
+  // it in both lists would report two changes for one logical fix and imply a
+  // deletion that never happens.
+  const renameSources = new Set(diff.caseRenames.map((r) => join(root, r.fromRel)));
+
   const seenRemove = new Set<string>();
   const candidates = [
-    ...(claudeAdopted ? [...installed.dkkPrefixedClaude, ...installed.dkkHooks] : []),
-    ...(githubSkillsAdopted ? installed.githubSkillDirs : []),
-    ...(copilotAdopted ? [...installed.copilotPrompts, ...installed.copilotAgents] : []),
+    ...(surfaces.claude ? [...installed.dkkPrefixedClaude, ...installed.dkkHooks] : []),
+    ...(surfaces.githubSkills ? installed.githubSkillDirs : []),
+    ...(surfaces.copilot ? [...installed.copilotPrompts, ...installed.copilotAgents] : []),
     ...installed.legacy,
   ];
   for (const path of candidates) {
-    if (expectedInstalled.has(path)) continue;
+    if (inventory.roots.has(path)) continue;
+    if (renameSources.has(path)) continue;
     if (seenRemove.has(path)) continue;
     seenRemove.add(path);
     diff.toRemove.push(toRel(root, path));
@@ -421,103 +592,34 @@ export function computeArtifactDiff(root: string): ArtifactDiff {
 }
 
 /**
- * Diff the bundled `.claude/` template (hooks, skills, agents, commands)
- * against the target repo. `settings.json` is intentionally excluded — the
- * prune+merge phase owns it, and its content always differs from a fresh
- * template (user customisations + additive merge state).
+ * Rewrite `.dkk/artifacts.lock` from what is currently on disk.
+ *
+ * Call after any run that installs or refreshes artifacts (`dkk init`,
+ * `dkk update`). Files matching the bundled template get their hash recorded;
+ * conflicted files keep the hash of the version DKK actually wrote, so they
+ * stay flagged until resolved.
  */
-function diffClaudeArtifacts(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
-  const claudeSrc = packageClaudeDir();
-  const inv = dkkClaudeFiles();
-
-  // Hooks: flat files.
-  for (const name of inv.hooks) {
-    const srcPath = join(claudeSrc, "hooks", name);
-    const destPath = join(root, ".claude", "hooks", name);
-    expectedInstalled.add(destPath);
-    if (!existsSync(destPath)) {
-      diff.toAdd.push(toRel(root, destPath));
-    } else if (!filesEqual(srcPath, destPath)) {
-      diff.toReplace.push(toRel(root, destPath));
-    }
-  }
-
-  // Skills: nested (skill/<file>).
-  for (const skillName of inv.skills) {
-    const skillSrc = join(claudeSrc, "skills", skillName);
-    const skillDest = join(root, ".claude", "skills", skillName);
-    expectedInstalled.add(skillDest);
-    if (!existsSync(skillDest)) {
-      diff.toAdd.push(toRel(root, skillDest));
-    } else if (dirContentsDiffer(skillSrc, skillDest)) {
-      diff.toReplace.push(toRel(root, skillDest));
-    }
-  }
-
-  // Agents + commands: flat files.
-  for (const [sub, names] of [["agents", inv.agents], ["commands", inv.commands]] as const) {
-    for (const name of names) {
-      const srcPath = join(claudeSrc, sub, name);
-      const destPath = join(root, ".claude", sub, name);
-      expectedInstalled.add(destPath);
-      if (!existsSync(destPath)) {
-        diff.toAdd.push(toRel(root, destPath));
-      } else if (!filesEqual(srcPath, destPath)) {
-        diff.toReplace.push(toRel(root, destPath));
-      }
-    }
-  }
+export function recordArtifactLock(root: string): void {
+  const inventory = shippedArtifacts(root, detectAdoptedSurfaces(root));
+  writeArtifactLock(root, inventory.files);
 }
 
-/** Diff the bundled `.github/skills/dkk-*` template against the target repo. */
-function diffGithubSkills(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
-  const skillsSrc = packageSkillsDir();
-  if (!existsSync(skillsSrc)) return;
-  for (const skillName of dkkGithubSkillDirs()) {
-    const skillSrcDir = join(skillsSrc, skillName);
-    const skillDestDir = join(root, ".github", "skills", skillName);
-    expectedInstalled.add(skillDestDir);
-    if (!existsSync(skillDestDir)) {
-      diff.toAdd.push(toRel(root, skillDestDir));
-    } else if (dirContentsDiffer(skillSrcDir, skillDestDir)) {
-      diff.toReplace.push(toRel(root, skillDestDir));
-    }
-  }
+/** Total number of changes a diff proposes. */
+export function artifactDiffCount(diff: ArtifactDiff): number {
+  return (
+    diff.toAdd.length +
+    diff.toReplace.length +
+    diff.toConflict.length +
+    diff.toRemove.length +
+    diff.caseRenames.length
+  );
 }
 
-/** Diff the bundled `.github/{prompts,agents}/dkk-*` Copilot template. */
-function diffCopilotArtifacts(root: string, diff: ArtifactDiff, expectedInstalled: Set<string>): void {
-  const copilotInv = dkkCopilotFiles();
-  for (const [sub, names] of [["prompts", copilotInv.prompts], ["agents", copilotInv.agents]] as const) {
-    for (const name of names) {
-      const srcPath = join(packageCopilotDir(), sub, name);
-      const destPath = join(root, ".github", sub, name);
-      expectedInstalled.add(destPath);
-      if (!existsSync(destPath)) {
-        diff.toAdd.push(toRel(root, destPath));
-      } else if (!filesEqual(srcPath, destPath)) {
-        diff.toReplace.push(toRel(root, destPath));
-      }
-    }
-  }
-}
-
-/** True if any file in `srcDir` is missing from or differs against `destDir`. */
-function dirContentsDiffer(srcDir: string, destDir: string): boolean {
-  for (const fileName of readdirSync(srcDir)) {
-    const f = join(srcDir, fileName);
-    try { if (!statSync(f).isFile()) continue; } catch { continue; }
-    const df = join(destDir, fileName);
-    if (!existsSync(df) || !filesEqual(f, df)) return true;
-  }
-  return false;
-}
-
-function filesEqual(a: string, b: string): boolean {
+function readIfPresent(absPath: string): string | null {
   try {
-    return readFileSync(a, "utf-8") === readFileSync(b, "utf-8");
+    return readFileSync(absPath, "utf-8");
   } catch {
-    return false;
+    return null;
   }
 }
 

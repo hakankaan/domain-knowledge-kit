@@ -43,6 +43,40 @@ export function isPathGitIgnored(cwd: string, relPath: string): boolean {
   return !res.error && res.status === 0;
 }
 
+/**
+ * True only when `relPath` is tracked in git at `cwd`. `git ls-files
+ * --error-unmatch` exits 0 for a tracked path and non-zero otherwise
+ * (including "not a repo"), so every failure reads as "not tracked" and
+ * callers act only on a confident positive.
+ */
+export function isPathTracked(cwd: string, relPath: string): boolean {
+  const res = spawnSync("git", ["ls-files", "--error-unmatch", "--", relPath], {
+    cwd,
+    stdio: "ignore",
+  });
+  return !res.error && res.status === 0;
+}
+
+/**
+ * Rename `fromRel` → `toRel` through git so the change lands in the index.
+ *
+ * The reason this exists rather than `fs.renameSync`: on macOS and Windows
+ * `core.ignorecase` is true, so a rename that differs only in case is
+ * invisible to `git status` — the working tree changes, the repo does not,
+ * and every clone on a case-sensitive filesystem keeps serving the old
+ * spelling. `git mv -f` is the one operation that makes such a rename stick.
+ *
+ * Returns false on any failure (not a repo, path untracked, destination
+ * locked); callers fall back to a filesystem rename and warn.
+ */
+export function gitMove(cwd: string, fromRel: string, toRel: string): boolean {
+  const res = spawnSync("git", ["mv", "-f", "--", fromRel, toRel], {
+    cwd,
+    stdio: "ignore",
+  });
+  return !res.error && res.status === 0;
+}
+
 /** SHA of HEAD, or null. */
 export function headSha(cwd: string): string | null {
   return git(cwd, ["rev-parse", "HEAD"]);

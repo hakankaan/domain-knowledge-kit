@@ -82,17 +82,46 @@ function validateDomainFile(filePath, repoRoot) {
 
   // If validate fails, surface the JSON output to the model via stderr (exit 2
   // makes Claude Code feed stderr back as a tool-result correction signal).
+  //
+  // Gated on the validator having produced a report, not on its exit status:
+  // a crashed validator (e.g. a hook handed a Node older than dkk's >=21.2)
+  // is a tooling failure the agent cannot fix, and exit 2 would feed it back
+  // as a phantom schema error on every edit.
   if (res.status !== 0) {
-    const body =
-      res.stdout ||
-      res.stderr ||
-      "(validator exited non-zero with no output — likely a tooling/wiring problem, not a domain issue)";
+    const report = parseReport(res.stdout);
+    if (report) {
+      process.stderr.write(
+        `dkk schema validation failed for ${filePath} (cross-refs are checked at turn end):\n${res.stdout.trim()}\n`,
+      );
+      process.exit(2);
+    }
+
+    const detail = (res.stderr || res.stdout || "(no output)").trim();
     process.stderr.write(
-      `dkk schema validation failed for ${filePath} (cross-refs are checked at turn end):\n${body}\n`,
+      `dkk post-edit hook: \`dkk validate\` exited ${res.status} without producing a report. ` +
+      `This is a tooling failure, not a schema error — not blocking the edit.\n` +
+      `dkk requires Node >= 21.2; check the version this hook is invoked with.\n${detail}\n`,
     );
-    process.exit(2);
+    process.exit(1);
   }
   process.exit(0);
+}
+
+/**
+ * Parse `dkk validate --json` output, returning the report only if it really
+ * is one. A crashing validator can still write to stdout, so shape is checked
+ * rather than just JSON-parseability.
+ */
+function parseReport(stdout) {
+  if (!stdout) return null;
+  try {
+    const parsed = JSON.parse(stdout);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.valid !== "boolean" || !Array.isArray(parsed.errors)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 /**

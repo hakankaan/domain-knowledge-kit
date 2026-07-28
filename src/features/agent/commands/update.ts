@@ -25,7 +25,7 @@ import type { Command as Cmd } from "commander";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync, execFileSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { repoRoot, packageClaudeDir } from "../../../shared/paths.js";
 import { formatCliError } from "../../../shared/errors.js";
 import { pkgVersion, pkgName } from "../../../version.js";
@@ -41,15 +41,22 @@ import {
   type SectionOutcome,
 } from "./init.js";
 import {
+  artifactDiffCount,
   computeArtifactDiff,
+  detectAdoptedSurfaces,
   dkkHookBasenames,
   dkkPermissionAllowEntries,
   hasClaudeAdoption,
   hasCopilotAdoption,
   hasGithubSkillsAdoption,
+  recordArtifactLock,
   scanInstalledArtifacts,
+  shippedArtifacts,
   type ArtifactDiff,
 } from "../dkk-artifacts.js";
+import { CONFLICT_SUFFIX } from "../artifact-lock.js";
+import { applyCaseRenames } from "../case-rename.js";
+import { unifiedDiff } from "../../../shared/unified-diff.js";
 import { detectInstallMode, fetchLatestVersion, type InstallInfo } from "../install-mode.js";
 import { pruneDkkEntries } from "../settings-prune.js";
 import { ensureMcpRegistered, ensureVscodeMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
@@ -58,6 +65,8 @@ interface UpdateOpts {
   root?: string;
   yes?: boolean;
   check?: boolean;
+  diff?: boolean;
+  force?: boolean;
   skipNpm?: boolean;
   skipArtifacts?: boolean;
   skipMcp?: boolean;
@@ -71,6 +80,8 @@ export function registerUpdate(program: Cmd): void {
     .description("Upgrade dkk and refresh DKK-managed artifacts (.claude/, .github/skills/, AGENTS.md, MCP) in this project")
     .option("-y, --yes", "Skip interactive confirmation for the artifact diff")
     .option("--check", "Dry-run: print the diff + plan but make no changes")
+    .option("--diff", "Show the unified diff for each changed file before the confirmation prompt")
+    .option("--force", "Overwrite locally-edited artifacts instead of preserving them as conflicts")
     .option("--skip-npm", "Don't run npm upgrade (use the already-installed version)")
     .option("--skip-artifacts", "Don't sweep/reinstall .claude/ and .github/skills/ files")
     .option("--skip-mcp", "Don't auto-register the DKK MCP server")
@@ -159,21 +170,33 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
   const copilotAdopted = hasCopilotAdoption(root);
 
   // ── Phase D: Artifact diff + sweep + reinstall ──────────────────────
-  let diffSummary = { added: 0, replaced: 0, removed: 0 };
+  let diffSummary = { added: 0, replaced: 0, conflicted: 0, removed: 0, renamed: 0 };
   // Track whether settings.json existed before the install path; if it
   // didn't, Phase E has nothing to prune — installClaudeConfig just wrote
   // a pristine copy of the template.
   const settingsExistedBefore = existsSync(join(root, ".claude", "settings.json"));
+  const anyAdopted = claudeAdopted || githubSkillsAdopted || copilotAdopted;
   if (!opts.skipArtifacts) {
     const diff = computeArtifactDiff(root);
-    printArtifactDiff(diff);
+    printArtifactDiff(diff, Boolean(opts.force));
+
+    if (opts.diff) printContentDiffs(root, diff);
+
+    // Everything decision-relevant must land BEFORE the prompt. The
+    // settings.json prune is what actually surfaces "mixed DKK/user commands
+    // left intact" warnings, and printing those after the writes made them
+    // unactionable — by then the user had already answered y.
+    const settingsPreview = claudeAdopted && settingsExistedBefore
+      ? previewSettingsPrune(root)
+      : [];
+    for (const warning of settingsPreview) console.warn(`Warning: ${warning}`);
 
     if (opts.check) {
       console.log("\n(--check) No changes made. Re-run without --check to apply.");
       return;
     }
 
-    const totalChanges = diff.toAdd.length + diff.toReplace.length + diff.toRemove.length;
+    const totalChanges = artifactDiffCount(diff);
     if (totalChanges === 0) {
       console.log("Artifacts: already up to date.");
     } else {
@@ -184,21 +207,56 @@ async function runUpdate(opts: UpdateOpts): Promise<void> {
           return;
         }
       }
-      sweepRemovedArtifacts(root);
-      if (claudeAdopted) installClaudeConfig(root, /*force*/ true, { skipSettings: true });
-      if (githubSkillsAdopted) installSkills(root, /*force*/ true);
+
+      // Case-only renames first: they must land before the sweep, or a
+      // delete-then-recreate on a case-insensitive filesystem leaves git
+      // seeing no change at all.
+      const renames = applyCaseRenames(root, diff.caseRenames);
+      for (const label of renames.applied) console.log(`Renamed  ${label}`);
+      for (const warning of renames.warnings) console.warn(`Warning: ${warning}`);
+
+      const removed = sweepRemovedArtifacts(root);
+
+      // Locally-edited files are protected from the force-overwrite: the
+      // installers keep them and write the new template as `<path>.new`.
+      const protect = opts.force
+        ? undefined
+        : new Set(diff.toConflict.map((rel) => join(root, rel)));
+
+      if (claudeAdopted) installClaudeConfig(root, /*force*/ true, { skipSettings: true, protect });
+      if (githubSkillsAdopted) installSkills(root, /*force*/ true, { protect });
       // Copilot prompts/agents. Skills are handled by the line above;
       // instructions + MCP are handled by Phases G/F below — skip all three.
       if (copilotAdopted) {
-        installCopilotConfig(root, /*force*/ true, { skipInstructions: true, skipMcp: true, skipSkills: true });
+        installCopilotConfig(root, /*force*/ true, {
+          skipInstructions: true, skipMcp: true, skipSkills: true, protect,
+        });
       }
-      diffSummary = { added: diff.toAdd.length, replaced: diff.toReplace.length, removed: diff.toRemove.length };
+      diffSummary = {
+        added: diff.toAdd.length,
+        replaced: diff.toReplace.length,
+        conflicted: opts.force ? 0 : diff.toConflict.length,
+        // What the sweep actually deleted, not what the pre-rename diff
+        // predicted — a legacy path reclaimed by a case rename is not a
+        // removal.
+        removed,
+        renamed: renames.applied.length,
+      };
     }
+
+    sweepResolvedConflicts(root, opts.force ? [] : diff.toConflict);
+
+    // Always re-record, even on a no-op run: a repo upgrading from a
+    // pre-lock dkk has zero drift but no lock, and would otherwise never
+    // acquire one.
+    if (anyAdopted) recordArtifactLock(root);
   }
 
   // ── Phase E: settings.json prune + remerge (Claude only) ────────────
+  // `quiet`: the mixed-hook warnings were already printed above, before the
+  // prompt. Repeating them here would just be noise.
   const settingsResult = claudeAdopted
-    ? pruneAndRemergeSettings(root, opts, settingsExistedBefore)
+    ? pruneAndRemergeSettings(root, opts, settingsExistedBefore, /*quiet*/ !opts.skipArtifacts)
     : { status: "skipped" as const, pruned: 0, added: 0, mixedWarnings: [] };
 
   // ── Phase F: MCP auto-register ──────────────────────────────────────
@@ -268,6 +326,8 @@ function buildReExecArgs(opts: UpdateOpts): string[] {
   const args: string[] = [];
   if (opts.yes) args.push("--yes");
   if (opts.check) args.push("--check");
+  if (opts.diff) args.push("--diff");
+  if (opts.force) args.push("--force");
   if (opts.skipArtifacts) args.push("--skip-artifacts");
   if (opts.skipMcp) args.push("--skip-mcp");
   if (opts.root) args.push("--root", opts.root);
@@ -279,26 +339,100 @@ function buildReExecArgs(opts: UpdateOpts): string[] {
 
 // ── Phase D helpers ───────────────────────────────────────────────────
 
-function printArtifactDiff(diff: ArtifactDiff): void {
+function printArtifactDiff(diff: ArtifactDiff, force: boolean): void {
   console.log("");
   console.log("Artifact diff against the bundled template:");
-  if (diff.toAdd.length === 0 && diff.toReplace.length === 0 && diff.toRemove.length === 0) {
+  if (artifactDiffCount(diff) === 0) {
     console.log("  (no changes)");
     return;
   }
-  for (const p of diff.toAdd) console.log(`  + add      ${p}`);
-  for (const p of diff.toReplace) console.log(`  ~ replace  ${p}`);
-  for (const p of diff.toRemove) console.log(`  - remove   ${p}`);
+  for (const p of diff.toAdd) console.log(`  + add       ${p}`);
+  for (const p of diff.toReplace) console.log(`  ~ replace   ${p}`);
+  for (const p of diff.toConflict) {
+    console.log(`  ${force ? "~ OVERWRITE" : "! conflict "} ${p}`);
+  }
+  for (const p of diff.toRemove) console.log(`  - remove    ${p}`);
+  for (const r of diff.caseRenames) console.log(`  ↻ rename    ${r.fromRel} → ${basename(r.toRel)}`);
+
+  if (diff.toConflict.length > 0) {
+    const noun = diff.toConflict.length === 1 ? "file was" : "files were";
+    console.log("");
+    if (force) {
+      console.log(`  ⚠ --force: ${diff.toConflict.length} ${noun} edited after dkk installed`);
+      console.log(`    ${diff.toConflict.length === 1 ? "it" : "them"}. Those local changes will be DESTROYED.`);
+    } else {
+      console.log(`  ${diff.toConflict.length} ${noun} edited after dkk installed ${diff.toConflict.length === 1 ? "it" : "them"}.`);
+      console.log(`  Your version is kept; the new template is written alongside as`);
+      console.log(`  <path>${CONFLICT_SUFFIX} for you to merge. Pass --diff to see what changed,`);
+      console.log(`  or --force to overwrite instead.`);
+    }
+  }
+
+  if (diff.lockMissing && diff.toReplace.length > 0) {
+    console.log("");
+    console.log(`  Note: this repo has no .dkk/artifacts.lock yet, so a local edit can't be`);
+    console.log(`  told apart from a previous dkk version's copy — everything differing is`);
+    console.log(`  listed as \`replace\`. This run writes the lock; future upgrades will`);
+    console.log(`  flag conflicts instead. Pass --diff to check before answering.`);
+  }
 }
 
-function sweepRemovedArtifacts(root: string): void {
+/**
+ * Print a unified diff for every file whose content is about to change.
+ *
+ * The reason `--diff` exists: a y/N prompt over a list of paths is not a
+ * decision. Without the content there is no way to see what you are about to
+ * lose short of running `git diff` in another terminal.
+ */
+function printContentDiffs(root: string, diff: ArtifactDiff): void {
+  const changed = [...diff.toReplace, ...diff.toConflict];
+  if (changed.length === 0) return;
+
+  // rel → bundled template path, so each local file can be diffed against
+  // what would replace it.
+  const templates = new Map(
+    shippedArtifacts(root, detectAdoptedSurfaces(root)).files.map((f) => [f.rel, f.src]),
+  );
+
+  for (const rel of changed) {
+    const src = templates.get(rel);
+    if (!src) continue;
+    const local = readIfPresent(join(root, rel));
+    const template = readIfPresent(src);
+    if (local === null || template === null) continue;
+
+    const body = unifiedDiff(local, template, {
+      fromLabel: `${rel} (local)`,
+      toLabel: `${rel} (dkk ${pkgVersion})`,
+    });
+    if (!body) continue;
+    console.log("");
+    console.log(body);
+  }
+  console.log("");
+}
+
+function readIfPresent(absPath: string): string | null {
+  try {
+    return readFileSync(absPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+function sweepRemovedArtifacts(root: string): number {
   // Recompute the diff at sweep-time so we delete exactly what we promised.
+  // This also absorbs the case renames applied a moment ago: a legacy path
+  // that has just been renamed to its canonical spelling is no longer stale,
+  // and must not be deleted on the strength of the pre-rename diff.
   const diff = computeArtifactDiff(root);
+  let removed = 0;
   for (const rel of diff.toRemove) {
     const abs = join(root, rel);
     try {
       rmSync(abs, { recursive: true, force: true });
       console.log(`Removed  ${rel}`);
+      removed++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.warn(`Warning: could not remove ${rel}: ${msg}`);
@@ -314,6 +448,30 @@ function sweepRemovedArtifacts(root: string): void {
       try { rmSync(p, { recursive: true, force: true }); } catch { /* ignore */ }
     }
   }
+
+  return removed;
+}
+
+/**
+ * Drop `<path>.new` merge candidates whose conflict is gone — the local file
+ * now matches the template, so the copy is stale.
+ *
+ * `writeArtifactFile` already does this whenever it writes a file; this
+ * covers the case it can't reach, where resolving the last conflict leaves
+ * the diff empty so no install runs at all and the `.new` would linger
+ * forever.
+ */
+function sweepResolvedConflicts(root: string, stillConflicted: readonly string[]): void {
+  const keep = new Set(stillConflicted);
+  for (const artifact of shippedArtifacts(root, detectAdoptedSurfaces(root)).files) {
+    if (keep.has(artifact.rel)) continue;
+    const candidate = `${artifact.dest}${CONFLICT_SUFFIX}`;
+    if (!existsSync(candidate)) continue;
+    try {
+      rmSync(candidate, { force: true });
+      console.log(`Removed  ${artifact.rel}${CONFLICT_SUFFIX} (conflict resolved)`);
+    } catch { /* best effort — a stale merge candidate is harmless */ }
+  }
 }
 
 // ── Phase E helpers ───────────────────────────────────────────────────
@@ -325,10 +483,39 @@ interface SettingsResult {
   mixedWarnings: string[];
 }
 
+/**
+ * Non-mutating dry run of the settings.json prune, returning only its
+ * warnings.
+ *
+ * Exists purely for ordering: `pruneDkkEntries` is where "mixed DKK/user
+ * commands left intact" is discovered, but the real prune runs in Phase E —
+ * after the artifact writes, and therefore after the confirmation prompt.
+ * A warning a user reads only once the writes have happened cannot inform
+ * the decision it is about.
+ */
+function previewSettingsPrune(root: string): string[] {
+  const templatePath = join(packageClaudeDir(), "settings.json");
+  const settingsPath = join(root, ".claude", "settings.json");
+  if (!existsSync(templatePath) || !existsSync(settingsPath)) return [];
+  try {
+    const existing = JSON.parse(readFileSync(settingsPath, "utf-8")) as ClaudeSettings;
+    const { mixedHookWarnings } = pruneDkkEntries(
+      existing,
+      new Set(dkkPermissionAllowEntries()),
+      new Set(dkkHookBasenames()),
+    );
+    return mixedHookWarnings;
+  } catch {
+    // A malformed file is reported (and left alone) by the real prune below.
+    return [];
+  }
+}
+
 function pruneAndRemergeSettings(
   root: string,
   opts: UpdateOpts,
   existedBefore: boolean,
+  quiet: boolean,
 ): SettingsResult {
   if (opts.check || opts.skipArtifacts) {
     return { status: "skipped", pruned: 0, added: 0, mixedWarnings: [] };
@@ -368,7 +555,7 @@ function pruneAndRemergeSettings(
 
   writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + "\n", "utf-8");
 
-  for (const w of mixedHookWarnings) console.warn(`Warning: ${w}`);
+  if (!quiet) for (const w of mixedHookWarnings) console.warn(`Warning: ${w}`);
 
   return {
     status: removed.length > 0 ? "pruned-and-merged" : "merge-only",
@@ -381,16 +568,23 @@ function pruneAndRemergeSettings(
 // ── Phase H helpers ───────────────────────────────────────────────────
 
 function printSummary(
-  diff: { added: number; replaced: number; removed: number },
+  diff: { added: number; replaced: number; conflicted: number; removed: number; renamed: number },
   settings: SettingsResult,
   mcp: McpRegisterOutcome | { status: "skipped"; reason: string },
   agents: SectionOutcome | "not-run",
   copilot: SectionOutcome | "not-adopted",
 ): void {
+  const parts = [`+${diff.added} added`, `~${diff.replaced} replaced`, `-${diff.removed} removed`];
+  if (diff.renamed > 0) parts.push(`↻${diff.renamed} renamed`);
+
   console.log("");
   console.log("── Summary ────────────────────────────────────────────────────────");
   console.log(`dkk           ${pkgVersion}`);
-  console.log(`Artifacts     +${diff.added} added, ~${diff.replaced} replaced, -${diff.removed} removed`);
+  console.log(`Artifacts     ${parts.join(", ")}`);
+  if (diff.conflicted > 0) {
+    const noun = diff.conflicted === 1 ? "file" : "files";
+    console.log(`              !${diff.conflicted} ${noun} kept as-is — merge the *${CONFLICT_SUFFIX} copies by hand`);
+  }
   console.log(`settings.json ${formatSettingsResult(settings)}`);
   console.log(`MCP server    ${formatMcpResult(mcp)}`);
   console.log(`AGENTS.md     ${formatSectionOutcome(agents)}`);

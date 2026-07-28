@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "dkk": "0.8.0",
+  "artifacts": {
+    ".claude/agents/dkk-domain-reviewer.md": "6966840fab9445b3fb8cf499f2351b92a0009ea75f9e14c53fdf70c9a159318e",
+    ".claude/commands/dkk-adr.md": "99fe7dd7d9860044ce92e11afd07cd263d1a37c698d3f51407679955dff8bbd6",
+    ".claude/commands/dkk-feedback-export.md": "30eb394969e4b1368d72eb1c3ee57f8d02a2b285cdbf37e6769feaa46e797609",
+    ".claude/commands/dkk-feedback.md": "aa42d4e44e5e2aa2de801aedc14ed42af48e9bfe6d18176fabed96d8826bd686",
+    ".claude/commands/dkk-impact.md": "b706d6d1ac0c05d8205f5e86df4e7ef24c7468fc3c0ff40fa1c6108ae0b184b9",
+    ".claude/commands/dkk-implement.md": "f3b20e0b556b274d4ebdc633b7f41318080f94e6f506ec6ee41cb6045ccc4738",
+    ".claude/commands/dkk-prime.md": "08239acdb8d39e793216856ae63fc4d2f939a2017cecd1a29b34e2b787b29701",
+    ".claude/commands/dkk-review.md": "3c768ba92c798d412e200e2eb55a78bae8bfa9d8d5795799058504a94d4c2f65",
+    ".claude/commands/dkk-story.md": "d4d2244f6b9803e3d99c8a5c86f0338278f0c73a3a34896bf481b760b2ee8125",
+    ".claude/hooks/pre-edit-block-generated.mjs": "fa748f16c6ede09f91e2c72b8d43582faf56965e9cb25418d472a61436b2d36d",
+    ".claude/skills/dkk-adr-author/SKILL.md": "26519f2f33e344adb6317f8970b4e9c59670486a8652a527c052decf73ca826e",
+    ".claude/skills/dkk-flow-implementer/SKILL.md": "5ef5b0e9af31a8bf008e45c77ee39f17905193697fcce02bdfa2d46eeffbcb69",
+    ".claude/skills/dkk-story-analyst/SKILL.md": "f8d444151838f4812aa43d740ae7abd525eb9462846df70b05eff3a917e42765",
+    ".github/skills/dkk-adr-author/SKILL.md": "1d33ec3538d18855f397e795db2bfcf41dd552611c1b2b0edda63d0624d6522b",
+    ".github/skills/dkk-flow-implementer/SKILL.md": "be55338b8a30916bd6d7a579b92b5ff014c163c8a6aa2ba91635e6e112378258",
+    ".github/skills/dkk-story-analyst/SKILL.md": "4f17281f9893589bcc8c5d56db1bda2ce12042e608b3add5f036b91e96d36d21"
+  }
+}

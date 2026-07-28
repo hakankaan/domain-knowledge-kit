@@ -6,6 +6,21 @@
  * with the JSON error report on stderr. Claude Code feeds that back so the
  * agent must fix the broken model before declaring the work complete.
  *
+ * **Exit 2 is gated on the validator having produced a report**, not merely on
+ * a non-zero status. Those are different failures with opposite remedies:
+ *
+ * - a parseable report means the domain model is broken — the agent can and
+ *   should fix it, so blocking the turn is correct;
+ * - no report means `dkk validate` itself failed (not on PATH, crashed, or —
+ *   the common one — a Stop hook under nvm/asdf handed an older Node than
+ *   dkk's `>=21.2` requirement, where `import.meta.dirname` throws
+ *   `ERR_INVALID_ARG_TYPE`). Exit 2 there tells the agent "domain validation
+ *   failed" about something it has no way to repair, so every turn re-fires
+ *   the hook and the session wedges.
+ *
+ * Tooling failures therefore exit 1: surfaced to the human, non-blocking for
+ * the agent.
+ *
  * `stop_hook_active` is honoured to prevent infinite loops if Claude tries
  * to stop again after the hook already fired once.
  */
@@ -54,14 +69,42 @@ process.stdin.on("end", () => {
   }
 
   if (res.status !== 0) {
-    const body =
-      res.stdout ||
-      res.stderr ||
-      "(validator exited non-zero with no output — likely a tooling/wiring problem, not a domain issue)";
+    // Did the validator actually produce a report? That, not the exit status,
+    // is what separates "the agent broke the model" from "the toolchain is
+    // broken" — and only the first is something the agent can act on.
+    const report = parseReport(res.stdout);
+    if (report) {
+      process.stderr.write(
+        `Domain validation failed — fix these before ending the turn:\n${res.stdout.trim()}\n`,
+      );
+      process.exit(2);
+    }
+
+    const detail = (res.stderr || res.stdout || "(no output)").trim();
     process.stderr.write(
-      `Domain validation failed — fix these before ending the turn:\n${body}\n`,
+      `dkk stop hook: \`dkk validate\` exited ${res.status} without producing a report. ` +
+      `This is a tooling failure, not a domain failure — not blocking the turn.\n` +
+      `dkk requires Node >= 21.2; check the version this hook is invoked with ` +
+      `(nvm/asdf shims often hand hooks an older one).\n${detail}\n`,
     );
-    process.exit(2);
+    process.exit(1);
   }
   process.exit(0);
 });
+
+/**
+ * Parse `dkk validate --json` output, returning the report only if it really
+ * is one. A crashing validator can still write to stdout, so shape is checked
+ * rather than just JSON-parseability.
+ */
+function parseReport(stdout) {
+  if (!stdout) return null;
+  try {
+    const parsed = JSON.parse(stdout);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.valid !== "boolean" || !Array.isArray(parsed.errors)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
