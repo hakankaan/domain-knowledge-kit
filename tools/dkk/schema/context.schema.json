@@ -26,6 +26,15 @@
       "uniqueItems": true,
       "description": "POSIX glob patterns (repo-relative) binding this context to the source paths it models (e.g. apps/api/src/billing/**). Used by `dkk drift` to detect model/code drift; not a statement about architecture."
     },
+    "adr_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$"
+      },
+      "uniqueItems": true,
+      "description": "ADRs that constrain this context as a whole (the reciprocal of an ADR's domain_refs entry for context.<name>)"
+    },
     "events": {
       "type": "array",
       "items": { "$ref": "event.schema.json" },

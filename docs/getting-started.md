@@ -25,7 +25,7 @@ dkk update            # bump npm + refresh .claude/, .github/skills/, MCP, AGENT
 dkk update --check    # dry-run; preview the diff
 ```
 
-`dkk update` cleans stale `dkk-*` files (e.g., skills or hooks renamed in a newer release), preserves your `.claude/settings.json` customizations, and re-registers the DKK MCP server if needed. See [`dkk update`](cli-reference.md#update) for flags and edge cases.
+`dkk update` cleans stale `dkk-*` files (e.g., skills or hooks renamed in a newer release), preserves your `.claude/settings.json` customizations, and re-registers the DKK MCP server if needed. Artifacts you edited yourself are **not** overwritten: they're reported as `! conflict`, left in place, and the new template is written beside them as `<path>.new` to merge. Commit `.dkk/artifacts.lock` — that's what makes the distinction possible. See [`dkk update`](cli-reference.md#update) for flags and edge cases.
 
 ## Prerequisites
 
@@ -284,13 +284,14 @@ dkk show ordering.OrderPlaced --json --minify
 
 ## Step 7: Add an ADR (Optional)
 
-Architecture Decision Records document the *why* behind your domain design. Scaffold a new ADR:
+Architecture Decision Records document the *why* behind your domain design. Scaffold a new ADR, naming what it constrains:
 
 ```bash
-dkk new adr "Event Sourcing for Orders"
+dkk new adr "Event Sourcing for Orders" \
+  --domain-refs ordering.OrderPlaced,ordering.Order
 ```
 
-This will create an ADR template in `.dkk/adr/adr-0001.md`. Open it and add your details:
+This creates `.dkk/adr/adr-0001.md` **and** writes the reciprocal `adr_refs` onto each referenced item — the link is stored on both sides, and only writing one half leaves it invisible from the item side. Open the file and fill in the body:
 
 ```markdown
 ---
@@ -311,13 +312,17 @@ We need to track the full history of order state changes...
 
 Adopt event sourcing for the ordering aggregate...
 
+## Alternatives Considered
+
+A plain CRUD table with an audit log — rejected because...
+
 ## Consequences
 
 - Full audit trail of order changes
 - Increased storage requirements
 ```
 
-Then link back from domain items by adding `adr_refs` to the item file (e.g. `.dkk/domain/contexts/ordering/events/OrderPlaced.yml`):
+The item file now carries the other half of the link:
 
 ```yaml
 name: OrderPlaced
@@ -327,7 +332,13 @@ adr_refs:
   - adr-0001
 ```
 
-Run `dkk render` to verify the bidirectional links.
+To link or unlink later, use `dkk adr link` / `dkk adr unlink` rather than editing one side by hand:
+
+```bash
+dkk adr link adr-0001 ordering.Order actor.Customer
+```
+
+Then run `dkk render`. `dkk validate` warns about any link recorded on only one side, and `dkk adr audit` reports decisions that have gone stale.
 
 → See [ADR Guide](adr-guide.md) for the full ADR workflow.
 

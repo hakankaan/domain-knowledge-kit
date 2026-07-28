@@ -22,6 +22,9 @@ import { repoRoot, packageSkillsDir, packageClaudeDir, packageCopilotDir, domain
 import { loadDomainModel } from "../../../shared/loader.js";
 import { isPathGitIgnored } from "../../../shared/git.js";
 import { ensureMcpRegistered, ensureVscodeMcpRegistered, type McpRegisterOutcome } from "../mcp-register.js";
+import { CONFLICT_SUFFIX } from "../artifact-lock.js";
+import { applyCaseRenames, findCaseVariants } from "../case-rename.js";
+import { recordArtifactLock } from "../dkk-artifacts.js";
 import { primeContent } from "./prime.js";
 
 export const START_MARKER = "<!-- dkk:start -->";
@@ -52,16 +55,19 @@ Events and Commands map business domain concepts. They **DO NOT** imply Event-Dr
 
 ### 🏛️ Prioritize ADRs
 
-**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use \`dkk search "your topic"\` or \`dkk show <id>\` to understand existing constraints and decisions.
+**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, ask \`dkk adr decisions <id>\` (or \`--file <path>\`) what has already been decided. It follows supersession chains, so a replaced decision is never reported as still binding.
+
+ADR ↔ domain links are **bidirectional** and both halves must be written. Use \`dkk adr link\`, which writes both, instead of hand-editing one side — \`dkk validate\` warns about one-way links, and only the item side shows up in the generated docs.
 
 ### Quick Reference
 
 \`\`\`bash
 # Query
-dkk list                              # List all domain items (--context, --type filters)
-dkk show <id>                         # Display full YAML of a domain item
+dkk list                              # List all domain items (--context, --type, --status filters)
+dkk show <id>                         # Display a domain item (ADRs: frontmatter + Markdown body)
+dkk show <adr-id> --section decision  # Just one section of an ADR body
 dkk summary <id>                      # Concise item summary (AI-optimized)
-dkk search "<query>"                  # Full-text search
+dkk search "<query>"                  # Full-text search (--status narrows ADRs)
 dkk related <id>                      # Graph traversal of related items
 dkk graph                             # Mermaid.js flowchart (--layout LR|TD, --node-types ...)
 
@@ -70,11 +76,16 @@ dkk validate                          # Schema + cross-reference validation
 dkk render                            # Validate, render docs, rebuild search index
 
 # ADR
+dkk adr decisions <id>                # Which decisions govern an item/context/actor/flow (--file <path>)
+dkk adr link <adr-id> <ids...>        # Link a decision to targets (writes domain_refs AND adr_refs)
+dkk adr unlink <adr-id> <ids...>      # Remove a link from both sides
+dkk adr status <adr-id> <status>      # proposed | accepted | rejected | deprecated | superseded
+dkk adr audit                         # Decision rot: unlinked, stalled, one-way links, broken chains
 
 # Scaffold
 dkk new domain                        # Scaffold .dkk/domain/ structure (one-time, per project)
 dkk new context <name>                # Scaffold a new bounded context
-dkk new adr "<title>"                 # Scaffold a new ADR file
+dkk new adr "<title>"                 # Scaffold a new ADR (--domain-refs also writes the reciprocal adr_refs)
 dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
 
 # Refactor
@@ -94,6 +105,9 @@ dkk init --copilot                    # Also scaffold GitHub Copilot config (.gi
 dkk init --skills                     # Also install agent skills into .github/skills/
 dkk init --all                        # Install both Claude Code and Copilot config
 dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills/Copilot artifacts + MCP
+dkk update --diff                     # Show the unified diff for each changed file before confirming
+dkk update --force                    # Overwrite locally-edited artifacts instead of keeping them
+dkk artifacts check                   # Read-only drift gate for CI (non-zero exit when out of sync)
 dkk prime                             # Output full agent context
 dkk mcp                               # MCP server entrypoint — auto-spawned by the client via .mcp.json / .vscode/mcp.json (do not run by hand)
 
@@ -106,9 +120,13 @@ dkk feedback rm <id>                  # Drop an entry (redaction escape hatch)
 
 Feedback is a local file (\`.dkk/feedback.yml\`) — nothing is transmitted. Offer to record it when the user hits a dkk bug or rough edge; never file it unprompted.
 
+### Upgrades and local edits
+
+\`dkk update\` records what it installed in \`.dkk/artifacts.lock\` — **commit it**. That record is what lets an upgrade tell its own previous output (safe to overwrite) from a file somebody edited (not safe). An edited artifact is reported as \`! conflict\`: your version stays, and the new template lands beside it as \`<path>.new\` to merge. Use \`--diff\` to see the change before answering the prompt, or \`--force\` to overwrite regardless.
+
 ### Model Context Protocol (MCP)
 
-\`dkk init\` writes a committed \`.mcp.json\` registering the **dkk** MCP server (\`dkk init --copilot\` also writes \`.vscode/mcp.json\` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (\`dkk_search\`, \`dkk_show\`, \`dkk_summary\`, \`dkk_related\`, \`dkk_list\`, \`dkk_story\`, \`dkk_validate\`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
+\`dkk init\` writes a committed \`.mcp.json\` registering the **dkk** MCP server (\`dkk init --copilot\` also writes \`.vscode/mcp.json\` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (\`dkk_search\`, \`dkk_show\`, \`dkk_summary\`, \`dkk_related\`, \`dkk_decisions\`, \`dkk_list\`, \`dkk_story\`, \`dkk_validate\`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
 
 ### Quality Gates
 
@@ -128,32 +146,81 @@ function delimitedSection(): string {
 }
 
 /**
- * Delete any entry in `dir` whose name matches `fileName` case-insensitively
- * but not exactly (e.g. a stale `skill.md` next to the required `SKILL.md`).
+ * Fix any entry that matches `destFile`'s basename case-insensitively but not
+ * exactly (e.g. a stale `skill.md` next to the required `SKILL.md`).
  *
  * On a case-insensitive filesystem (APFS, NTFS) writing `SKILL.md` over an
  * existing `skill.md` truncates the same inode but **leaves the directory
  * entry spelled the old way**, so the file stays invisible to every agent
- * that requires the canonical casing. Removing the variant first forces a
- * fresh entry with the correct name on both filesystem families.
+ * that requires the canonical casing.
+ *
+ * The rename is routed through `git mv` when the stale entry is tracked —
+ * see [[case-rename]] for why a plain filesystem rename is not enough to make
+ * the change reach anyone else's checkout.
  */
-function removeCaseVariants(dir: string, fileName: string): void {
-  let entries: string[];
-  try {
-    entries = readdirSync(dir);
-  } catch {
+function reconcileCaseVariants(root: string, destFile: string): void {
+  const renames = findCaseVariants(root, [destFile]);
+  if (renames.length === 0) return;
+  const { applied, warnings } = applyCaseRenames(root, renames);
+  for (const label of applied) console.log(`Renamed  ${label}`);
+  for (const warning of warnings) console.warn(`Warning: ${warning}`);
+}
+
+/**
+ * Write `contents` to `destFile`, or — when the path is protected — leave the
+ * local file alone and drop the template beside it as `<name>.new`.
+ *
+ * A protected path is one `computeArtifactDiff` classified as a conflict: its
+ * content matches neither the new template nor what DKK last recorded
+ * writing, which means somebody edited it. Overwriting is how a user's local
+ * patch gets clobbered, so the new template becomes a merge candidate instead
+ * of a replacement.
+ *
+ * When a path is *not* protected, any leftover `.new` from an earlier
+ * conflict is swept: the local file now matches the template, so the merge
+ * candidate is stale.
+ */
+function writeArtifactFile(opts: {
+  destFile: string;
+  relPath: string;
+  contents: string;
+  protect?: ReadonlySet<string>;
+  executable?: boolean;
+}): void {
+  const { destFile, relPath, contents, protect, executable } = opts;
+  const conflictFile = `${destFile}${CONFLICT_SUFFIX}`;
+
+  if (protect?.has(destFile)) {
+    writeFileSync(conflictFile, contents, "utf-8");
+    console.log(`Conflict ${relPath} — kept your version; new template written to ${relPath}${CONFLICT_SUFFIX}`);
     return;
   }
-  for (const entry of entries) {
-    if (entry === fileName) continue;
-    if (entry.toLowerCase() !== fileName.toLowerCase()) continue;
+
+  const alreadyExisted = existsSync(destFile);
+  writeFileSync(destFile, contents, "utf-8");
+  if (executable) {
     try {
-      rmSync(join(dir, entry), { force: true });
-      console.log(`Removed  ${entry} (wrong case — canonical name is ${fileName})`);
+      chmodSync(destFile, 0o755);
     } catch {
-      /* best effort; the write below still reports its own outcome */
+      // Non-POSIX filesystems may reject chmod — safe to ignore.
     }
   }
+  if (existsSync(conflictFile)) {
+    try {
+      rmSync(conflictFile, { force: true });
+      console.log(`Removed  ${relPath}${CONFLICT_SUFFIX} (conflict resolved)`);
+    } catch { /* best effort */ }
+  }
+  console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+}
+
+/**
+ * Absolute destination paths that must not be overwritten because they were
+ * edited locally. Threaded through every installer so a refresh can be
+ * force-overwrite for DKK's own files and merge-candidate for the rest.
+ */
+export interface ProtectOpts {
+  protect?: ReadonlySet<string>;
 }
 
 /**
@@ -166,7 +233,7 @@ function removeCaseVariants(dir: string, fileName: string): void {
  * case-sensitive filesystem, so stale case variants are removed on the way in.
  * Files are skipped if they already exist, unless `force` is true.
  */
-export function installSkills(root: string, force: boolean): void {
+export function installSkills(root: string, force: boolean, opts: ProtectOpts = {}): void {
   const srcDir = packageSkillsDir();
   const destDir = join(root, ".github", "skills");
 
@@ -187,9 +254,9 @@ export function installSkills(root: string, force: boolean): void {
       const srcFile = join(skillSrcDir, fileName);
       if (!statSync(srcFile).isFile()) continue;
 
-      removeCaseVariants(skillDestDir, fileName);
-
       const destFile = join(skillDestDir, fileName);
+      reconcileCaseVariants(root, destFile);
+
       const relPath = `.github/skills/${skillName}/${fileName}`;
 
       if (existsSync(destFile) && !force) {
@@ -197,10 +264,12 @@ export function installSkills(root: string, force: boolean): void {
         continue;
       }
 
-      const alreadyExisted = existsSync(destFile);
-      const contents = readFileSync(srcFile, "utf-8");
-      writeFileSync(destFile, contents, "utf-8");
-      console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+      writeArtifactFile({
+        destFile,
+        relPath,
+        contents: readFileSync(srcFile, "utf-8"),
+        protect: opts.protect,
+      });
     }
   }
 }
@@ -219,8 +288,9 @@ function copyFlatDir(opts: {
   relSubpath: string;
   force: boolean;
   executable?: boolean;
+  protect?: ReadonlySet<string>;
 }): void {
-  const { srcDir, destDir, relSubpath, force, executable } = opts;
+  const { srcDir, destDir, relSubpath, force, executable, protect } = opts;
   if (!existsSync(srcDir)) return;
   mkdirSync(destDir, { recursive: true });
   for (const fileName of readdirSync(srcDir)) {
@@ -235,16 +305,13 @@ function copyFlatDir(opts: {
       continue;
     }
 
-    const alreadyExisted = existsSync(destFile);
-    writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
-    if (executable) {
-      try {
-        chmodSync(destFile, 0o755);
-      } catch {
-        // Non-POSIX filesystems may reject chmod — safe to ignore.
-      }
-    }
-    console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+    writeArtifactFile({
+      destFile,
+      relPath,
+      contents: readFileSync(srcFile, "utf-8"),
+      protect,
+      executable,
+    });
   }
 }
 
@@ -258,8 +325,10 @@ function copyNestedDir(opts: {
   destDir: string;
   relSubpath: string;
   force: boolean;
+  root: string;
+  protect?: ReadonlySet<string>;
 }): void {
-  const { srcDir, destDir, relSubpath, force } = opts;
+  const { srcDir, destDir, relSubpath, force, root, protect } = opts;
   if (!existsSync(srcDir)) return;
   for (const subName of readdirSync(srcDir)) {
     const subSrc = join(srcDir, subName);
@@ -273,6 +342,8 @@ function copyNestedDir(opts: {
       if (!statSync(srcFile).isFile()) continue;
 
       const destFile = join(subDest, fileName);
+      reconcileCaseVariants(root, destFile);
+
       const relPath = `${relSubpath}/${subName}/${fileName}`;
 
       if (existsSync(destFile) && !force) {
@@ -280,9 +351,12 @@ function copyNestedDir(opts: {
         continue;
       }
 
-      const alreadyExisted = existsSync(destFile);
-      writeFileSync(destFile, readFileSync(srcFile, "utf-8"), "utf-8");
-      console.log(`${alreadyExisted ? "Updated" : "Created"}  ${relPath}`);
+      writeArtifactFile({
+        destFile,
+        relPath,
+        contents: readFileSync(srcFile, "utf-8"),
+        protect,
+      });
     }
   }
 }
@@ -383,7 +457,7 @@ export function mergeClaudeSettings(
  *     agents/<agent>.md
  *     commands/<command>.md
  */
-export interface InstallClaudeOpts {
+export interface InstallClaudeOpts extends ProtectOpts {
   /** Skip writing/merging `.claude/settings.json`. Used by `dkk update` so its
    *  prune + re-merge phase can handle settings independently from artifact
    *  refresh. Defaults to false. */
@@ -445,6 +519,7 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
     relSubpath: ".claude/hooks",
     force,
     executable: true,
+    protect: opts.protect,
   });
 
   // 3. skills/<skill>/SKILL.md (nested)
@@ -453,6 +528,8 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
     destDir: join(destDir, "skills"),
     relSubpath: ".claude/skills",
     force,
+    root,
+    protect: opts.protect,
   });
 
   // 4. agents/<agent>.md (flat)
@@ -461,6 +538,7 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
     destDir: join(destDir, "agents"),
     relSubpath: ".claude/agents",
     force,
+    protect: opts.protect,
   });
 
   // 5. commands/<command>.md (flat)
@@ -469,6 +547,7 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
     destDir: join(destDir, "commands"),
     relSubpath: ".claude/commands",
     force,
+    protect: opts.protect,
   });
 }
 
@@ -489,7 +568,7 @@ export function installClaudeConfig(root: string, force: boolean, opts: InstallC
  * `.mcp.json` is written separately by the caller (`dkk init`'s default MCP
  * step), so `dkk init --copilot` ends up with both MCP config files.
  */
-export interface InstallCopilotOpts {
+export interface InstallCopilotOpts extends ProtectOpts {
   /** Skip writing/merging `.vscode/mcp.json`. Used by `dkk update` (its MCP
    *  phase handles registration) and by `--no-mcp`. Defaults to false. */
   skipMcp?: boolean;
@@ -514,6 +593,7 @@ export function installCopilotConfig(root: string, force: boolean, opts: Install
       destDir: join(root, ".github", "prompts"),
       relSubpath: ".github/prompts",
       force,
+      protect: opts.protect,
     });
     // agents/<name>.agent.md (flat)
     copyFlatDir({
@@ -521,11 +601,12 @@ export function installCopilotConfig(root: string, force: boolean, opts: Install
       destDir: join(root, ".github", "agents"),
       relSubpath: ".github/agents",
       force,
+      protect: opts.protect,
     });
   }
 
   // Portable skills (the same set installed by `--skills`).
-  if (!opts.skipSkills) installSkills(root, force);
+  if (!opts.skipSkills) installSkills(root, force, { protect: opts.protect });
 
   // .github/copilot-instructions.md — static DKK context section.
   if (!opts.skipInstructions) {
@@ -848,6 +929,14 @@ export function registerInit(program: Cmd): void {
         installCopilotConfig(root, force, { skipMcp: opts.mcp === false });
       } else if (wantSkills) {
         installSkills(root, force);
+      }
+
+      // Record what we just wrote. Without this the first `dkk update` has no
+      // provenance to consult and has to treat every local edit as a stale
+      // copy — which is the exact failure the lock exists to prevent.
+      if (wantClaude || wantCopilot || wantSkills) {
+        recordArtifactLock(root);
+        console.log(`Updated  .dkk/artifacts.lock (records what dkk installed — commit it)`);
       }
 
       // MCP registration — commander sets `mcp` false only when `--no-mcp`

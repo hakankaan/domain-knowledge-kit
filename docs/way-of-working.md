@@ -18,7 +18,8 @@ This guide defines the operational practices for development teams adopting DKK 
 | New feature introduces a new business event, command, or aggregate | `dkk add <type> <Name> --context <ctx>`, fill in the YAML |
 | Refactoring changes the name of a domain concept | `dkk rename <old-id> <new-id>` |
 | Removing a concept from the system | `dkk rm <id>` (blocks if dependents exist) |
-| Significant architectural decision made | `dkk new adr "<title>"`, link via `domain_refs` / `adr_refs` |
+| Significant architectural decision made | `dkk new adr "<title>" --domain-refs <ids>` (writes both halves of each link) |
+| A decision is accepted, declined, or replaced | `dkk adr status <id> <status>` — never delete an ADR |
 | New bounded context identified | `dkk new context <name>` |
 | Glossary term needs clarification or a new alias | Edit `context.yml` directly |
 
@@ -76,7 +77,10 @@ When a newer dkk release ships, refresh the assistant artifacts in one step:
 ```bash
 dkk update          # bumps npm + sweeps stale .claude/.github/skills/MCP/AGENTS.md, reinstalls fresh ones
 dkk update --check  # preview the diff without applying
+dkk update --diff   # see the content change, not just the paths
 ```
+
+Commit `.dkk/artifacts.lock` alongside the artifacts. It records a hash of everything dkk installed, which is what lets a later upgrade overwrite its own stale files while refusing to clobber ones your team has customized — those are reported as `! conflict` and the new template is left beside them as `<path>.new`.
 
 At the start of an agent session (or in your agent's system prompt), feed:
 
@@ -137,6 +141,7 @@ Track these metrics to gauge whether DKK is adding value:
 - **Model coverage**: ratio of domain items in YAML vs. known business concepts (review quarterly).
 - **Orphan count**: `dkk stats` output — should trend toward zero.
 - **ADR linkage**: percentage of domain items with at least one `adr_ref`.
+- **Decision rot**: `dkk adr audit` — unlinked decisions, proposals nobody resolved, one-way links, broken supersession chains. Worth running in CI with `--strict`.
 - **CI gate pass rate**: how often `dkk render` fails in CI (high failure = model is drifting from code).
 - **Agent query usage**: if instrumented, how often agents call `dkk search` / `dkk summary` / `dkk related` during coding sessions.
 

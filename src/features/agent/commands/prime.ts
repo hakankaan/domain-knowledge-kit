@@ -46,8 +46,8 @@ DKK supports **multi-repo federation**: a \`.dkk/service.yml\` declares the repo
 1. **Domain YAML is the single source of truth.** Never generate domain knowledge from code.
    - **Structural changes (create, rename, delete):** ALWAYS use the dkk CLI (\`dkk add\`, \`dkk rename\`, \`dkk rm\`, \`dkk new …\`).
    - **Content updates (descriptions, fields, refs):** edit the YAML directly (respect the JSON Schemas in \`tools/dkk/schema/\`), then run \`dkk render\`.
-2. **ADRs live in \`.dkk/adr/\`** as Markdown with YAML frontmatter; they link to items via \`domain_refs\` and items link back via \`adr_refs\`.
-3. **Prioritize ADRs.** Before architectural refactors, tech choices, or domain-logic changes, consult existing decisions (\`dkk_search\`, \`dkk_show\`).
+2. **ADRs live in \`.dkk/adr/\`** as Markdown with YAML frontmatter, named \`adr-NNNN.md\` with a matching \`id\`. Links are **bidirectional**: the ADR's \`domain_refs\` and the target's \`adr_refs\` must both be written — use \`dkk adr link\`, which writes both halves, rather than editing one side by hand.
+3. **Prioritize ADRs.** Before architectural refactors, tech choices, or domain-logic changes, ask \`dkk_decisions\` what has already been decided about the item or file you are touching. It resolves supersession, so a replaced decision is never reported as binding.
 4. **Quality gate:** run \`dkk render\` before committing (validates → renders docs → rebuilds the search index). \`dkk_validate\` is a quick dry-run check.
 
 ## Retrieval — use the MCP tools
@@ -56,18 +56,19 @@ For all read/query operations, call the DKK MCP tools rather than shelling out t
 
 | Tool | Use for |
 |------|---------|
-| \`dkk_search\` | Full-text search (filters: context, type, tag, service) |
+| \`dkk_search\` | Full-text search (filters: context, type, tag, status, service) |
 | \`dkk_summary\` | Cheapest orientation around an id (+ direct neighbours) |
-| \`dkk_show\` | Full definition of an item |
+| \`dkk_show\` | Full definition of an item; for ADRs the Markdown body, with \`section\` to read just one part |
+| \`dkk_decisions\` | Which ADRs govern an item, context, actor, flow, or **source file** (+ what is still binding) |
 | \`dkk_related\` | Graph traversal / blast radius (depth ≥ 2) |
-| \`dkk_list\` | List items by context/type |
+| \`dkk_list\` | List items by context/type/status |
 | \`dkk_story\` | A flow's full story context |
-| \`dkk_stats\` | Counts + orphan detection |
+| \`dkk_stats\` | Counts + orphan detection + ADR rot |
 | \`dkk_drift\` | Model/code drift report (\`code_refs\` + git); pass \`file\` to map a source file to its context |
 | \`dkk_validate\` | Schema + cross-reference validation |
-| \`dkk_guide\` | On-demand deep reference: \`yaml\`, \`update\`, \`federation\`, \`review\`, \`cli\` |
+| \`dkk_guide\` | On-demand deep reference: \`yaml\`, \`update\`, \`adr\`, \`federation\`, \`review\`, \`cli\` |
 
-When you're about to author or edit YAML, call \`dkk_guide\` topic \`yaml\`; before structural mutations, topic \`update\`.
+When you're about to author or edit YAML, call \`dkk_guide\` topic \`yaml\`; before structural mutations, topic \`update\`; before writing or retiring a decision, topic \`adr\`.
 
 ## Mutations — CLI only (MCP is read-only)
 
@@ -75,7 +76,10 @@ When you're about to author or edit YAML, call \`dkk_guide\` topic \`yaml\`; bef
 |---------|---------|
 | \`dkk new domain\` | Scaffold \`.dkk/domain/\` (one-time) |
 | \`dkk new context <name>\` | Scaffold + register a bounded context |
-| \`dkk new adr "<title>"\` | Scaffold a new ADR (auto-numbered) |
+| \`dkk new adr "<title>"\` | Scaffold a new ADR (auto-numbered); \`--domain-refs\` also writes the reciprocal \`adr_refs\` |
+| \`dkk adr link <adr-id> <ids…>\` | Link a decision to items/contexts/actors/flows — writes **both** halves |
+| \`dkk adr status <adr-id> <status>\` | Move a decision through its lifecycle (\`--superseded-by\` for supersession) |
+| \`dkk adr audit\` | Report decision rot: unlinked, stalled, one-way links, broken chains |
 | \`dkk add <type> <name> --context <ctx>\` | Scaffold a domain item |
 | \`dkk rename <old-id> <new-id>\` | Rename an item + update all refs |
 | \`dkk rm <id>\` | Remove an item safely |
@@ -124,7 +128,8 @@ Naming: items PascalCase (\`OrderPlaced\`), contexts kebab-case (\`ordering\`), 
 | **Read Model** | Query projection | \`name\`, \`description\`, \`fields\`, \`subscribes_to\`, \`used_by\`, \`adr_refs\` |
 | **Glossary** | Ubiquitous-language term | \`term\`, \`definition\`, \`aliases\`, \`adr_refs\` |
 | **Actor** | Person or system | \`name\`, \`type\`, \`description\`, \`capabilities\`, \`failure_modes\` |
-| **Flow** | Cross-context sequence | \`name\`, \`description\`, \`steps[]\` |
+| **Flow** | Cross-context sequence | \`name\`, \`description\`, \`steps[]\`, \`adr_refs\` |
+| **ADR** | Architectural decision | \`id\`, \`title\`, \`status\`, \`date\`, \`domain_refs\`, \`supersedes\`/\`superseded_by\`, \`tags\`, \`code_refs\` |
 
 For full YAML examples of each item type, call \`dkk_guide\` topic \`yaml\`.
 `;
@@ -133,7 +138,7 @@ For full YAML examples of each item type, call \`dkk_guide\` topic \`yaml\`.
 // ── On-demand deep reference (dkk_guide / dkk prime --full) ───────────
 
 /** The reference topics fetchable via `dkk_guide` / surfaced by `--full`. */
-export const GUIDE_TOPICS = ["yaml", "update", "federation", "review", "cli"] as const;
+export const GUIDE_TOPICS = ["yaml", "update", "adr", "federation", "review", "cli"] as const;
 export type GuideTopic = (typeof GUIDE_TOPICS)[number];
 
 /**
@@ -147,6 +152,8 @@ export function guideSection(topic: GuideTopic): string {
       return GUIDE_YAML;
     case "update":
       return GUIDE_UPDATE;
+    case "adr":
+      return GUIDE_ADR;
     case "federation":
       return GUIDE_FEDERATION;
     case "review":
@@ -174,10 +181,11 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 
 | Command                       | Purpose                                              |
 |-------------------------------|------------------------------------------------------|
-| \`dkk list\`                    | List all domain items (filterable by \`--context\`, \`--type\`) |
-| \`dkk show <id>\`               | Display full YAML of a domain item                   |
+| \`dkk list\`                    | List all domain items (filterable by \`--context\`, \`--type\`, \`--status\`) |
+| \`dkk show <id>\`               | Display a domain item; for ADRs, frontmatter + the Markdown body |
+| \`dkk show <adr-id> --section <s>\` | One section of an ADR body (decision, consequences, alternatives…) |
 | \`dkk summary <id>\`            | Concise item summary with direct relations (AI-optimized) |
-| \`dkk search <query>\`          | FTS5 full-text search with ranking                   |
+| \`dkk search <query>\`          | FTS5 full-text search with ranking (\`--status\` narrows ADRs) |
 | \`dkk related <id>\`            | BFS graph traversal of related items                 |
 | \`dkk graph\`                   | Mermaid.js flowchart (--layout LR|TD, --node-types to filter kinds) |
 
@@ -195,8 +203,19 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 |------------------------------------------|------------------------------------------------------|
 | \`dkk new domain\`                        | Scaffold a complete \`.dkk/domain/\` structure         |
 | \`dkk new context <name>\`               | Scaffold a new bounded context and register it       |
-| \`dkk new adr <title>\`                  | Scaffold a new ADR file (auto-increments number)     |
+| \`dkk new adr <title>\`                  | Scaffold a new ADR file (auto-increments number; \`--domain-refs\` links both halves) |
 | \`dkk add <type> <name> --context <ctx>\` | Scaffold an individual domain item                   |
+
+### ADR lifecycle
+
+| Command                                       | Purpose                                              |
+|-----------------------------------------------|------------------------------------------------------|
+| \`dkk adr decisions <id>\`                     | Which decisions govern an item/context/actor/flow (\`--file <path>\` for source) |
+| \`dkk adr link <adr-id> <ids…>\`               | Link a decision to targets — writes \`domain_refs\` **and** \`adr_refs\` |
+| \`dkk adr unlink <adr-id> <ids…>\`             | Remove a link from both sides                        |
+| \`dkk adr status <adr-id> <status>\`           | proposed \| accepted \| rejected \| deprecated \| superseded |
+| \`dkk adr status <old> superseded --superseded-by <new>\` | Retire a decision and record the chain both ways |
+| \`dkk adr audit\`                              | Decision rot: unlinked, stalled proposals, one-way links, broken chains (\`--strict\` for CI) |
 
 ### Refactor
 
@@ -224,7 +243,13 @@ Keep this in sync with the Quick Reference block in init.ts#dkkSection.
 | \`dkk init --copilot\`  | Also scaffold GitHub Copilot config (\`.github/\` prompts, agent, skills, copilot-instructions.md, \`.vscode/mcp.json\`) |
 | \`dkk init --all\`      | Install both Claude Code and Copilot config          |
 | \`dkk update\`          | Upgrade dkk via npm and refresh \`.claude/\`, \`.github/skills/\`, Copilot artifacts, MCP, and AGENTS.md |
+| \`dkk update --diff\`   | Show the unified diff for every changed file before the confirmation prompt |
+| \`dkk update --force\`  | Overwrite locally-edited artifacts instead of preserving them as conflicts |
+| \`dkk artifacts check\` | Read-only drift gate for CI — exits non-zero when artifacts are out of sync |
 | \`dkk prime\`           | Output the lean agent context (\`--full\` for everything) |
+
+\`dkk update\` records what it installed in \`.dkk/artifacts.lock\` (commit it). On the next upgrade, a file whose content still matches that record is overwritten silently; a file that was edited since is reported as \`! conflict\`, left alone, and the new template is written beside it as \`<path>.new\` to merge by hand.
+
 | \`dkk mcp\`             | MCP server entrypoint (auto-spawned by the client via .mcp.json / .vscode/mcp.json) |
 
 ### Feedback (about dkk itself, not the domain)
@@ -253,6 +278,88 @@ Nothing is transmitted: \`export\` prints to stdout and a human decides where it
 | \`dkk consumers <id>\`                              | Reverse-lookup: which peers reference this item     |
 | \`dkk validate --federation strict\`                | Promote unreachable-peer warnings to errors (CI gate) |
 | \`dkk search --service <n>\`                        | Narrow search to one service (local or peer)        |
+`;
+
+const GUIDE_ADR = `## ADR Workflow
+
+### Before deciding anything
+
+Ask what has already been decided. \`dkk_decisions\` takes an item id
+(\`ordering.Order\`, \`actor.Customer\`, \`flow.Checkout\`,
+\`context.ordering\`) or a source \`file\` path, and returns every linked
+ADR with its provenance plus \`binding\` — the ids in effect *after*
+following supersession chains. A superseded ADR is never reported as
+binding; its successor is.
+
+Relitigating a decided question without citing the prior ADR is the
+worst failure mode here. If a *rejected* ADR covers the idea, say so
+rather than proposing it again.
+
+### Recording a decision
+
+\`\`\`bash
+dkk new adr "Use CQRS for inventory" \\
+  --status proposed \\
+  --deciders "Ada,Grace" \\
+  --domain-refs inventory.StockReserved,context.inventory \\
+  --tags storage
+\`\`\`
+
+- The file is \`.dkk/adr/adr-NNNN.md\`; \`id\` must match the filename
+  (the validator enforces it) and the number is assigned for you.
+- \`--domain-refs\` writes **both** halves of each link. Pass
+  \`--no-backlink\` only if you deliberately want the ADR side alone.
+- Frontmatter is the single source of truth for status and date. Do
+  not restate them in the body — nothing keeps a prose copy in sync.
+- Canonical sections: **Context**, **Decision**, **Alternatives
+  Considered**, **Consequences**. A team can override the skeleton by
+  putting its own \`adr.md.hbs\` in \`.dkk/templates/\`.
+
+### Linking
+
+\`\`\`bash
+dkk adr link adr-0007 ordering.Order actor.Customer context.ordering
+dkk adr unlink adr-0007 ordering.Order
+\`\`\`
+
+Targets may be items, glossary terms, actors, flows, or whole contexts.
+Editing only one side produces a link that resolves but is invisible on
+the item side and in the rendered docs; \`dkk validate\` warns about it.
+
+### Lifecycle
+
+| Status | Meaning |
+|--------|---------|
+| \`proposed\` | under discussion — not in effect yet |
+| \`accepted\` | in effect — new code must comply |
+| \`rejected\` | considered and declined — kept so it is not relitigated |
+| \`deprecated\` | was in effect, no longer applies |
+| \`superseded\` | replaced by a later ADR |
+
+\`\`\`bash
+dkk adr status adr-0007 accepted
+dkk adr status adr-0003 superseded --superseded-by adr-0007
+\`\`\`
+
+The supersession form writes \`superseded_by\` on the old ADR and
+\`supersedes\` on the new one, so the chain is answerable from both
+ends. Never delete an ADR — retire it.
+
+### Reading
+
+- \`dkk_show adr-0007\` returns the frontmatter plus the Markdown body
+  intact, and lists the section names.
+- \`dkk_show adr-0007 section="decision"\` returns just that section —
+  prefer it when you want what was decided, not the whole document.
+- \`dkk_search "<topic>" type="adr" status="accepted"\` narrows to what
+  is currently binding; \`status="proposed"\` finds open questions.
+
+### Health
+
+\`dkk adr audit\` reports unlinked decisions, proposals nobody ever
+resolved, one-way links, and broken supersession chains. \`--strict\`
+makes it a CI gate. \`review_by: YYYY-MM-DD\` in the frontmatter opts a
+decision into a revisit deadline.
 `;
 
 const GUIDE_UPDATE = `## Domain Update Workflow

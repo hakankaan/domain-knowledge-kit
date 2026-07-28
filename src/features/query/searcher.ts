@@ -1,8 +1,9 @@
 /**
  * FTS5 searcher for domain items.
  *
- * Accepts a query string and optional filters (context, type, tag),
- * performs an FTS5 MATCH query against the index built by the indexer,
+ * Accepts a query string and optional filters (context, type, tag,
+ * status, service), performs an FTS5 MATCH query against the index
+ * built by the indexer,
  * applies boost scoring, post-FTS filters, and graph expansion for
  * top-N results. Returns a ranked list of search results.
  */
@@ -48,6 +49,8 @@ export interface SearchResult {
   relatedIds: string[];
   /** ADR references attached to this item. */
   adrIds: string[];
+  /** Lifecycle status, for item types that have one (ADRs). */
+  status?: string;
 }
 
 /** Filters that narrow search results. */
@@ -58,6 +61,11 @@ export interface SearchFilters {
   type?: string;
   /** Only include items whose tags contain this value. */
   tag?: string;
+  /**
+   * Only include items with this lifecycle status (ADRs today).
+   * Exact match — `proposed` does not also return `superseded`.
+   */
+  status?: string;
   /**
    * Only include items from this service. Use the empty string to
    * match local rows in unfederated repos. Useful for narrowing to
@@ -116,12 +124,38 @@ function sanitiseQuery(raw: string): string {
 }
 
 /**
- * Build snippet text from matching row fields.
- * We take the first 200 characters of the text column as an excerpt.
+ * Build an excerpt centred on the first place a query term appears.
+ *
+ * Taking the head of the text column instead — the previous behaviour —
+ * meant a document whose match lived halfway down showed an excerpt of
+ * its own preamble: technically an excerpt, useless as evidence that
+ * the result is the one you wanted.
  */
-function makeExcerpt(text: string, maxLen: number = 200): string {
+export function makeExcerpt(text: string, query = "", maxLen: number = 200): string {
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen).trimEnd() + "…";
+
+  const haystack = text.toLowerCase();
+  const hit = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => haystack.indexOf(token))
+    .filter((i) => i !== -1)
+    .sort((a, b) => a - b)[0];
+
+  if (hit === undefined || hit < maxLen / 2) {
+    return text.slice(0, maxLen).trimEnd() + "…";
+  }
+
+  // Centre the window on the match, then snap to word boundaries so
+  // the excerpt does not start or end mid-token.
+  let start = Math.max(0, hit - Math.floor(maxLen / 3));
+  const spaceBefore = text.lastIndexOf(" ", start);
+  if (spaceBefore > 0 && start - spaceBefore < 20) start = spaceBefore + 1;
+
+  const end = Math.min(text.length, start + maxLen);
+  const slice = text.slice(start, end).trimEnd();
+  return `…${slice}${end < text.length ? "…" : ""}`;
 }
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -132,7 +166,7 @@ function makeExcerpt(text: string, maxLen: number = 200): string {
  * Steps:
  * 1. Run FTS5 MATCH query to get candidate rows + BM25 scores.
  * 2. Apply boost scoring (exact-id, name, tag, glossary).
- * 3. Apply post-FTS filters (context, type, tag).
+ * 3. Apply post-FTS filters (context, type, tag, status, service).
  * 4. Sort by final score descending.
  * 5. If a {@link DomainGraph} is provided, expand top-N results with
  *    graph neighbours and include linked ADRs.
@@ -169,6 +203,7 @@ export function search(
         name,
         service,
         tags,
+        status,
         text,
         relations,
         adrRefs,
@@ -186,6 +221,7 @@ export function search(
       name: string;
       service: string;
       tags: string;
+      status: string;
       text: string;
       relations: string;
       adrRefs: string;
@@ -236,6 +272,10 @@ export function search(
       const tag = filters.tag.toLowerCase();
       filtered = filtered.filter((s) => s.row.tags.toLowerCase().includes(tag));
     }
+    if (filters.status) {
+      const st = filters.status.toLowerCase();
+      filtered = filtered.filter((s) => (s.row.status ?? "").toLowerCase() === st);
+    }
     if (filters.service !== undefined) {
       const svc = filters.service.toLowerCase();
       filtered = filtered.filter((s) => s.row.service.toLowerCase() === svc);
@@ -282,10 +322,11 @@ export function search(
         context: row.context,
         name: row.name,
         service: row.service ?? "",
-        excerpt: makeExcerpt(row.text),
+        excerpt: makeExcerpt(row.text, query),
         score: Math.round(score * 1000) / 1000,
         relatedIds: uniqueRelated,
         adrIds: uniqueAdrs,
+        ...(row.status ? { status: row.status } : {}),
       });
     }
 

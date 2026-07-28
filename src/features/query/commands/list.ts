@@ -1,8 +1,8 @@
 /**
  * `domain list` command — list domain items with optional filters.
  *
- * Displays a table of domain items filtered by bounded context
- * and/or item type.
+ * Displays a table of domain items filtered by bounded context,
+ * item type, and/or lifecycle status.
  */
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
@@ -15,6 +15,8 @@ export interface ListRow {
   context: string;
   name: string;
   description: string;
+  /** Lifecycle status, for item types that have one (ADRs). */
+  status?: string;
 }
 
 /** Collect all domain items into flat rows. */
@@ -62,6 +64,7 @@ export function collectRows(root?: string): ListRow[] {
       context: "",
       name: adr.title,
       description: `[${adr.status}] ${adr.date}`,
+      status: adr.status,
     });
   }
 
@@ -128,10 +131,14 @@ export function registerList(program: Cmd): void {
     .description("List domain items with optional filters")
     .option("-c, --context <name>", "Filter by bounded context")
     .option("-t, --type <type>", "Filter by item type (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context)")
+    .option(
+      "--status <status>",
+      "Filter by lifecycle status (ADRs: proposed, accepted, rejected, deprecated, superseded)",
+    )
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((opts: { context?: string; type?: string; json?: boolean; minify?: boolean; root?: string }) => {
+    .action((opts: { context?: string; type?: string; status?: string; json?: boolean; minify?: boolean; root?: string }) => {
       let rows = collectRows(opts.root);
 
       if (opts.context) {
@@ -142,6 +149,10 @@ export function registerList(program: Cmd): void {
         let t = opts.type.toLowerCase();
         if (t === "read-model") t = "read_model";
         rows = rows.filter((r) => r.type.toLowerCase() === t);
+      }
+      if (opts.status) {
+        const st = opts.status.toLowerCase();
+        rows = rows.filter((r) => (r.status ?? "").toLowerCase() === st);
       }
 
       if (opts.json) {

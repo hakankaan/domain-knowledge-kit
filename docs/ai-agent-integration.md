@@ -56,8 +56,25 @@ When a newer release of `dkk` ships new skills, hooks, slash commands, or MCP wi
 ```bash
 dkk update            # bump npm + refresh .claude/, .github/skills/, Copilot, MCP, AGENTS.md
 dkk update --check    # preview the diff without applying
+dkk update --diff     # see the actual content change, not just the paths
 dkk artifacts check   # read-only drift gate for CI — exits 1 when out of sync
 ```
+
+### If you've customized an artifact
+
+Editing a DKK-installed hook or skill is legitimate — but an upgrade that blindly overwrites it destroys that work. `dkk update` records what it wrote in **`.dkk/artifacts.lock`** (commit it) so it can tell its own previous output from your edits:
+
+```
+  ~ replace   .claude/commands/dkk-review.md
+  ! conflict  .claude/hooks/stop-validate.mjs
+
+  1 file was edited after dkk installed it.
+  Your version is kept; the new template is written alongside as
+  <path>.new for you to merge. Pass --diff to see what changed,
+  or --force to overwrite instead.
+```
+
+The `~ replace` file is overwritten silently — it is provably the previous release's copy. The `! conflict` file is left exactly as you wrote it, with `stop-validate.mjs.new` dropped beside it. Merge at your leisure; once the local file matches the template again, the `.new` copy is cleaned up automatically.
 
 It runs the npm install for you (global or local install — `npx` is refused), re-execs onto the freshly-installed binary, then refreshes the DKK-managed artifacts. `AGENTS.md` and the repo-root `.mcp.json` are the **universal base** — every `dkk init` writes them, so `update` always refreshes them.
 
@@ -203,19 +220,22 @@ Either way, Claude Code exposes the following tools (all read-only except `dkk_v
 
 | Tool | Purpose |
 |------|---------|
-| `dkk_search` | FTS5 keyword search with context/type/tag filters |
-| `dkk_show` | Full YAML/JSON for an item id |
+| `dkk_search` | FTS5 keyword search with context/type/tag/status filters |
+| `dkk_show` | Full definition for an item id; for ADRs the Markdown body, with `section` to read one part |
+| `dkk_decisions` | Which ADRs govern an item, context, actor, flow, or **source file** — with provenance and what is still binding |
 | `dkk_summary` | Concise summary + direct neighbours (cheapest orientation tool) |
 | `dkk_related` | BFS graph traversal — use depth ≥ 2 for blast radius |
-| `dkk_list` | List all items, filterable by context/type |
+| `dkk_list` | List all items, filterable by context/type/status |
 | `dkk_story` | Aggregate a flow's full story context (markdown or JSON) |
 | `dkk_locate` | Absolute file path(s) for an item |
-| `dkk_stats` | Domain counts + orphaned-item detection |
+| `dkk_stats` | Domain counts + orphaned-item detection + ADR rot |
 | `dkk_prime` | Lean agent context + live domain summary (`verbose: true` for the full reference) |
-| `dkk_guide` | On-demand deep reference by topic: `yaml`, `update`, `federation`, `review`, `cli` |
+| `dkk_guide` | On-demand deep reference by topic: `yaml`, `update`, `adr`, `federation`, `review`, `cli` |
 | `dkk_validate` | Schema + cross-reference validation |
 
 The server reuses the same in-process modules the CLI uses, so the output is identical and there's no shell-escaping fragility.
+
+`dkk_decisions` is the one to reach for before an architectural change. "What has already been decided about this?" used to mean composing a search, a graph traversal, and several `dkk_show` calls, and then working out by hand which results were still in effect. It answers that in one call, and follows supersession chains so a replaced decision is never reported as binding.
 
 `dkk_prime` is deliberately lean — it carries only the behavioural contract an agent can't discover through a tool call. When the agent needs the full YAML structure, the change workflow, or the federation guide, it calls `dkk_guide` with the relevant topic, so that reference material is paid for only when used rather than injected into every session.
 
@@ -236,6 +256,15 @@ Re-run with `--force` to overwrite local edits. The scaffolder creates:
 - **`.claude/hooks/stop-validate.mjs`** (`Stop`) — runs `dkk validate` as a quality gate before the agent finishes a turn; an invalid model returns exit 2 with the error report so the agent must fix it before declaring the work done.
 
 Each hook script auto-detects whether it's running inside the DKK source repo (where it uses `npx tsx src/cli.ts`) or in a downstream consumer repo (where it uses the published `dkk` binary). They work unchanged in both contexts.
+
+### Validator failures vs. tooling failures
+
+Both validating hooks block the agent with **exit 2 only when `dkk validate` actually produced a report**. That distinction matters more than it looks:
+
+- A parseable report means the *domain model* is broken. The agent can fix it, so blocking is correct.
+- No report means `dkk validate` itself failed. The most common cause is a version manager handing the hook an older Node than dkk's `>=21.2` requirement, where `import.meta.dirname` throws `ERR_INVALID_ARG_TYPE`. Blocking there tells the agent to "fix domain validation" about something it has no way to repair — so every turn re-fires the hook and the session wedges.
+
+Tooling failures therefore exit **1**: the error is surfaced to you, with the Node version called out, and the agent is left alone.
 
 ## GitHub Copilot Integration
 

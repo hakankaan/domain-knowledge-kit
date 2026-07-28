@@ -38,6 +38,22 @@ _No actors defined._
 _No glossary entries._
 {{/if}}
 
+## Decisions
+
+{{#if adrs}}
+{{adrSummary}}
+
+| ADR | Title | Status |
+|-----|-------|--------|
+{{#each adrs}}
+| [{{id}}]({{href}}) | {{title}} | {{status}} |
+{{/each}}
+
+→ [Full decision log](adr/index.md)
+{{else}}
+_No ADRs recorded._
+{{/if}}
+
 ## Key Flows
 
 {{#if flows}}

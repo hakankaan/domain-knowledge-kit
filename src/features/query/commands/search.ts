@@ -2,7 +2,7 @@
  * `domain search <query>` command — FTS5 keyword search over domain items.
  *
  * Runs a full-text search against the SQLite FTS5 index and displays
- * ranked results with optional context/type/tag filters.
+ * ranked results with optional context/type/tag/status filters.
  *
  * When the search index does not exist yet, the command automatically
  * builds it from the domain model (unless `--no-auto-index` is set).
@@ -22,6 +22,10 @@ export function registerSearch(program: Cmd): void {
     .option("-t, --type <type>", "Filter results by item type")
     .option("--tag <tag>", "Filter results by tag/keyword")
     .option(
+      "--status <status>",
+      "Filter by lifecycle status (ADRs: proposed, accepted, rejected, deprecated, superseded)",
+    )
+    .option(
       "-s, --service <name>",
       "Filter results to one service (use \"\" or omit for local rows in unfederated repos)",
     )
@@ -35,6 +39,7 @@ export function registerSearch(program: Cmd): void {
       context?: string;
       type?: string;
       tag?: string;
+      status?: string;
       service?: string;
       limit?: string;
       expand?: boolean;
@@ -47,6 +52,7 @@ export function registerSearch(program: Cmd): void {
         context: opts.context,
         type: opts.type,
         tag: opts.tag,
+        status: opts.status,
         service: opts.service,
       };
 
@@ -100,7 +106,8 @@ export function registerSearch(program: Cmd): void {
 
       for (const r of results) {
         const ctx = r.context ? ` [${r.context}]` : "";
-        console.log(`  ${r.id}  (${r.type})${ctx}  score=${r.score}`);
+        const status = r.status ? ` [${r.status}]` : "";
+        console.log(`  ${r.id}  (${r.type})${ctx}${status}  score=${r.score}`);
         console.log(`    ${r.excerpt}`);
         if (r.adrIds.length > 0) {
           console.log(`    ADRs: ${r.adrIds.join(", ")}`);

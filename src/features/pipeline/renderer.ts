@@ -81,6 +81,7 @@ interface CompiledTemplates {
   index: HandlebarsTemplateDelegate;
   context: HandlebarsTemplateDelegate;
   item: HandlebarsTemplateDelegate;
+  adrIndex: HandlebarsTemplateDelegate;
 }
 
 /**
@@ -101,7 +102,69 @@ function loadTemplates(tplDir: string): CompiledTemplates {
     index: compile("index"),
     context: compile("context"),
     item: compile("item"),
+    adrIndex: compile("adr-index"),
   };
+}
+
+// ── ADR presentation ──────────────────────────────────────────────────
+
+/**
+ * Relative link from a rendered page to an ADR's **source** file.
+ *
+ * The generated docs never contain the ADR prose — that would be a
+ * second copy to drift — so every reference points back at
+ * `.dkk/adr/<id>.md`. `depth` is how many directories deep inside
+ * `.dkk/docs/` the linking page sits.
+ */
+function adrHref(id: string, depth: number): string {
+  return `${"../".repeat(depth + 1)}adr/${id}.md`;
+}
+
+/** ADR fields the templates render, with the source link resolved. */
+interface AdrLinkData {
+  id: string;
+  title: string;
+  status: string;
+  date?: string;
+  href: string;
+}
+
+/**
+ * Look up an ADR id for display. Unresolvable ids still render (the
+ * validator reports them as errors) so a broken link is visible in the
+ * docs rather than silently dropped.
+ */
+function adrLinkData(
+  id: string,
+  allAdrs: Map<string, AdrRecord>,
+  depth: number,
+): AdrLinkData {
+  const rec = allAdrs.get(id);
+  return {
+    id,
+    title: rec?.title ?? "",
+    status: rec?.status ?? "",
+    date: rec?.date,
+    href: adrHref(id, depth),
+  };
+}
+
+/** Both directions of the supersession chain, as one cell of prose. */
+function supersessionNote(adr: AdrRecord): string | undefined {
+  const parts: string[] = [];
+  if (adr.superseded_by) parts.push(`superseded by ${adr.superseded_by}`);
+  if (adr.supersedes?.length) parts.push(`supersedes ${adr.supersedes.join(", ")}`);
+  return parts.length ? parts.join("; ") : undefined;
+}
+
+/** "3 accepted · 1 proposed · 2 superseded" for a heading line. */
+function statusSummary(adrs: Iterable<AdrRecord>): string {
+  const counts = new Map<string, number>();
+  for (const adr of adrs) counts.set(adr.status, (counts.get(adr.status) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([status, n]) => `${n} ${status}`)
+    .join(" · ");
 }
 
 // ── Data preparation ──────────────────────────────────────────────────
@@ -122,21 +185,24 @@ function collectGlossary(model: DomainModel) {
   return entries.sort((a, b) => a.term.localeCompare(b.term));
 }
 
-/** Collect all ADRs referenced by a context's items. */
+/**
+ * Collect every ADR a context is linked to — both from its items'
+ * `adr_refs` and from the context's own, which records decisions that
+ * govern the context as a whole rather than any single item.
+ */
 function collectContextAdrs(
   ctx: DomainContext,
   allAdrs: Map<string, AdrRecord>,
-): AdrRecord[] {
-  const refs = new Set<string>();
+): AdrLinkData[] {
+  const refs = new Set<string>(ctx.adr_refs ?? []);
 
   forEachItem(ctx, (_type, _name, item) => {
     for (const r of itemAdrRefs(item) ?? []) refs.add(r);
   });
 
-  const records: AdrRecord[] = [];
+  const records: AdrLinkData[] = [];
   for (const ref of [...refs].sort()) {
-    const rec = allAdrs.get(ref);
-    if (rec) records.push(rec);
+    if (allAdrs.has(ref)) records.push(adrLinkData(ref, allAdrs, 1));
   }
   return records;
 }
@@ -182,6 +248,7 @@ function buildItemData(
     preconditions?: string[];
     rejections?: string[];
   },
+  allAdrs: Map<string, AdrRecord>,
 ) {
   const relationships: Relationship[] = [];
 
@@ -248,7 +315,12 @@ function buildItemData(
     examples: item.examples,
     aliases: item.aliases,
     relationships: relationships.length > 0 ? relationships : undefined,
-    adr_refs: item.adr_refs,
+    // Resolved so the item page can show each decision's title and
+    // status and link to its source, rather than a bare id the reader
+    // has to go look up.
+    adr_refs: item.adr_refs?.length
+      ? item.adr_refs.map((ref) => adrLinkData(ref, allAdrs, 1))
+      : undefined,
   };
 }
 
@@ -309,14 +381,39 @@ export function renderDocs(
     sequenceDiagram: generateFlowSequence(f, graph),
   }));
 
+  const adrList = [...model.adrs.values()].sort((a, b) => a.id.localeCompare(b.id));
+
   const indexData = {
     contexts: model.index.contexts,
     actors: model.actors,
     glossaryEntries: collectGlossary(model),
     flows: flowsData.length > 0 ? flowsData : undefined,
+    adrs: adrList.length > 0 ? adrList.map((a) => adrLinkData(a.id, model.adrs, 0)) : undefined,
+    adrSummary: statusSummary(adrList),
   };
 
   writeOutput(join(outDir, "index.md"), tpl.index(indexData), written);
+
+  // ── 1b. Render the decision log ───────────────────────────────────
+  //
+  // ADRs were the one item type `render` produced no page for, which
+  // left a repo whose pack is mostly decisions with empty docs.
+
+  const adrOutDir = join(outDir, "adr");
+  ensureDir(adrOutDir);
+  writeOutput(
+    join(adrOutDir, "index.md"),
+    tpl.adrIndex({
+      adrs: adrList.map((adr) => ({
+        ...adrLinkData(adr.id, model.adrs, 1),
+        date: adr.date,
+        constrains: adr.domain_refs?.length ? adr.domain_refs : undefined,
+        supersession: supersessionNote(adr),
+      })),
+      summary: statusSummary(adrList),
+    }),
+    written,
+  );
 
   // ── 2. Render each bounded context ────────────────────────────────
 
@@ -353,6 +450,7 @@ export function renderDocs(
         typeLabel[type],
         ctxName,
         dataItem as unknown as Parameters<typeof buildItemData>[2],
+        model.adrs,
       );
       writeOutput(
         join(ctxDir, `${name}.md`),

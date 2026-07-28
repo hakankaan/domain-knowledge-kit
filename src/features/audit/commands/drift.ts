@@ -414,7 +414,28 @@ export interface FileMapping {
   codeRefs?: string[];
   daysSinceModelChange?: number | null;
   commitsSinceModelChange?: number | null;
+  /**
+   * Decisions relevant to this file, most precise first: ADRs whose own
+   * `code_refs` match it, then ADRs on the owning context, then the
+   * ADRs its items most often cite.
+   */
   adrs?: string[];
+  /**
+   * The subset of `adrs` bound to this path by the ADR's own
+   * `code_refs` — an exact statement that the decision governs this
+   * file, not an inference from its context.
+   */
+  adrsBoundDirectly?: string[];
+}
+
+/** ADRs whose own `code_refs` glob matches a repo-relative path. */
+function adrsBindingFile(model: DomainModel, rel: string): string[] {
+  const hits: string[] = [];
+  for (const [id, adr] of model.adrs) {
+    if (!adr.code_refs?.length) continue;
+    if (picomatch.isMatch(rel, adr.code_refs, { dot: false })) hits.push(id);
+  }
+  return hits.sort();
 }
 
 /** Resolve a file to its owning context. No printing, no exit codes. */
@@ -427,6 +448,11 @@ export function mapFileToContext(
   const model = loadDomainModel({ root: opts.root });
   const acks = loadDriftConfig(opts.root).acks ?? {};
 
+  // A decision can bind source directly, which is both more precise
+  // than inferring it from the context and independent of whether any
+  // context claims the file at all.
+  const direct = adrsBindingFile(model, rel);
+
   let match: DomainContext | null = null;
   for (const ctx of boundContexts(model)) {
     if (picomatch.isMatch(rel, ctx.code_refs ?? [], { dot: false })) {
@@ -434,11 +460,20 @@ export function mapFileToContext(
       break;
     }
   }
-  if (!match) return { file: rel, context: null };
+
+  if (!match) {
+    return direct.length
+      ? { file: rel, context: null, adrs: direct, adrsBoundDirectly: direct }
+      : { file: rel, context: null };
+  }
 
   const staleness = isGitRepo(cwd)
     ? contextStaleness(match.name, match.code_refs ?? [], cwd, acks)
     : null;
+
+  const adrs = [
+    ...new Set([...direct, ...(match.adr_refs ?? []), ...topAdrRefs(match)]),
+  ];
 
   return {
     file: rel,
@@ -447,7 +482,8 @@ export function mapFileToContext(
     codeRefs: match.code_refs ?? [],
     daysSinceModelChange: staleness?.daysSinceModelChange ?? null,
     commitsSinceModelChange: staleness?.commitsSince ?? null,
-    adrs: topAdrRefs(match),
+    adrs,
+    ...(direct.length ? { adrsBoundDirectly: direct } : {}),
   };
 }
 
@@ -465,7 +501,10 @@ function runMap(
   }
 
   if (!mapping.context) {
-    console.log(`${mapping.file}: no context binds this file.`);
+    const direct = mapping.adrsBoundDirectly?.length
+      ? ` Decisions binding it directly: ${mapping.adrsBoundDirectly.join(", ")}.`
+      : "";
+    console.log(`${mapping.file}: no context binds this file.${direct}`);
     return;
   }
 

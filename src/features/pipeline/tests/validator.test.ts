@@ -128,6 +128,10 @@ function testValidModel() {
       "  - name: orderId",
       "    type: UUID",
       "raised_by: Order",
+      // Reciprocal half of adr-0001's domain_refs — without it the
+      // link is one-way and the validator warns.
+      "adr_refs:",
+      "  - adr-0001",
     ].join("\n")]],
     commands: [["PlaceOrder.yml", [
       "name: PlaceOrder",
@@ -152,7 +156,7 @@ function testValidModel() {
 
   writeAdr(
     join(root, ".dkk", "adr"),
-    "0001-use-yaml.md",
+    "adr-0001.md",
     [
       "id: adr-0001",
       "title: Use YAML for domain models",
@@ -217,7 +221,7 @@ function testBrokenDomainRefs() {
   writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
   writeAdr(
     join(root, ".dkk", "adr"),
-    "0001-test.md",
+    "adr-0001.md",
     [
       "id: adr-0001",
       "title: Test",
@@ -480,6 +484,204 @@ function testWarnMissingFields() {
   rmSync(root, { recursive: true, force: true });
 }
 
+// ── Test: ADR file identity ───────────────────────────────────────────
+
+/**
+ * The loader keys ADRs by their frontmatter `id`, but every consumer
+ * that resolves an ADR to a path derives `<id>.md`. When those two
+ * disagree the model looks healthy and `locate`/`rm`/`rename` cannot
+ * find the file — so it has to be an error, not a silent divergence.
+ */
+function testAdrFileIntegrity() {
+  console.log("\n=== ADR file identity ===");
+  const root = makeTempRoot("adrfiles");
+  const adrDir = join(root, ".dkk", "adr");
+
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
+
+  // Filename says 0002, frontmatter says 0009.
+  writeAdr(adrDir, "adr-0002.md", [
+    "id: adr-0009",
+    "title: Mismatched",
+    "status: accepted",
+    "date: 2026-01-01",
+  ].join("\n"));
+
+  // A second file claiming the same id.
+  writeAdr(adrDir, "adr-0003.md", [
+    "id: adr-0009",
+    "title: Duplicate",
+    "status: accepted",
+    "date: 2026-01-01",
+  ].join("\n"));
+
+  // Malformed YAML — must not take down the model load.
+  writeFileSync(
+    join(adrDir, "adr-0004.md"),
+    "---\nid: adr-0004\ntitle: Broken: colon\nstatus: accepted\ndate: 2026-01-01\n---\n\nBody\n",
+    "utf-8",
+  );
+
+  // A stray note with no frontmatter — a warning, not an error.
+  writeFileSync(join(adrDir, "notes.md"), "just a note\n", "utf-8");
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert("model still loads despite a malformed ADR", model.adrs.size === 1);
+  assert("detects id/filename mismatch", hasError(result, "adr-0002.md"));
+  assert("detects duplicate ADR id", hasError(result, "duplicate ADR id"));
+  assert("reports malformed frontmatter by path", hasError(result, "adr-0004.md"));
+  assert("stray Markdown is a warning", hasWarning(result, "notes.md"));
+  assert("result is invalid", !result.valid);
+
+  rmSync(root, { recursive: true, force: true });
+}
+
+// ── Test: ADR link reciprocity ────────────────────────────────────────
+
+function testAdrReciprocity() {
+  console.log("\n=== ADR link reciprocity ===");
+  const root = makeTempRoot("adrrecip");
+
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts:\n  - name: ordering\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
+  writeContextDir(root, ["name: ordering", 'description: "Orders"'].join("\n"), {
+    events: [["OrderPlaced.yml", [
+      "name: OrderPlaced",
+      'description: "Placed"',
+    ].join("\n")]],
+  });
+  writeAdr(join(root, ".dkk", "adr"), "adr-0001.md", [
+    "id: adr-0001",
+    "title: One-way",
+    "status: accepted",
+    "date: 2026-02-20",
+    "domain_refs:",
+    "  - ordering.OrderPlaced",
+  ].join("\n"));
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert("one-way link warns", hasWarning(result, "adr-0001"));
+  assert("one-way link names the fix", hasWarning(result, "dkk adr link"));
+  assert("one-way link is not an error", result.valid);
+
+  rmSync(root, { recursive: true, force: true });
+}
+
+// ── Test: ADR domain_refs beyond items ────────────────────────────────
+
+/**
+ * Plenty of decisions constrain a whole context, a flow, or an actor's
+ * contract rather than one item; all four id families must resolve.
+ */
+function testAdrRefTargets() {
+  console.log("\n=== ADR domain_refs target kinds ===");
+  const root = makeTempRoot("adrtargets");
+
+  writeYaml(
+    join(root, ".dkk", "domain", "index.yml"),
+    [
+      "contexts:",
+      "  - name: ordering",
+      "flows:",
+      "  - name: PlaceAndShip",
+      "    steps:",
+      "      - ref: ordering.OrderPlaced",
+      "        type: event",
+      "    adr_refs:",
+      "      - adr-0001",
+    ].join("\n"),
+  );
+  writeYaml(
+    join(root, ".dkk", "domain", "actors.yml"),
+    [
+      "actors:",
+      "  - name: Customer",
+      "    type: human",
+      '    description: "A buyer"',
+      "    adr_refs:",
+      "      - adr-0001",
+    ].join("\n"),
+  );
+  writeContextDir(root, [
+    "name: ordering",
+    'description: "Orders"',
+    "adr_refs:",
+    "  - adr-0001",
+  ].join("\n"), {
+    events: [["OrderPlaced.yml", ["name: OrderPlaced", 'description: "Placed"'].join("\n")]],
+  });
+  writeAdr(join(root, ".dkk", "adr"), "adr-0001.md", [
+    "id: adr-0001",
+    "title: Broad decision",
+    "status: accepted",
+    "date: 2026-02-20",
+    "domain_refs:",
+    "  - context.ordering",
+    "  - actor.Customer",
+    "  - flow.PlaceAndShip",
+  ].join("\n"));
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert(
+    "context/actor/flow domain_refs resolve",
+    result.valid,
+    `errors: ${result.errors.map((e) => e.message).join("; ")}`,
+  );
+  assert("reciprocal links satisfy the lint", result.warnings.length === 0,
+    `warnings: ${result.warnings.map((w) => w.message).join("; ")}`);
+
+  rmSync(root, { recursive: true, force: true });
+}
+
+// ── Test: extension keys ──────────────────────────────────────────────
+
+/** `x-` prefixed frontmatter keys pass through without a schema patch. */
+function testAdrExtensionKeys() {
+  console.log("\n=== ADR extension keys ===");
+  const root = makeTempRoot("adrext");
+
+  writeYaml(join(root, ".dkk", "domain", "index.yml"), "contexts: []\n");
+  writeYaml(join(root, ".dkk", "domain", "actors.yml"), "actors: []\n");
+  writeAdr(join(root, ".dkk", "adr"), "adr-0001.md", [
+    "id: adr-0001",
+    "title: With extensions",
+    "status: proposed",
+    "date: 2026-02-20",
+    "tags:",
+    "  - storage",
+    "links:",
+    "  - https://example.com/rfc-12",
+    "review_by: 2026-12-01",
+    "x-jira: PLAT-42",
+  ].join("\n"));
+
+  const model = loadDomainModel({ root });
+  const result = validateDomainModel(model, { schemaDir: SCHEMA_DIR });
+
+  assert("tags/links/review_by/x- keys validate", result.valid,
+    `errors: ${result.errors.map((e) => e.message).join("; ")}`);
+
+  // An unknown non-`x-` key is still rejected.
+  writeAdr(join(root, ".dkk", "adr"), "adr-0002.md", [
+    "id: adr-0002",
+    "title: Typo key",
+    "status: proposed",
+    "date: 2026-02-20",
+    "tag: storage",
+  ].join("\n"));
+  const result2 = validateDomainModel(loadDomainModel({ root }), { schemaDir: SCHEMA_DIR });
+  assert("unknown key without the x- prefix is rejected", !result2.valid);
+
+  rmSync(root, { recursive: true, force: true });
+}
+
 // ── Test: Empty model (should be valid) ───────────────────────────────
 
 function testEmptyModel() {
@@ -511,6 +713,10 @@ testMissingContextFile();
 testUnindexedContext();
 testBrokenFlowSteps();
 testBrokenSupersededBy();
+testAdrFileIntegrity();
+testAdrReciprocity();
+testAdrRefTargets();
+testAdrExtensionKeys();
 testWarnMissingFields();
 testEmptyModel();
 

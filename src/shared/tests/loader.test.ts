@@ -12,13 +12,19 @@
  *           shipping/
  *             context.yml         (directory context)
  *       adr/
- *         0001-use-yaml.md
+ *         adr-0001.md
  */
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { loadDomainModel } from "../loader.js";
-import { parseAdrFrontmatter } from "../adr-parser.js";
+import {
+  adrFrontmatter,
+  adrSearchText,
+  findSection,
+  parseAdrDocument,
+  parseAdrFrontmatter,
+} from "../adr-parser.js";
 import { parseYaml, stringifyYaml } from "../yaml.js";
 
 // ── Test scaffolding fixtures ─────────────────────────────────────────
@@ -156,9 +162,9 @@ function setup() {
     ].join("\n"),
   );
 
-  // docs/adr/0001-use-yaml.md
+  // docs/adr/adr-0001.md
   writeFileSync(
-    join(ADR_DIR, "0001-use-yaml.md"),
+    join(ADR_DIR, "adr-0001.md"),
     [
       "---",
       "id: adr-0001",
@@ -222,21 +228,52 @@ try {
   assert("parseAdrFrontmatter returns record", adr !== null);
   assert("parseAdrFrontmatter id correct", adr?.id === "adr-0042");
   assert("parseAdrFrontmatter status correct", adr?.status === "proposed");
-  assert("parseAdrFrontmatter extracts body", adr?.body === "Hello");
+  assert("parseAdrFrontmatter keeps the body verbatim", adr?.body === "# Hello");
 
   const adrWithBody = parseAdrFrontmatter(
     "---\nid: adr-0099\ntitle: Rich\nstatus: accepted\ndate: 2026-03-01\n---\n\n## Context\n\nWe need a [search engine](https://example.com) for **full-text** queries.\n\n## Decision\n\nUse `SQLite FTS5` for indexing.\n",
   );
   assert("parseAdrFrontmatter with rich body returns record", adrWithBody !== null);
   assert(
-    "body strips markdown formatting",
+    "body keeps Markdown structure intact",
     adrWithBody?.body !== undefined &&
-      adrWithBody.body.includes("search engine") &&
-      adrWithBody.body.includes("full-text") &&
-      adrWithBody.body.includes("SQLite FTS5") &&
-      !adrWithBody.body.includes("##") &&
-      !adrWithBody.body.includes("**") &&
-      !adrWithBody.body.includes("`"),
+      adrWithBody.body.includes("## Context") &&
+      adrWithBody.body.includes("**full-text**") &&
+      adrWithBody.body.includes("`SQLite FTS5`") &&
+      adrWithBody.body.includes("[search engine](https://example.com)"),
+  );
+  assert(
+    "body splits into level-2 sections",
+    adrWithBody?.sections?.length === 2 &&
+      adrWithBody.sections[0].slug === "context" &&
+      adrWithBody.sections[1].slug === "decision" &&
+      adrWithBody.sections[1].body.includes("SQLite FTS5") &&
+      !adrWithBody.sections[1].body.includes("search engine"),
+  );
+  assert(
+    "findSection matches an exact slug and a prefix",
+    findSection(adrWithBody?.sections, "decision")?.heading === "Decision" &&
+      findSection(adrWithBody?.sections, "Con")?.heading === "Context" &&
+      findSection(adrWithBody?.sections, "nope") === undefined,
+  );
+
+  // The search index gets a flattened copy with the frontmatter echo
+  // (title H1, **Status:**/**Date:** lines) removed.
+  const searchable = adrSearchText({
+    id: "adr-0099",
+    title: "Rich",
+    status: "accepted",
+    date: "2026-03-01",
+    body:
+      "# ADR-0099 — Rich\n\n**Status:** Accepted\n**Date:** 2026-03-01\n\n## Context\n\nWe need **full-text** queries.\n",
+  });
+  assert(
+    "adrSearchText strips markdown and the frontmatter echo",
+    searchable.includes("full-text") &&
+      !searchable.includes("**") &&
+      !searchable.includes("#") &&
+      !searchable.includes("Accepted") &&
+      !searchable.includes("ADR-0099"),
   );
 
   const adrNoBody = parseAdrFrontmatter(
@@ -248,6 +285,23 @@ try {
   assert("parseAdrFrontmatter returns null for missing frontmatter", noFront === null);
   const incompleteFront = parseAdrFrontmatter("---\nid: adr-0042\n---\n");
   assert("parseAdrFrontmatter returns null for incomplete frontmatter", incompleteFront === null);
+
+  // Malformed YAML is a reported failure, not a thrown exception: one
+  // bad ADR used to take the whole model load down with it.
+  const broken = parseAdrDocument("---\nid: adr-0042\ntitle: Bad: colon\nstatus: proposed\ndate: 2026-02-20\n---\n");
+  assert("parseAdrDocument reports malformed YAML", !broken.ok && broken.reason === "parse-error");
+  const noFm = parseAdrDocument("# nothing\n");
+  assert("parseAdrDocument reports missing frontmatter", !noFm.ok && noFm.reason === "no-frontmatter");
+  const missing = parseAdrDocument("---\nid: adr-0042\n---\n");
+  assert("parseAdrDocument reports missing fields", !missing.ok && missing.reason === "missing-fields");
+
+  // Frontmatter serialisation drops the runtime-only fields, which the
+  // schema (additionalProperties: false) would otherwise reject.
+  const fm = adrFrontmatter(adrWithBody!);
+  assert(
+    "adrFrontmatter strips runtime fields",
+    fm.id === "adr-0099" && !("body" in fm) && !("sections" in fm) && !("file" in fm),
+  );
 
   // loader.ts
   console.log("\n=== loader.ts ===");

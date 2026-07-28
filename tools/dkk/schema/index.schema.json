@@ -63,6 +63,15 @@
               "additionalProperties": false
             },
             "description": "Ordered sequence of domain item references forming the flow"
+          },
+          "adr_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$"
+            },
+            "uniqueItems": true,
+            "description": "ADRs that constrain this flow (the reciprocal of an ADR's domain_refs entry for flow.<Name>)"
           }
         },
         "required": ["name", "steps"],

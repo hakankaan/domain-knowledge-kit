@@ -15,6 +15,10 @@ import { registerInit } from "./features/agent/commands/init.js";
 import { registerUpdate } from "./features/agent/commands/update.js";
 import { registerArtifacts } from "./features/agent/commands/artifacts.js";
 import { registerPrime } from "./features/agent/commands/prime.js";
+import { registerAdrStatus } from "./features/adr/commands/adr-status.js";
+import { registerAdrLink } from "./features/adr/commands/adr-link.js";
+import { registerAdrAudit } from "./features/adr/commands/adr-audit.js";
+import { registerAdrDecisions } from "./features/adr/commands/adr-decisions.js";
 import { registerNewDomain } from "./features/scaffold/commands/new-domain.js";
 import { registerNewContext } from "./features/scaffold/commands/new-context.js";
 import { registerNewAdr } from "./features/scaffold/commands/new-adr.js";
@@ -80,6 +84,16 @@ registerStats(program);
 registerDrift(program);
 registerFeedback(program);
 registerMcp(program);
+
+// "adr" sub-command group — decision lifecycle, after the file exists
+const adrCmd = program
+  .command("adr")
+  .description("Architecture Decision Record lifecycle (status, linking, audit)");
+
+registerAdrStatus(adrCmd);
+registerAdrLink(adrCmd);
+registerAdrDecisions(adrCmd);
+registerAdrAudit(adrCmd);
 
 // "new" sub-command group
 const newCmd = program

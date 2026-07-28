@@ -123,6 +123,34 @@ export function docsDir(root?: string): string {
 }
 
 /**
+ * Absolute path to `.dkk/templates/` — the project's own overrides for
+ * DKK's bundled Handlebars templates.
+ *
+ * Optional and absent by default. A file here shadows the bundled
+ * template of the same name, which is the only sane place for a team to
+ * customise a scaffold: the bundled copy lives inside `node_modules`
+ * and is replaced on every upgrade.
+ */
+export function projectTemplatesDir(root?: string): string {
+  return join(repoRoot(root), ".dkk", "templates");
+}
+
+/**
+ * Resolve a template by name, preferring the project override in
+ * `.dkk/templates/` over the copy bundled with the package.
+ *
+ * @param name - Template basename without extension (e.g. "adr").
+ * @returns Absolute path, or `null` when neither location has it.
+ */
+export function resolveTemplate(name: string, root?: string): string | null {
+  const file = `${name}.md.hbs`;
+  const override = join(projectTemplatesDir(root), file);
+  if (existsSync(override)) return override;
+  const bundled = join(templatesDir(), file);
+  return existsSync(bundled) ? bundled : null;
+}
+
+/**
  * Absolute path to `tools/dkk/templates/`.
  *
  * Always resolves relative to the DKK package installation so that

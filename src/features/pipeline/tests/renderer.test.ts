@@ -155,7 +155,7 @@ function setup() {
   mkdirSync(TPL_DIR, { recursive: true });
 
   // Copy real templates to temp so we test the actual templates
-  for (const name of ["index.md.hbs", "context.md.hbs", "item.md.hbs"]) {
+  for (const name of ["index.md.hbs", "context.md.hbs", "item.md.hbs", "adr-index.md.hbs"]) {
     copyFileSync(join(REAL_TPL_DIR, name), join(TPL_DIR, name));
   }
 }
@@ -183,11 +183,11 @@ try {
   // ── File count ──────────────────────────────────────────────────
 
   console.log(`\n  Files rendered: ${result.fileCount}`);
-  // Expected: 1 index + 2 context index pages + items
+  // Expected: 1 index + 1 decision log + 2 context index pages + items
   //   ordering: OrderPlaced, PlaceOrder, SendConfirmation, Order, Order(glossary) = 5
   //   shipping: ShipOrder, ShipmentTracker = 2
-  //   Total: 1 + 2 + 5 + 2 = 10
-  assert("rendered 10 files", result.fileCount === 10);
+  //   Total: 1 + 1 + 2 + 5 + 2 = 11
+  assert("rendered 11 files", result.fileCount === 11);
 
   // ── Top-level index ─────────────────────────────────────────────
 
@@ -203,6 +203,17 @@ try {
   assertContains("index has flows section", indexMd, "## Key Flows");
   assertContains("index flow has PlaceAndShip", indexMd, "PlaceAndShip");
   assertContains("index flow has step refs", indexMd, "ordering.PlaceOrder");
+  assertContains("index has decisions section", indexMd, "## Decisions");
+  assertContains("index links the decision log", indexMd, "adr/index.md");
+
+  // ── Decision log ────────────────────────────────────────────────
+
+  console.log("\n  -- adr/index.md --");
+  const adrIndexMd = readFileSync(join(OUT_DIR, "adr", "index.md"), "utf-8");
+  assertContains("decision log has title", adrIndexMd, "# Decision Log");
+  assertContains("decision log lists the ADR", adrIndexMd, "Use YAML for domain models");
+  assertContains("decision log links the source file", adrIndexMd, "../../adr/adr-0001.md");
+  assertContains("decision log shows status", adrIndexMd, "accepted");
 
   // ── Ordering context index ──────────────────────────────────────
 
@@ -216,6 +227,8 @@ try {
   assertContains("ordering has aggregate table", orderCtxMd, "Order");
   assertContains("ordering has glossary term", orderCtxMd, "Order");
   assertContains("ordering has linked ADR", orderCtxMd, "adr-0001");
+  assertContains("ordering ADR links to its source", orderCtxMd, "../../adr/adr-0001.md");
+  assertContains("ordering ADR shows its title", orderCtxMd, "Use YAML for domain models");
 
   // ── Shipping context index ──────────────────────────────────────
 
@@ -274,7 +287,7 @@ try {
     outputDir: emptyOut,
     templateDir: TPL_DIR,
   });
-  assert("empty model renders 1 file (index only)", emptyResult.fileCount === 1);
+  assert("empty model renders 2 files (index + decision log)", emptyResult.fileCount === 2);
   const emptyIndex = readFileSync(join(emptyOut, "index.md"), "utf-8");
   assertContains("empty index has no contexts message", emptyIndex, "No bounded contexts registered");
   assertContains("empty index has no actors message", emptyIndex, "No actors defined");
@@ -288,7 +301,7 @@ try {
     templateDir: TPL_DIR,
   });
   assert("fresh nested output created", existsSync(join(freshOut, "index.md")));
-  assert("fresh nested has same count", freshResult.fileCount === 10);
+  assert("fresh nested has same count", freshResult.fileCount === 11);
 
 } finally {
   teardown();

@@ -123,16 +123,19 @@ Events and Commands map business domain concepts. They **DO NOT** imply Event-Dr
 
 ### 🏛️ Prioritize ADRs
 
-**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, use `dkk search "your topic"` or `dkk show <id>` to understand existing constraints and decisions.
+**Always consult Architecture Decision Records.** Before proposing architectural refactors, making tech choices, or modifying domain logic, ask `dkk adr decisions <id>` (or `--file <path>`) what has already been decided. It follows supersession chains, so a replaced decision is never reported as still binding.
+
+ADR ↔ domain links are **bidirectional** and both halves must be written. Use `dkk adr link`, which writes both, instead of hand-editing one side — `dkk validate` warns about one-way links, and only the item side shows up in the generated docs.
 
 ### Quick Reference
 
 ```bash
 # Query
-dkk list                              # List all domain items (--context, --type filters)
-dkk show <id>                         # Display full YAML of a domain item
+dkk list                              # List all domain items (--context, --type, --status filters)
+dkk show <id>                         # Display a domain item (ADRs: frontmatter + Markdown body)
+dkk show <adr-id> --section decision  # Just one section of an ADR body
 dkk summary <id>                      # Concise item summary (AI-optimized)
-dkk search "<query>"                  # Full-text search
+dkk search "<query>"                  # Full-text search (--status narrows ADRs)
 dkk related <id>                      # Graph traversal of related items
 dkk graph                             # Mermaid.js flowchart (--layout LR|TD, --node-types ...)
 
@@ -141,11 +144,16 @@ dkk validate                          # Schema + cross-reference validation
 dkk render                            # Validate, render docs, rebuild search index
 
 # ADR
+dkk adr decisions <id>                # Which decisions govern an item/context/actor/flow (--file <path>)
+dkk adr link <adr-id> <ids...>        # Link a decision to targets (writes domain_refs AND adr_refs)
+dkk adr unlink <adr-id> <ids...>      # Remove a link from both sides
+dkk adr status <adr-id> <status>      # proposed | accepted | rejected | deprecated | superseded
+dkk adr audit                         # Decision rot: unlinked, stalled, one-way links, broken chains
 
 # Scaffold
 dkk new domain                        # Scaffold .dkk/domain/ structure (one-time, per project)
 dkk new context <name>                # Scaffold a new bounded context
-dkk new adr "<title>"                 # Scaffold a new ADR file
+dkk new adr "<title>"                 # Scaffold a new ADR (--domain-refs also writes the reciprocal adr_refs)
 dkk add <type> <name> --context <ctx> # Scaffold an individual domain item
 
 # Refactor
@@ -165,6 +173,9 @@ dkk init --copilot                    # Also scaffold GitHub Copilot config (.gi
 dkk init --skills                     # Also install agent skills into .github/skills/
 dkk init --all                        # Install both Claude Code and Copilot config
 dkk update                            # Upgrade dkk via npm + refresh .claude/.github/skills/Copilot artifacts + MCP
+dkk update --diff                     # Show the unified diff for each changed file before confirming
+dkk update --force                    # Overwrite locally-edited artifacts instead of keeping them
+dkk artifacts check                   # Read-only drift gate for CI (non-zero exit when out of sync)
 dkk prime                             # Output full agent context
 dkk mcp                               # MCP server entrypoint — auto-spawned by the client via .mcp.json / .vscode/mcp.json (do not run by hand)
 
@@ -177,9 +188,13 @@ dkk feedback rm <id>                  # Drop an entry (redaction escape hatch)
 
 Feedback is a local file (`.dkk/feedback.yml`) — nothing is transmitted. Offer to record it when the user hits a dkk bug or rough edge; never file it unprompted.
 
+### Upgrades and local edits
+
+`dkk update` records what it installed in `.dkk/artifacts.lock` — **commit it**. That record is what lets an upgrade tell its own previous output (safe to overwrite) from a file somebody edited (not safe). An edited artifact is reported as `! conflict`: your version stays, and the new template lands beside it as `<path>.new` to merge. Use `--diff` to see the change before answering the prompt, or `--force` to overwrite regardless.
+
 ### Model Context Protocol (MCP)
 
-`dkk init` writes a committed `.mcp.json` registering the **dkk** MCP server (`dkk init --copilot` also writes `.vscode/mcp.json` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (`dkk_search`, `dkk_show`, `dkk_summary`, `dkk_related`, `dkk_list`, `dkk_story`, `dkk_validate`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
+`dkk init` writes a committed `.mcp.json` registering the **dkk** MCP server (`dkk init --copilot` also writes `.vscode/mcp.json` for VS Code Copilot). Once committed, every clone gets the server automatically — the client spawns it on session start (approve the "dkk" server once when prompted). **Prefer the MCP tools** (`dkk_search`, `dkk_show`, `dkk_summary`, `dkk_related`, `dkk_decisions`, `dkk_list`, `dkk_story`, `dkk_validate`, …) over shelling out to the CLI for queries — they hit the same data with no shell-quoting fragility.
 
 ### Quality Gates
 

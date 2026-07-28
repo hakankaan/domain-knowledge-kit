@@ -165,7 +165,7 @@ export class DomainGraph {
       // ── Bounded contexts & their items ────────────────────────────
       for (const [ctxName, ctx] of m.contexts) {
         const ctxId = ensureNode(`${walkPrefix}context.${ctxName}`, "context", ctxName);
-        wireAdrRefs(ctxId, undefined, walkPrefix);
+        wireAdrRefs(ctxId, ctx.adr_refs, walkPrefix);
 
         forEachItem(ctx, (type: ItemType, name: string, item: AnyDomainItem) => {
           const nodeKind = type as NodeKind;
@@ -251,19 +251,30 @@ export class DomainGraph {
         const adrNodeId = `${walkPrefix}${adrIdRaw}`;
         ensureNode(adrNodeId, "adr", adr.title);
 
-        // domain_refs → domain items. Use parseRef to split correctly
-        // for both bare and service-prefixed forms.
+        // domain_refs → whatever the decision constrains. Use parseRef
+        // to split correctly for both bare and service-prefixed forms.
+        // A decision can govern an item, an actor, a flow, or a whole
+        // context, so all four kinds get a properly-typed node rather
+        // than everything being force-labelled an aggregate.
         for (const ref of adr.domain_refs ?? []) {
           const parsed = parseRef(ref);
-          if (parsed?.kind === "item" && parsed.service) {
-            // Explicit peer ref — keep as-is.
-            const id = `${parsed.service}:${parsed.context}.${parsed.name}`;
+          const prefix = parsed?.service ? `${parsed.service}:` : walkPrefix;
+
+          if (parsed?.kind === "item") {
+            const id = `${prefix}${parsed.context}.${parsed.name}`;
             ensureNode(id, "aggregate", parsed.name, parsed.context);
             addEdge(adrNodeId, id, "domain_ref");
-          } else if (parsed?.kind === "item") {
-            // Bare ref — prefix with this walk's service.
-            const id = `${walkPrefix}${parsed.context}.${parsed.name}`;
-            ensureNode(id, "aggregate", parsed.name, parsed.context);
+          } else if (parsed?.kind === "actor") {
+            const id = `${prefix}${actorId(parsed.name)}`;
+            ensureNode(id, "actor", parsed.name);
+            addEdge(adrNodeId, id, "domain_ref");
+          } else if (parsed?.kind === "flow") {
+            const id = `${prefix}${flowId(parsed.name)}`;
+            ensureNode(id, "flow", parsed.name);
+            addEdge(adrNodeId, id, "domain_ref");
+          } else if (parsed?.kind === "context") {
+            const id = `${prefix}context.${parsed.name}`;
+            ensureNode(id, "context", parsed.name);
             addEdge(adrNodeId, id, "domain_ref");
           } else {
             // Unparseable — record edge against the raw form so
@@ -290,6 +301,7 @@ export class DomainGraph {
       // ── Flows ─────────────────────────────────────────────────────
       for (const flow of m.index.flows ?? []) {
         const fId = ensureNode(`${walkPrefix}${flowId(flow.name)}`, "flow", flow.name);
+        wireAdrRefs(fId, flow.adr_refs, walkPrefix);
 
         let prevStepId: string | undefined;
         for (const step of flow.steps) {

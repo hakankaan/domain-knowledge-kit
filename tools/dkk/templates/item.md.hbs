@@ -75,10 +75,10 @@ _No relationships._
 ## Linked ADRs
 
 {{#if adr_refs}}
-| ADR |
-|-----|
+| ADR | Title | Status |
+|-----|-------|--------|
 {{#each adr_refs}}
-| {{this}} |
+| {{#if href}}[{{id}}]({{href}}){{else}}{{id}}{{/if}} | {{#if title}}{{title}}{{else}}—{{/if}} | {{#if status}}{{status}}{{else}}—{{/if}} |
 {{/each}}
 {{else}}
 _No linked ADRs._

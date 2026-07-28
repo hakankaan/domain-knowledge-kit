@@ -11,6 +11,7 @@ import { execFileSync, spawnSync, type ExecFileSyncOptions } from "node:child_pr
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, cpSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 
 const REPO_ROOT = join(import.meta.dirname, "..");
 const TOOLS_DIR = join(REPO_ROOT, "tools");
@@ -77,6 +78,25 @@ function run(args: string[], opts?: { root?: string }): RunResult {
     stderr: String(result.stderr ?? ""),
     exitCode: result.status ?? 1,
   };
+}
+
+/**
+ * Run the CLI with stdout and stderr merged into one stream, preserving the
+ * order they were actually written in.
+ *
+ * `run()` captures the two separately, so offsets taken from a concatenation
+ * of them say nothing about real ordering — which is exactly what a test
+ * about "did this warning reach the user before the prompt" needs to know.
+ */
+function runMerged(args: string[], root: string): string {
+  const quote = (a: string) => `'${a.replace(/'/g, "'\\''")}'`;
+  const cmd = [TSX, ...TSX_ARGS, ...args, "--root", root].map(quote).join(" ");
+  const result = spawnSync("sh", ["-c", `${cmd} 2>&1`], {
+    encoding: "utf-8",
+    timeout: 30_000,
+    env: { ...process.env, NO_COLOR: "1" },
+  });
+  return String(result.stdout ?? "");
 }
 
 /** Create a minimal temp domain tree and return its root path. */
@@ -909,11 +929,11 @@ try {
       assert(`--help lists '${cmd}' command`, helpText.includes(cmd));
     }
 
-    // Also verify the adr sub-commands
+    // Also verify the adr lifecycle sub-commands
     const adrResult = run(["adr", "--help"]);
     assert("adr --help exits 0", adrResult.exitCode === 0);
     const adrHelp = adrResult.stdout;
-    const adrSubCommands = ["show", "related"];
+    const adrSubCommands = ["status", "link", "unlink", "audit"];
     for (const sub of adrSubCommands) {
       assert(`adr --help lists '${sub}' sub-command`, adrHelp.includes(sub));
     }
@@ -1491,8 +1511,261 @@ try {
     assert("user-authored hook entry preserved", Boolean(userHook));
   }
 
+  console.log("\n=== update: mixed-hook warnings print BEFORE the confirmation prompt ===");
+  {
+    // A warning the user only reads after the writes have happened cannot
+    // inform the decision it is about.
+    const root = makeTempRoot("update-warn-order");
+    tempRoots.push(root);
+    run(["init", "--claude"], { root });
+    // One hook entry mixing a DKK command with a user command: prune refuses
+    // to touch it and warns.
+    const settingsPath = join(root, ".claude", "settings.json");
+    const settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as {
+      hooks: Record<string, Array<{ hooks?: Array<{ type?: string; command?: string }> }>>;
+    };
+    settings.hooks.Stop = [{
+      hooks: [
+        { type: "command", command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/stop-validate.mjs"' },
+        { type: "command", command: "echo user-owned" },
+      ],
+    }];
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+    // Force some artifact drift so a prompt would actually be reached.
+    writeFileSync(join(root, ".claude", "commands", "dkk-review.md"), "drifted\n", "utf-8");
+
+    // Previously these warnings came only from the settings phase, which
+    // `--check` skips entirely — so a dry run never surfaced them at all.
+    const merged = runMerged(["update", "--check", "--skip-npm", "--skip-mcp"], root);
+    assert("mixed-hook warning is emitted under --check", merged.includes("mixed DKK/user commands left intact"));
+    const warnAt = merged.indexOf("mixed DKK/user commands left intact");
+    const endAt = merged.indexOf("(--check) No changes made");
+    assert(
+      "warning precedes the decision point",
+      warnAt >= 0 && endAt >= 0 && warnAt < endAt,
+      `warn@${warnAt} end@${endAt}`,
+    );
+
+    // In an applying run it must land before anything is written, too.
+    const applied = runMerged(["update", "--yes", "--skip-npm", "--skip-mcp"], root);
+    const appliedWarnAt = applied.indexOf("mixed DKK/user commands left intact");
+    const firstWriteAt = applied.search(/^(Created|Updated|Removed|Conflict) /m);
+    assert(
+      "warning precedes the first write",
+      appliedWarnAt >= 0 && firstWriteAt >= 0 && appliedWarnAt < firstWriteAt,
+      `warn@${appliedWarnAt} write@${firstWriteAt}`,
+    );
+    assert("warning is not repeated after the writes", applied.split("mixed DKK/user commands left intact").length === 2);
+  }
+
   // ═══════════════════════════════════════════════════════════════════
-  // 21. feedback — capture, list, export, rm
+  // 21. artifacts.lock — telling a local edit from a stale copy
+  // ═══════════════════════════════════════════════════════════════════
+  console.log("\n=== lock: init records what it installed ===");
+  {
+    const root = makeTempRoot("lock-init");
+    tempRoots.push(root);
+    run(["init", "--claude", "--skills", "--no-mcp"], { root });
+
+    const lockPath = join(root, ".dkk", "artifacts.lock");
+    assert("init writes .dkk/artifacts.lock", existsSync(lockPath));
+    const lock = JSON.parse(readFileSync(lockPath, "utf-8")) as {
+      version: number;
+      artifacts: Record<string, string>;
+    };
+    assert("lock is version 1", lock.version === 1);
+    assert(
+      "lock records an installed hook",
+      typeof lock.artifacts[".claude/hooks/stop-validate.mjs"] === "string",
+    );
+    assert(
+      "lock records a portable skill file",
+      typeof lock.artifacts[".github/skills/dkk-adr-author/SKILL.md"] === "string",
+    );
+    // Hashes must be of the content actually on disk, or the next run
+    // misreads its own output as a user edit.
+    const onDisk = readFileSync(join(root, ".claude", "hooks", "stop-validate.mjs"), "utf-8");
+    assert(
+      "recorded hash matches the file on disk",
+      lock.artifacts[".claude/hooks/stop-validate.mjs"] ===
+        createHash("sha256").update(onDisk, "utf-8").digest("hex"),
+    );
+  }
+
+  console.log("\n=== lock: a locally-edited artifact is a conflict, not a silent overwrite ===");
+  {
+    const root = makeTempRoot("lock-conflict");
+    tempRoots.push(root);
+    run(["init", "--claude", "--no-mcp"], { root });
+
+    const hookPath = join(root, ".claude", "hooks", "stop-validate.mjs");
+    const patched = readFileSync(hookPath, "utf-8") + "\n// local patch\n";
+    writeFileSync(hookPath, patched, "utf-8");
+
+    const check = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("edited file is reported as a conflict", check.stdout.includes("! conflict"));
+    assert(
+      "conflict names the edited file",
+      /! conflict\s+\.claude\/hooks\/stop-validate\.mjs/.test(check.stdout),
+    );
+    assert("conflict is NOT reported as a plain replace", !check.stdout.includes("~ replace"));
+    assert("output explains the .new protocol", check.stdout.includes(".new"));
+
+    const applied = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root });
+    assert("update with a conflict exits 0", applied.exitCode === 0);
+    assert(
+      "the local edit survived the upgrade",
+      readFileSync(hookPath, "utf-8") === patched,
+    );
+    assert(
+      "the new template landed alongside as .new",
+      existsSync(`${hookPath}.new`),
+    );
+    assert(
+      "the .new copy is the bundled template",
+      readFileSync(`${hookPath}.new`, "utf-8") ===
+        readFileSync(join(TOOLS_DIR, "dkk", "claude", "hooks", "stop-validate.mjs"), "utf-8"),
+    );
+    assert("summary flags the kept file", applied.stdout.includes("kept as-is"));
+
+    // A .new file is not itself a managed artifact: the next run must not
+    // sweep it away as stale, or the merge candidate vanishes.
+    const rerun = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("conflict persists until resolved", rerun.stdout.includes("! conflict"));
+    assert(
+      "the .new copy is never flagged for removal",
+      !rerun.stdout.includes("stop-validate.mjs.new"),
+    );
+    assert("the .new copy still exists", existsSync(`${hookPath}.new`));
+
+    // Resolving it must clean up, even though that leaves an empty diff and
+    // therefore no install to piggyback on.
+    writeFileSync(hookPath, readFileSync(`${hookPath}.new`, "utf-8"), "utf-8");
+    const resolved = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root });
+    assert("resolved run reports no drift", resolved.stdout.includes("already up to date"));
+    assert("resolved conflict sweeps its .new", !existsSync(`${hookPath}.new`));
+  }
+
+  console.log("\n=== lock: --force overwrites a conflict, --diff shows what would be lost ===");
+  {
+    const root = makeTempRoot("lock-force");
+    tempRoots.push(root);
+    run(["init", "--claude", "--no-mcp"], { root });
+
+    const cmdPath = join(root, ".claude", "commands", "dkk-review.md");
+    writeFileSync(cmdPath, "my own review prompt\n", "utf-8");
+
+    const withDiff = run(["update", "--check", "--diff", "--skip-npm", "--skip-mcp"], { root });
+    assert("--diff emits a unified diff header", withDiff.stdout.includes("--- .claude/commands/dkk-review.md (local)"));
+    assert("--diff emits a hunk header", withDiff.stdout.includes("@@ -"));
+    assert("--diff shows the line being lost", withDiff.stdout.includes("-my own review prompt"));
+
+    const forced = run(["update", "--yes", "--force", "--skip-npm", "--skip-mcp"], { root });
+    assert("--force exits 0", forced.exitCode === 0);
+    assert("--force announces the destruction", forced.stdout.includes("DESTROYED"));
+    assert(
+      "--force actually overwrites the local file",
+      readFileSync(cmdPath, "utf-8") !== "my own review prompt\n",
+    );
+    assert("--force writes no .new copy", !existsSync(`${cmdPath}.new`));
+  }
+
+  console.log("\n=== lock: a pre-lock repo degrades honestly instead of guessing ===");
+  {
+    const root = makeTempRoot("lock-absent");
+    tempRoots.push(root);
+    run(["init", "--claude", "--no-mcp"], { root });
+    // Simulate a repo installed by a dkk that predates the lock.
+    rmSync(join(root, ".dkk", "artifacts.lock"), { force: true });
+    writeFileSync(join(root, ".claude", "commands", "dkk-review.md"), "drifted\n", "utf-8");
+
+    const check = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("no lock → falls back to replace", check.stdout.includes("~ replace"));
+    assert("no lock → does not claim a conflict", !check.stdout.includes("! conflict"));
+    assert(
+      "no lock → says why the distinction is missing",
+      check.stdout.includes("no .dkk/artifacts.lock"),
+    );
+
+    // Even a zero-drift repo must acquire a lock, or it never gains conflict
+    // detection at all.
+    const clean = makeTempRoot("lock-absent-clean");
+    tempRoots.push(clean);
+    run(["init", "--claude", "--no-mcp"], { root: clean });
+    rmSync(join(clean, ".dkk", "artifacts.lock"), { force: true });
+    const noop = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root: clean });
+    assert("zero-drift run reports no changes", noop.stdout.includes("already up to date"));
+    assert("zero-drift run still writes the lock", existsSync(join(clean, ".dkk", "artifacts.lock")));
+  }
+
+  console.log("\n=== artifacts check: reports conflicts and miscased files for CI ===");
+  {
+    const root = makeTempRoot("artifacts-check-conflict");
+    tempRoots.push(root);
+    run(["init", "--claude", "--no-mcp"], { root });
+    const hookPath = join(root, ".claude", "hooks", "stop-validate.mjs");
+    writeFileSync(hookPath, readFileSync(hookPath, "utf-8") + "\n// patch\n", "utf-8");
+
+    const result = run(["artifacts", "check"], { root });
+    assert("artifacts check exits 1 on drift", result.exitCode === 1);
+    assert("artifacts check labels the conflict", result.stdout.includes("! conflict"));
+
+    const asJson = run(["artifacts", "check", "--json"], { root });
+    const parsed = JSON.parse(asJson.stdout) as { drifted: number; toConflict: string[] };
+    assert("JSON carries toConflict", parsed.toConflict.includes(".claude/hooks/stop-validate.mjs"));
+    assert("JSON drift count includes conflicts", parsed.drifted >= 1);
+  }
+
+  console.log("\n=== case rename: a case-only rename is recorded by git ===");
+  {
+    // The bug this covers: with core.ignorecase=true (macOS/Windows) a
+    // delete+recreate leaves `git status` empty, so the rename never reaches
+    // a Linux checkout and re-fires on every subsequent update.
+    const root = makeTempRoot("case-rename-git");
+    tempRoots.push(root);
+    const git = (...args: string[]) =>
+      spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+
+    git("init", "-q");
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    run(["init", "--skills", "--no-mcp"], { root });
+    git("add", "-A");
+    git("-c", "commit.gpgsign=false", "commit", "-qm", "install");
+
+    // Recreate the pre-0.7.0 lowercase spelling as git records it.
+    const skillDir = join(root, ".github", "skills", "dkk-adr-author");
+    git("mv", "-f", ".github/skills/dkk-adr-author/SKILL.md", ".github/skills/dkk-adr-author/skill.md");
+    git("-c", "commit.gpgsign=false", "commit", "-qm", "legacy lowercase");
+    assert(
+      "setup: git tracks the lowercase spelling",
+      git("ls-files", ".github/skills/dkk-adr-author/").stdout.includes("skill.md"),
+    );
+
+    const check = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("--check announces the pending rename", check.stdout.includes("↻ rename"));
+
+    const applied = run(["update", "--yes", "--skip-npm", "--skip-mcp"], { root });
+    assert("rename run exits 0", applied.exitCode === 0);
+    assert("rename is reported", applied.stdout.includes("Renamed"));
+
+    const tracked = git("ls-files", ".github/skills/dkk-adr-author/").stdout;
+    assert("git now tracks the canonical SKILL.md", tracked.includes("SKILL.md"));
+    assert("git no longer tracks the lowercase file", !/(^|\n)[^\n]*\/skill\.md/.test(tracked));
+    assert("the canonical file exists on disk", existsSync(join(skillDir, "SKILL.md")));
+    // The whole point: the change must be visible to git, not just the FS.
+    assert(
+      "the rename is staged as a real change",
+      git("status", "--porcelain", ".github/skills/dkk-adr-author/").stdout.trim().length > 0,
+    );
+
+    // And it must not re-fire forever.
+    const rerun = run(["update", "--check", "--skip-npm", "--skip-mcp"], { root });
+    assert("rename does not churn on re-run", rerun.stdout.includes("(no changes)"));
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 22. feedback — capture, list, export, rm
   // ═══════════════════════════════════════════════════════════════════
   console.log("\n=== feedback: empty state teaches instead of reporting nothing ===");
   {

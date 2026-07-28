@@ -155,9 +155,9 @@ function setup() {
     "  - Customer",
   ].join("\n"));
 
-  // docs/adr/0001-use-yaml.md
+  // docs/adr/adr-0001.md
   writeFileSync(
-    join(ADR_DIR, "0001-use-yaml.md"),
+    join(ADR_DIR, "adr-0001.md"),
     [
       "---",
       "id: adr-0001",

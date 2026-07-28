@@ -1,6 +1,7 @@
 import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
 import { DomainGraph } from "../../../shared/graph.js";
+import { auditAdrs } from "../../adr/audit.js";
 
 export function registerStats(program: Cmd): void {
   program
@@ -26,7 +27,14 @@ export function registerStats(program: Cmd): void {
             actors: 0,
             adrs: 0,
             flows: 0,
-            orphaned: [] as string[]
+            orphaned: [] as string[],
+            /**
+             * ADRs connected to no domain item. Graph-based orphan
+             * detection deliberately skips ADR nodes (an ADR's edges
+             * are links, not structure), which left the one item type
+             * where rot matters most with no staleness signal at all.
+             */
+            unlinkedAdrs: [] as string[],
         };
 
         for (const [id, node] of graph.nodes) {
@@ -57,6 +65,10 @@ export function registerStats(program: Cmd): void {
             }
         }
 
+        // ADR health comes from the audit engine, not the graph walk.
+        const adrAudit = auditAdrs(model);
+        stats.unlinkedAdrs = adrAudit.unlinked.map((a) => a.id);
+
         if (opts.json) {
           const payload = {
             counts: {
@@ -73,6 +85,8 @@ export function registerStats(program: Cmd): void {
             health: {
               orphanedCount: stats.orphaned.length,
               orphaned: stats.orphaned,
+              unlinkedAdrCount: stats.unlinkedAdrs.length,
+              unlinkedAdrs: stats.unlinkedAdrs,
             },
           };
           console.log(JSON.stringify(payload, null, opts.minify ? 0 : 2));
@@ -98,6 +112,14 @@ export function registerStats(program: Cmd): void {
             }
         } else {
             console.log(`  No orphaned items found! All clear.`);
+        }
+
+        if (stats.unlinkedAdrs.length > 0) {
+            console.log(`  ${stats.unlinkedAdrs.length} ADR(s) linked to no domain item:`);
+            for (const id of stats.unlinkedAdrs) {
+                console.log(`    - ${id}`);
+            }
+            console.log(`  Run 'dkk adr audit' for the full decision-rot report.`);
         }
         console.log("");
       },

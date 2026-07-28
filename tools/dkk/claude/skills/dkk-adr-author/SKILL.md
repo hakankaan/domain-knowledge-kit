@@ -7,48 +7,74 @@ description: Draft a new Architecture Decision Record grounded in the local Doma
 
 Use this skill whenever the user wants to **record an architectural decision, draft an ADR, or capture a trade-off** in a project that has a Domain Knowledge Pack (`.dkk/`).
 
-> **The DKK model is the single source of truth.** Every ADR must link to the domain items it constrains, bidirectionally. Skipping that link is the most common failure mode this skill prevents.
+> **The DKK model is the single source of truth.** Every ADR must link to what it constrains, and the link has two halves. Writing only one of them is the most common failure mode this skill prevents — which is why the linking step is a CLI command, not a hand edit.
 
 ## Preferred tools
 
-1. `mcp__dkk__search` (with `type: adr`) — find related existing ADRs
-2. `mcp__dkk__show` — read those ADRs in full
-3. `mcp__dkk__search` and `mcp__dkk__related` — identify which domain items the decision affects
-4. `mcp__dkk__locate` — get absolute paths to edit the linked items
+1. `mcp__dkk__decisions` — what is already decided about the items or files in question
+2. `mcp__dkk__search` (with `type: adr`) — find related ADRs by topic; add `status` to narrow
+3. `mcp__dkk__show` — read those ADRs (use `section` to read just the decision)
+4. `mcp__dkk__related` — identify which domain items the decision affects
 5. `mcp__dkk__validate` — final correctness check
 6. `dkk new adr "<title>"` (Bash) — scaffold the file with the right number and frontmatter
-7. `dkk render` (Bash) — refresh docs and search index after the ADR is finished
+7. `dkk adr link <adr-id> <ids…>` (Bash) — write **both** halves of every link
+8. `dkk render` (Bash) — refresh docs and search index after the ADR is finished
 
 Use the equivalent `dkk` shell commands only if the MCP server is unavailable.
 
 ## Workflow
 
-1. **Search prior ADRs first.** Call `mcp__dkk__search` with the topic and `type: adr`. Read every related ADR via `mcp__dkk__show`. If a *current* ADR already covers the decision, do not create a new one — update the existing record (with `superseded_by` if direction has changed). If a *deprecated* ADR is relevant, surface its rationale to the user; do not relitigate without acknowledging it.
-2. **Identify affected domain items.** From the user's description, search the model and use `mcp__dkk__related` to find aggregates, events, commands, policies, and read models the decision constrains. Confirm the list with the user.
-3. **Clarify the decision.** Ask **2–5 targeted questions** before drafting. Derive each question and its options from the search results and the user's stated motivation. Skip questions only when the decision is fully specified and uncontroversial. Examples (only if relevant):
-   - What problem prompted the decision? (constraint / incident / new requirement / cleanup)
+1. **Find out what is already decided.** Call `mcp__dkk__decisions` for each item, context, or file the decision touches, and `mcp__dkk__search` with `type: adr` for the topic. Read anything relevant via `mcp__dkk__show`.
+   - If a **binding** ADR already covers the decision, do not create a new one — either update that record, or supersede it (step 6).
+   - If a **rejected** ADR covers the idea, say so before proposing it again. Relitigating a settled question without citing the prior record is the worst failure mode here.
+   - If a **deprecated or superseded** ADR is relevant, surface its rationale; note that `dkk_decisions` already tells you which successor is in effect.
+2. **Identify what the decision constrains.** Search the model and use `mcp__dkk__related` to find the aggregates, events, commands, policies, and read models involved. A decision can also constrain a whole context (`context.ordering`), an actor (`actor.Customer`), or a flow (`flow.Checkout`) — use those when no single item is the right target. Confirm the list with the user.
+3. **Clarify the decision.** Ask **2–5 targeted questions** before drafting, derived from the search results and the user's stated motivation. Skip them only when the decision is fully specified and uncontroversial. Examples:
+   - What problem prompted this? (constraint / incident / new requirement / cleanup)
    - What alternatives were considered, and why were they rejected?
-   - Which domain items are constrained by this decision?
-   - What is the status — Proposed (needs review), Accepted (in effect), or Deprecated (recording history)?
+   - What does this constrain?
+   - What is the status — Proposed (needs review), Accepted (in effect), or Rejected (recording a decision *not* to do it)?
    - Does this supersede a prior ADR? If yes, which one?
-4. **Scaffold via the CLI.** Run `dkk new adr "<title>"` — this auto-increments the number and creates the file with valid frontmatter and the canonical section structure. Do not hand-create the file.
-5. **Fill the body.** The canonical sections are *Context*, *Decision*, *Consequences*, and *Alternatives Considered*. Use precise domain terminology — match every name to the items returned by `mcp__dkk__search` and `mcp__dkk__show`.
-6. **Set the bidirectional links.** Both sides must agree:
-   - In the ADR frontmatter, set `domain_refs:` to the list of affected item ids (e.g. `ordering.OrderPlaced`, `actor.Customer`).
-   - On every linked domain item's YAML, append the new ADR id to its `adr_refs:` list. Use `mcp__dkk__locate` to find each file.
-7. **Run quality gates.** The post-edit hook runs `mcp__dkk__validate` automatically; before declaring the work done, also run `dkk render` to refresh `.dkk/docs/` and rebuild the search index.
+4. **Scaffold via the CLI.** Never hand-create the file — `dkk new adr` assigns the number (accounting for both filenames and declared ids) and writes valid frontmatter:
+
+   ```bash
+   dkk new adr "<title>" --status proposed --deciders "<names>" \
+     --domain-refs <ids> --tags <tags>
+   ```
+
+   `--domain-refs` writes the reciprocal `adr_refs` on each target for you.
+5. **Fill the body.** The canonical sections are *Context*, *Decision*, *Alternatives Considered*, and *Consequences* — the scaffold creates all four. Use precise domain terminology: every name must exist in the model.
+   - Do **not** write `**Status:**` or `**Date:**` lines into the body. The frontmatter is the single copy; a prose duplicate drifts.
+6. **Supersede rather than rewrite** when direction has changed:
+
+   ```bash
+   dkk new adr "<new title>" --supersedes adr-NNNN
+   # or, for an ADR that already exists:
+   dkk adr status adr-NNNN superseded --superseded-by adr-MMMM
+   ```
+
+   Both forms write `superseded_by` on the old record and `supersedes` on the new one. Never delete an ADR.
+7. **Verify the links landed.** If you added or changed refs after scaffolding, use `dkk adr link` (which writes both halves) rather than editing YAML by hand. `dkk validate` warns about one-way links and names the fix.
+8. **Run quality gates.** The post-edit hook runs validation automatically; before declaring the work done, also run `dkk render` to refresh `.dkk/docs/` and rebuild the search index.
 
 ## Status discipline
 
-- **Proposed** — newly drafted, awaiting team review. The decision is not in effect yet.
-- **Accepted** — the decision is in effect; new code must comply.
-- **Deprecated** — no longer in effect, but kept as project memory. If a successor exists, set `superseded_by: adr-NNNN` in the frontmatter.
+| Status | Meaning |
+|--------|---------|
+| `proposed` | Newly drafted, awaiting review. Not in effect. |
+| `accepted` | In effect; new code must comply. |
+| `rejected` | Considered and declined — kept so nobody proposes it again. |
+| `deprecated` | Was in effect, no longer applies. |
+| `superseded` | Replaced by a later ADR (`superseded_by` records which). |
 
-Never delete an ADR. Even superseded ones are institutional memory.
+`rejected` and `deprecated` are not interchangeable. A proposal that was turned down never took effect; filing it as `deprecated` invents a history that didn't happen and loses the answer to "have we considered this already?".
+
+Change status with `dkk adr status <id> <status>` — it updates every copy in the file and warns on unusual transitions.
 
 ## Don'ts
 
-- Don't draft an ADR that doesn't reference at least one domain item (the bidirectional link is what makes ADRs queryable).
-- Don't invent domain terms in the ADR body — every name must exist in the model.
-- Don't hand-edit the ADR filename or number; let `dkk new adr` assign it.
-- Don't skip searching for prior ADRs — relitigating a decided question without referencing the prior ADR is the worst failure mode.
+- Don't draft an ADR that references nothing — the links are what make a decision findable later. If it genuinely has no domain footprint, tell the user that and let them decide.
+- Don't invent domain terms in the ADR body; every name must exist in the model.
+- Don't hand-edit the ADR filename or number, and don't let `id` and filename diverge (`dkk validate` rejects it).
+- Don't write only one half of a link.
+- Don't skip step 1.

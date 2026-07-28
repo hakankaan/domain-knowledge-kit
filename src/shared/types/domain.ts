@@ -191,6 +191,8 @@ export interface ContextMetaFile {
    * by `dkk drift` for freshness/coverage checks.
    */
   code_refs?: string[];
+  /** ADRs constraining this context as a whole. */
+  adr_refs?: AdrRef[];
 }
 
 // ── Bounded Context ───────────────────────────────────────────────────
@@ -205,6 +207,8 @@ export interface DomainContext {
   glossary?: GlossaryEntry[];
   /** Repo-relative glob patterns binding this context to source paths (see ContextMetaFile.code_refs). */
   code_refs?: string[];
+  /** ADRs constraining this context as a whole. */
+  adr_refs?: AdrRef[];
   /** Domain events raised within this context. */
   events?: DomainEvent[];
   /** Commands handled within this context. */
@@ -220,7 +224,22 @@ export interface DomainContext {
 // ── ADR ───────────────────────────────────────────────────────────────
 
 /** Lifecycle status of an Architecture Decision Record. */
-export type AdrStatus = "proposed" | "accepted" | "deprecated" | "superseded";
+export type AdrStatus =
+  | "proposed"
+  | "accepted"
+  | "rejected"
+  | "deprecated"
+  | "superseded";
+
+/** A level-2 section of an ADR body, split on its Markdown heading. */
+export interface AdrSection {
+  /** Heading text as written (e.g. "Alternatives Considered"). */
+  heading: string;
+  /** Lower-kebab slug of the heading, used for `--section` lookups. */
+  slug: string;
+  /** Raw Markdown between this heading and the next one of the same level. */
+  body: string;
+}
 
 /** Frontmatter metadata for an Architecture Decision Record. */
 export interface AdrRecord {
@@ -234,12 +253,46 @@ export interface AdrRecord {
   date: string;
   /** People involved in making this decision. */
   deciders?: string[];
-  /** Domain items related to this decision. */
-  domain_refs?: DomainRef[];
+  /** Domain items, contexts, actors, or flows related to this decision. */
+  domain_refs?: string[];
   /** ID of the ADR that supersedes this one. */
   superseded_by?: AdrRef;
-  /** Markdown body text (everything after the closing ---), with formatting stripped. */
+  /** ADR id(s) this decision replaces (the forward half of the chain). */
+  supersedes?: AdrRef[];
+  /** Free-form labels for filtering (e.g. "security", "storage"). */
+  tags?: string[];
+  /** External references — ticket, PR, RFC, or design-doc URLs. */
+  links?: string[];
+  /** Glob patterns binding this decision to the code it constrains. */
+  code_refs?: string[];
+  /** Date by which a `proposed` decision should be revisited (YYYY-MM-DD). */
+  review_by?: string;
+
+  // ── Runtime-only (computed at load time, never on disk) ─────────────
+
+  /** Raw Markdown body — everything after the closing `---`. */
   body?: string;
+  /** `body` split into its level-2 sections, in document order. */
+  sections?: AdrSection[];
+  /** Absolute path of the file this record was loaded from. */
+  file?: string;
+}
+
+/**
+ * A file under `.dkk/adr/` that could not be loaded as an ADR, or an
+ * ADR whose identity collides with another file's.
+ *
+ * Collected by the loader rather than thrown, so one broken decision
+ * record cannot take down the whole model. The validator turns these
+ * into findings against the offending path.
+ */
+export interface AdrLoadIssue {
+  /** Absolute path of the offending file. */
+  file: string;
+  /** What is wrong with it. */
+  message: string;
+  /** Blocking (a broken ADR) vs informational (probably not an ADR). */
+  severity: "error" | "warning";
 }
 
 // ── Domain Index ──────────────────────────────────────────────────────
@@ -273,6 +326,8 @@ export interface Flow {
   description?: string;
   /** Ordered sequence of domain item references forming the flow. */
   steps: FlowStep[];
+  /** ADRs constraining this flow. */
+  adr_refs?: AdrRef[];
 }
 
 /** Top-level domain index file shape (.dkk/domain/index.yml). */
@@ -295,6 +350,11 @@ export interface DomainModel {
   contexts: Map<string, DomainContext>;
   /** All ADR records keyed by ADR id. */
   adrs: Map<string, AdrRecord>;
+  /**
+   * Files under `.dkk/adr/` that failed to load, and id collisions
+   * between ADRs. Empty/absent when every ADR loaded cleanly.
+   */
+  adrIssues?: AdrLoadIssue[];
   /**
    * Service identity for this repo (federation). Present when a
    * `.dkk/service.yml` was found; otherwise `undefined`. Legacy

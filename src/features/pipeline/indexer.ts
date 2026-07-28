@@ -19,6 +19,7 @@ import type { DomainModel, DomainEvent, Command, Policy, Aggregate, ReadModel, G
 import { forEachItem, itemAdrRefs } from "../../shared/item-visitor.js";
 import { repoRoot } from "../../shared/paths.js";
 import { qualifyItemRef, qualifyActorRef } from "../../shared/refs.js";
+import { adrSearchText } from "../../shared/adr-parser.js";
 
 // better-sqlite3 is a CJS package; use createRequire for ESM interop.
 const require = createRequire(import.meta.url);
@@ -49,6 +50,12 @@ export interface IndexRow {
   service: string;
   /** Space-separated tags / keywords. */
   tags: string;
+  /**
+   * Lifecycle status, for rows that have one (ADRs today). Empty
+   * string otherwise. A dedicated column so `--status accepted` is an
+   * exact filter rather than a substring probe into `tags`.
+   */
+  status?: string;
   /** Concatenated searchable body text. */
   text: string;
   /** JSON-encoded array of relation ids (neighbours), each prefixed when foreign. */
@@ -113,6 +120,7 @@ export function buildIndex(model: DomainModel, options: IndexerOptions = {}): st
         name,
         service,
         tags,
+        status,
         text,
         relations,
         adrRefs,
@@ -134,14 +142,16 @@ export function buildIndex(model: DomainModel, options: IndexerOptions = {}): st
 
     // Prepare the insert statement.
     const insert = db.prepare(`
-      INSERT INTO domain_fts (id, type, context, name, service, tags, text, relations, adrRefs)
-      VALUES (@id, @type, @context, @name, @service, @tags, @text, @relations, @adrRefs)
+      INSERT INTO domain_fts (id, type, context, name, service, tags, status, text, relations, adrRefs)
+      VALUES (@id, @type, @context, @name, @service, @tags, @status, @text, @relations, @adrRefs)
     `);
 
     // Wrap all inserts in a single transaction for performance.
     const insertAll = db.transaction((rows: IndexRow[]) => {
       for (const row of rows) {
-        insert.run(row);
+        // `status` is meaningful for ADRs only; default the rest to ""
+        // here rather than repeating it at every row-construction site.
+        insert.run({ status: "", ...row });
       }
     });
 
@@ -236,7 +246,7 @@ function collectModelRows(
       tags: "",
       text: joinText(ctx.description),
       relations: "[]",
-      adrRefs: "[]",
+      adrRefs: JSON.stringify((ctx.adr_refs ?? []).map((r) => `${pfx}${r}`)),
     });
 
     // Glossary, events, commands, policies, aggregates, read models
@@ -373,12 +383,19 @@ function collectModelRows(
       context: "",
       name: adr.title,
       service,
-      tags: adr.status,
+      tags: joinText(adr.status, adr.tags?.join(" ")),
+      status: adr.status,
+      // `adrSearchText` rather than `adr.body`: the body opens with an
+      // H1 repeating the title and a `**Status:** / **Date:**` echo of
+      // the frontmatter, all of which are already indexed as their own
+      // columns. Leaving them in diluted BM25 scores and pushed the
+      // actual prose out of every result excerpt.
       text: joinText(
         adr.title,
         adr.status,
+        adr.tags?.join(" "),
         adr.deciders?.join(" "),
-        adr.body,
+        adrSearchText(adr),
       ),
       relations: JSON.stringify(relIds),
       adrRefs: "[]",
@@ -401,7 +418,7 @@ function collectModelRows(
       tags: "",
       text: joinText(flow.description, ...stepRefs),
       relations: JSON.stringify(stepRefs),
-      adrRefs: "[]",
+      adrRefs: JSON.stringify((flow.adr_refs ?? []).map((r) => `${pfx}${r}`)),
     });
   }
 

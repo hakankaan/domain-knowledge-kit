@@ -50,12 +50,14 @@ dkk list
 dkk list --context ordering
 dkk list --type event
 dkk list --context ordering --type command --json
+dkk list --type adr --status proposed
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-c, --context <name>` | — | Filter by bounded context |
 | `-t, --type <type>` | — | Filter by item type (see [Item Types](#item-types)) |
+| `--status <status>` | — | Filter by lifecycle status (ADRs: `proposed`, `accepted`, `rejected`, `deprecated`, `superseded`) |
 | `--json` | — | Output as JSON |
 | `--minify` | — | Minify JSON output (AI-optimized) |
 | `-r, --root <path>` | repo root | Override repository root |
@@ -81,16 +83,21 @@ dkk summary ordering.Order --json --minify
 
 ## `show <id>`
 
-Display the full YAML definition of a single domain item.
+Display the full definition of a single domain item.
+
+For an ADR the output is its frontmatter as YAML plus the **Markdown body kept intact** — headings, lists and tables survive, so *Context*, *Decision* and *Consequences* stay distinguishable. `--section` narrows it to one level-2 section; the full output lists the available names.
 
 ```bash
 dkk show ordering.OrderPlaced
 dkk show actor.Customer
 dkk show adr-0001 --json
+dkk show adr-0001 --section decision
+dkk show adr-0001 --section alt        # prefix match → "Alternatives Considered"
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--section <name>` | — | ADRs only: show one section of the body by its heading (prefix matching) |
 | `--json` | — | Output as JSON |
 | `--minify` | — | Minify JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
@@ -109,13 +116,17 @@ dkk search "payment" --context billing --type event
 dkk search "customer" --expand --limit 5
 dkk search "order" --service ordering          # only peer "ordering"
 dkk search "invoice" --service billing         # only local rows (when local svc is "billing")
+dkk search "storage" --type adr --status accepted   # decisions currently in effect
 ```
+
+Result excerpts are centred on the first place a query term appears, not on the head of the document.
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-c, --context <name>` | — | Filter results to a bounded context |
 | `-t, --type <type>` | — | Filter by item type |
 | `--tag <tag>` | — | Filter by tag/keyword |
+| `--status <status>` | — | Filter by lifecycle status (ADRs) |
 | `-s, --service <name>` | — | Filter to one service (local name or peer name; empty matches unfederated local rows) |
 | `--limit <n>` | `20` | Maximum number of results |
 | `--expand` | — | Expand top results with graph neighbours |
@@ -213,7 +224,9 @@ dkk rm ordering.OrderShipped --force
 
 ## `stats`
 
-Print domain model statistics and summarize model health by identifying orphaned items (items with no connections).
+Print domain model statistics and summarize model health by identifying orphaned items (items with no connections) and ADRs linked to no domain item.
+
+ADRs are excluded from the graph-based orphan walk on purpose — an ADR's edges are links, not structure — so decision health is computed separately. `dkk adr audit` is the full report.
 
 ```bash
 dkk stats
@@ -271,7 +284,9 @@ dkk validate --json --minify
 
 Checks performed:
 - **Schema conformance** — Each YAML file is validated against its JSON Schema in `tools/dkk/schema/`.
-- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly.
+- **Cross-references** — All item-to-item, item-to-ADR, and ADR-to-item references resolve correctly. ADR `domain_refs` may target items, contexts, actors, or flows.
+- **ADR file identity** — Every ADR's `id` matches its filename, and no two ADRs claim the same id. A file that fails to parse is reported against its path instead of aborting the load.
+- **ADR link reciprocity** *(warning)* — A `domain_refs` entry with no matching `adr_refs` (or vice versa) is reported with the `dkk adr link` command that fixes it.
 - **Context registration** — Every context directory in `.dkk/domain/contexts/` is registered in `.dkk/domain/index.yml`.
 - **ADR supersession consistency** — `superseded_by` and `status: superseded` must appear together (warns when they disagree).
 - **`code_refs` liveness** — a context binding glob that matches no files warns.
@@ -366,24 +381,43 @@ So a Claude-only repo keeps no Copilot files, a Copilot-only repo keeps no `.cla
 ```bash
 dkk update                  # default: upgrade + apply
 dkk update --check          # dry-run; print the diff without writing
+dkk update --diff           # show the unified diff for every changed file
 dkk update --yes            # skip the interactive confirm prompt
+dkk update --force          # overwrite locally-edited artifacts too
 dkk update --skip-npm       # only refresh artifacts, no npm upgrade
 ```
+
+### Local edits are never silently overwritten
+
+`dkk update` records a sha256 of every artifact it writes in **`.dkk/artifacts.lock`** — commit it. That record is what separates two situations a content comparison alone conflates:
+
+| On disk | Classified as | What happens |
+|---------|---------------|--------------|
+| Matches the lock (i.e. it is the previous release's file) | `~ replace` | Overwritten silently — this is what an upgrade is for. |
+| Differs from the lock (i.e. somebody edited it) | `! conflict` | **Your file is kept.** The new template is written beside it as `<path>.new` to merge by hand. |
+
+A conflict keeps reporting until you resolve it; once the local file matches the template again, the stale `.new` copy is removed automatically. Revert an edit and the file goes back to being a clean overwrite.
+
+Repos installed by a `dkk` older than 0.8.0 have no lock, so an edit cannot be told from a stale copy. Those runs fall back to `~ replace` for everything and say so — use `--diff` to check before answering. The run writes a lock, so subsequent upgrades get the full protection.
 
 Pipeline:
 
 1. **Pre-flight** — verify `.dkk/` exists; detect global vs. local install (`npx` is refused).
 2. **npm upgrade** — `npm install -g domain-knowledge-kit@latest` (or `--save-dev` for local installs). Skipped on `--skip-npm` or when already on the latest version.
 3. **Re-exec** — after upgrade, re-launch the freshly-installed binary so subsequent steps read the **new** bundled templates.
-4. **Artifact diff** — compute add / replace / remove against the bundled template, print, and confirm. Only surfaces the repo already adopted (Claude, portable skills, Copilot) are included, so nothing is proposed for a toolchain you didn't opt into. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
-5. **Settings prune + merge** — for Claude-adopted repos: remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning.
-6. **MCP register** — if the project's `.mcp.json` doesn't already declare a `dkk` server, write a committed entry into it (preserving any other servers). A committed `.mcp.json` is shared with the whole team, so the server is registered once for everyone rather than per-machine. Global installs get `command: dkk`; local devDependency installs get `npx dkk mcp`. Copilot-adopted repos also get `.vscode/mcp.json`.
-7. **AGENTS.md + Copilot refresh** — replaces the DKK section in `AGENTS.md` in place, and (for Copilot-adopted repos) the DKK section in `.github/copilot-instructions.md`.
+4. **Artifact diff** — compute add / replace / conflict / remove / rename against the bundled template, print, and confirm. Everything decision-relevant is printed *before* the prompt, including the settings-merge warnings from step 5. Only surfaces the repo already adopted (Claude, portable skills, Copilot) are included, so nothing is proposed for a toolchain you didn't opt into. Includes legacy paths that previous releases installed (e.g., the retired `dkk-domain-knowledge` skill).
+5. **Case renames** — an artifact spelled differently only in case (e.g. a pre-0.7.0 `skill.md` where the spec requires `SKILL.md`) is renamed through `git mv` when tracked. On macOS and Windows `core.ignorecase` makes a plain rename invisible to git, so the fix would never reach a Linux checkout or CI and would re-fire on every update. When the rename can't be recorded, `update` says so and prints the `git mv` to run by hand.
+6. **Settings prune + merge** — for Claude-adopted repos: remove DKK-owned entries from `.claude/settings.json` (anything matching the template's allow list and DKK hook basenames), then run the additive merge to add the new template entries. User-authored entries are preserved; mixed hook entries (DKK + user commands in one entry) are left intact with a warning — surfaced before the confirmation prompt, since it's the kind of thing you'd want to know before answering.
+7. **MCP register** — if the project's `.mcp.json` doesn't already declare a `dkk` server, write a committed entry into it (preserving any other servers). A committed `.mcp.json` is shared with the whole team, so the server is registered once for everyone rather than per-machine. Global installs get `command: dkk`; local devDependency installs get `npx dkk mcp`. Copilot-adopted repos also get `.vscode/mcp.json`.
+8. **AGENTS.md + Copilot refresh** — replaces the DKK section in `AGENTS.md` in place, and (for Copilot-adopted repos) the DKK section in `.github/copilot-instructions.md`.
+9. **Lock** — rewrite `.dkk/artifacts.lock` with a hash of every artifact that now matches the template. Runs even when the diff was empty, so a pre-0.8.0 repo with no drift still acquires a lock.
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-y, --yes` | — | Skip interactive confirmation for the artifact diff. |
 | `--check` | — | Dry-run: print the diff and plan, make no changes. Skips the npm upgrade and re-exec entirely, so it works under `npx`. Always exits 0 — for a CI gate use [`artifacts check`](#artifacts-check). |
+| `--diff` | — | Print the unified diff for every file about to be replaced or flagged as a conflict, before the prompt. |
+| `--force` | — | Overwrite locally-edited artifacts instead of preserving them. **Destroys local changes** — the diff labels those lines `OVERWRITE`. |
 | `--skip-npm` | — | Don't run npm upgrade (use the already-installed version). |
 | `--skip-artifacts` | — | Don't sweep/reinstall `.claude/` and `.github/skills/` files. |
 | `--skip-mcp` | — | Don't auto-register the DKK MCP server. |
@@ -399,8 +433,11 @@ Read-only drift gate: exit non-zero when the DKK-managed artifacts installed in 
 
 ```bash
 dkk artifacts check          # human-readable diff
+dkk artifacts check --diff   # with the unified diff for each changed file
 dkk artifacts check --json   # machine-readable
 ```
+
+Reports the same five classes as `update`: missing, outdated, **conflict** (edited locally), stale, and **miscased**. The last one is worth running on Linux CI specifically — a case-only rename that never landed in git is invisible to `git status` on macOS and Windows but shows up here.
 
 Unlike `update --check`, this command **never installs anything** — no npm upgrade, no re-exec, no install-mode requirement — so it is safe under `npx` and safe to run on every pull request.
 
@@ -419,7 +456,8 @@ Same adoption gating as `update`: only surfaces the repo already opted into are 
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--json` | — | Emit the diff as JSON (`{drifted, toAdd, toReplace, toRemove}`). |
+| `--json` | — | Emit the diff as JSON (`{drifted, toAdd, toReplace, toConflict, toRemove, caseRenames, lockMissing}`). |
+| `--diff` | — | Also print the unified diff for each outdated or conflicted file. |
 | `-r, --root <path>` | repo root | Override repository root. |
 
 ---
@@ -490,39 +528,81 @@ The file is safe to hand-edit. Unparseable YAML is an error rather than a silent
 
 ---
 
-## `show <id>`
+## `adr`
 
-Display the YAML frontmatter of an Architecture Decision Record.
+Architecture Decision Record lifecycle — everything after the file exists. Scaffolding is [`dkk new adr`](#new); reading one is [`dkk show`](#show-id).
 
 ```bash
-dkk show adr-0001
-dkk show adr-0001 --json
+dkk adr decisions ordering.Order                     # what governs this?
+dkk adr link adr-0007 ordering.Order actor.Customer  # link both halves
+dkk adr status adr-0007 accepted                     # move it through its lifecycle
+dkk adr audit                                        # find decision rot
+```
+
+### `adr decisions [id]`
+
+Which decisions govern a domain item, context, actor, flow, or source file. Returns each ADR with its **provenance** (how it reaches the subject) and which ids are actually **in effect** — supersession chains are followed, so a replaced decision is never reported as binding.
+
+```bash
+dkk adr decisions ordering.Order
+dkk adr decisions context.ordering
+dkk adr decisions --file src/storage/writer.ts
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--json` | — | Output as JSON |
-| `--minify` | — | Minify JSON output |
+| `-f, --file <path>` | — | Ask about a source file instead of a domain id |
+| `--no-include-context` | — | Exclude decisions that govern the whole owning context |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `adr link <adr-id> <item-ids...>` / `adr unlink`
+
+Write (or remove) **both** halves of an ADR ↔ domain link: `domain_refs` on the ADR and `adr_refs` on each target. Targets may be domain items, glossary terms, actors (`actor.Name`), flows (`flow.Name`), or contexts (`context.name`).
+
+Editing one side only produces a link that resolves but is invisible on the item side and in the rendered docs — `dkk validate` warns about it.
+
+```bash
+dkk adr link adr-0007 ordering.Order ordering.OrderPlaced context.ordering
+dkk adr unlink adr-0007 ordering.OrderPlaced
+```
+
+Targets that can't be written (typos, cross-service refs) are reported and their refs are left off the ADR too, so a typo never becomes a dangling `domain_ref`.
+
+### `adr status <id> <status>`
+
+Move a decision through its lifecycle: `proposed`, `accepted`, `rejected`, `deprecated`, `superseded`. Updates the frontmatter and any legacy `**Status:**` line in the body, and warns on unusual transitions.
+
+```bash
+dkk adr status adr-0007 accepted
+dkk adr status adr-0002 superseded --superseded-by adr-0009
+```
+
+`superseded` requires `--superseded-by` so the chain stays machine-readable — to retire a decision with no replacement, use `deprecated`. The command writes `superseded_by` on the old ADR and `supersedes` on the new one.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--superseded-by <adr-id>` | — | Required for `superseded`: the ADR that replaces this one |
+| `--json` / `--minify` | — | JSON output |
+| `-r, --root <path>` | repo root | Override repository root |
+
+### `adr audit`
+
+Report decision rot — the question `dkk validate` can't answer. Flags unlinked decisions, proposals nobody ever resolved, overdue `review_by` dates, one-way links, and broken supersession chains.
+
+```bash
+dkk adr audit
+dkk adr audit --strict --stale-days 30
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--stale-days <n>` | `90` | Age past which a `proposed` ADR is reported |
+| `--strict` | — | Exit 1 when anything is found (CI gate) |
+| `--json` / `--minify` | — | JSON output |
 | `-r, --root <path>` | repo root | Override repository root |
 
 → See [ADR Guide](adr-guide.md) for the full ADR workflow.
-
----
-
-## `related <id>`
-
-Show bidirectional ADR ↔ domain links. Given an ADR ID, lists domain items that reference it. Given a domain item ID, lists ADRs that reference it.
-
-```bash
-dkk related adr-0001
-dkk related ordering.OrderPlaced
-```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | — | Output as JSON |
-| `--minify` | — | Minify JSON output |
-| `-r, --root <path>` | repo root | Override repository root |
 
 ---
 
@@ -548,7 +628,7 @@ dkk new adr "<title>"
 |-------------|-------------|-------|
 | `domain` | Scaffold `.dkk/domain/` with `index.yml`, `actors.yml`, and a sample bounded context. Errors if `.dkk/domain/` already exists unless `--force` is passed (which deletes the existing directory entirely). | `--json`, `--minify`, `-r, --root <path>`, `--force` |
 | `context` | Scaffold a new bounded context with its metadata and subdirectories. | `--json`, `--minify`, `-d, --description <text>`, `-r, --root <path>` |
-| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Auto-increments IDs. `--supersedes adr-NNNN[,adr-NNNN…]` flips each old ADR to `status: superseded` with `superseded_by` pointing at the new one. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `--supersedes <ids>`, `-s, --status <status>`, `-r, --root <path>` |
+| `adr` | Generate a new Markdown file with frontmatter in `.dkk/adr/`. Numbering accounts for both existing filenames and the `id` each declares. `--domain-refs` also writes the reciprocal `adr_refs` on every target (opt out with `--no-backlink`). `--supersedes adr-NNNN[,…]` records `supersedes` here and flips each old ADR to `status: superseded` with `superseded_by` pointing back. The body comes from the `adr` template — put your own `adr.md.hbs` in `.dkk/templates/` to override it. | `--json`, `--minify`, `--domain-refs <ids>`, `--deciders <names>`, `--tags <tags>`, `--links <urls>`, `--supersedes <ids>`, `--no-backlink`, `-s, --status <status>`, `-r, --root <path>` |
 
 ---
 

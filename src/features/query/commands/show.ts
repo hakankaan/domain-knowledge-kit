@@ -8,7 +8,21 @@ import type { Command as Cmd } from "commander";
 import { loadDomainModel } from "../../../shared/loader.js";
 import { stringifyYaml } from "../../../shared/yaml.js";
 import { parseRef, type ParsedRef } from "../../../shared/refs.js";
-import type { DomainModel } from "../../../shared/types/domain.js";
+import type { AdrRecord, DomainModel } from "../../../shared/types/domain.js";
+import { adrFrontmatter } from "../../../shared/adr-parser.js";
+import { adrView, renderAdrText } from "../../adr/present.js";
+
+/** A resolved lookup: the raw item plus enough context to render it. */
+export interface ResolvedItem {
+  found: boolean;
+  /**
+   * Which id family matched. ADRs render differently from YAML items —
+   * their body is Markdown, not a YAML field — so callers need to know.
+   */
+  kind?: ParsedRef["kind"];
+  data?: unknown;
+  label?: string;
+}
 
 /**
  * Resolve a parsed ref against a single DomainModel (local or peer).
@@ -21,26 +35,26 @@ function resolveAgainst(
   model: DomainModel,
   parsed: ParsedRef,
   labelPrefix: string,
-): { found: boolean; data?: unknown; label?: string } {
+): ResolvedItem {
   switch (parsed.kind) {
     case "actor": {
       const actor = model.actors.find((a) => a.name === parsed.name);
-      if (actor) return { found: true, data: actor, label: `${labelPrefix}Actor: ${parsed.name}` };
+      if (actor) return { found: true, kind: "actor", data: actor, label: `${labelPrefix}Actor: ${parsed.name}` };
       return { found: false };
     }
     case "adr": {
       const adr = model.adrs.get(parsed.id);
-      if (adr) return { found: true, data: adr, label: `${labelPrefix}ADR: ${adr.title}` };
+      if (adr) return { found: true, kind: "adr", data: adr, label: `${labelPrefix}ADR: ${adr.title}` };
       return { found: false };
     }
     case "flow": {
       const flow = (model.index.flows ?? []).find((f) => f.name === parsed.name);
-      if (flow) return { found: true, data: flow, label: `${labelPrefix}Flow: ${parsed.name}` };
+      if (flow) return { found: true, kind: "flow", data: flow, label: `${labelPrefix}Flow: ${parsed.name}` };
       return { found: false };
     }
     case "context": {
       const ctx = model.contexts.get(parsed.name);
-      if (ctx) return { found: true, data: ctx, label: `${labelPrefix}Context: ${parsed.name}` };
+      if (ctx) return { found: true, kind: "context", data: ctx, label: `${labelPrefix}Context: ${parsed.name}` };
       return { found: false };
     }
     case "item": {
@@ -71,7 +85,7 @@ function resolveAgainst(
 
       const direct = tryContext(parsed.context, parsed.name);
       if (direct) {
-        return { found: true, data: direct.data, label: `${labelPrefix}${direct.kind}: ${direct.display}` };
+        return { found: true, kind: "item", data: direct.data, label: `${labelPrefix}${direct.kind}: ${direct.display}` };
       }
       return { found: false };
     }
@@ -87,7 +101,7 @@ function resolveAgainst(
  * happens against the local model; when it names a peer, the lookup
  * happens against `model.peers.get(<service>)`.
  */
-export function resolveItem(model: DomainModel, id: string): { found: boolean; data?: unknown; label?: string } {
+export function resolveItem(model: DomainModel, id: string): ResolvedItem {
   const parsed = parseRef(id);
 
   if (parsed) {
@@ -137,21 +151,63 @@ export function resolveItem(model: DomainModel, id: string): { found: boolean; d
 export function registerShow(program: Cmd): void {
   program
     .command("show <id>")
-    .description("Show full YAML for a domain item by ID")
+    .description("Show the full definition of a domain item by ID")
+    .option(
+      "--section <name>",
+      "ADRs only: show just one section of the body (e.g. decision, consequences, alternatives)",
+    )
     .option("--json", "Output as JSON")
     .option("--minify", "Minify JSON output (useful for AI agents)")
     .option("-r, --root <path>", "Override repository root")
-    .action((id: string, opts: { json?: boolean; minify?: boolean; root?: string }) => {
+    .action((id: string, opts: { section?: string; json?: boolean; minify?: boolean; root?: string }) => {
       const model = loadDomainModel({ root: opts.root });
       const result = resolveItem(model, id);
 
-      if (!result.found || !result.data) {
+      const fail = (message: string): never => {
         if (opts.json) {
-          console.log(JSON.stringify({ error: `Item "${id}" not found` }, null, opts.minify ? 0 : 2));
+          console.log(JSON.stringify({ error: message }, null, opts.minify ? 0 : 2));
         } else {
-          console.error(`Error: Item "${id}" not found.`);
+          console.error(`Error: ${message}`);
         }
         process.exit(1);
+      };
+
+      if (!result.found || !result.data) fail(`Item "${id}" not found.`);
+
+      if (result.kind === "adr") {
+        const adr = result.data as AdrRecord;
+        const view = adrView(adr, opts.section);
+        if (!view.ok) {
+          fail(view.message);
+          return;
+        }
+        const v = view.view;
+
+        if (opts.json) {
+          console.log(
+            JSON.stringify(
+              {
+                id,
+                label: result.label,
+                // The Markdown body stays Markdown, and `sections`
+                // lets a caller ask for one part next time instead of
+                // paying for the whole document.
+                data: opts.section ? { ...adrFrontmatter(adr), section: v.section, body: v.body } : adr,
+                sections: v.availableSections,
+              },
+              null,
+              opts.minify ? 0 : 2,
+            ),
+          );
+          return;
+        }
+
+        console.log(`\n${renderAdrText(adr, v)}\n`);
+        return;
+      }
+
+      if (opts.section) {
+        fail(`--section applies to ADRs only; "${id}" is not an ADR.`);
       }
 
       if (opts.json) {

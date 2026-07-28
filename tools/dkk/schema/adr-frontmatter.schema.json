@@ -8,7 +8,7 @@
     "id": {
       "type": "string",
       "pattern": "^adr-\\d{4}$",
-      "description": "Stable ADR identifier (e.g. adr-0001)"
+      "description": "Stable ADR identifier (e.g. adr-0001). Must match the filename."
     },
     "title": {
       "type": "string",
@@ -17,7 +17,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["proposed", "accepted", "deprecated", "superseded"],
+      "enum": ["proposed", "accepted", "rejected", "deprecated", "superseded"],
       "description": "Current lifecycle status of the ADR"
     },
     "date": {
@@ -35,15 +35,52 @@
       "items": {
         "type": "string",
         "pattern": "^([a-z][a-z0-9-]*:)?[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
-        "description": "Domain item reference in context.Name format (e.g. ordering.OrderPlaced, or service:context.Name for federated refs)"
+        "description": "What this decision constrains: a domain item (ordering.OrderPlaced), an actor (actor.Customer), a flow (flow.OrderFulfillment), or a context (context.ordering). Prefix with service: for federated refs."
       },
       "uniqueItems": true,
-      "description": "Domain items related to this decision"
+      "description": "Domain items, actors, flows, or contexts related to this decision"
     },
     "superseded_by": {
       "type": "string",
       "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$",
       "description": "ID of the ADR that supersedes this one (optionally service-qualified for peer ADRs)"
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^([a-z][a-z0-9-]*:)?adr-\\d{4}$"
+      },
+      "uniqueItems": true,
+      "description": "ID(s) of the ADR(s) this decision replaces — the forward half of the supersession chain, so 'what did this replace?' is answerable without scanning every ADR"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "Free-form labels for filtering (e.g. security, storage, api)"
+    },
+    "links": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "External references — ticket, PR, RFC, or design-doc URLs backing this decision"
+    },
+    "code_refs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "description": "POSIX glob patterns (repo-relative) binding this decision to the source it constrains (e.g. src/storage/**). Used by `dkk drift --file` to answer 'which decisions govern this file?'."
+    },
+    "review_by": {
+      "type": "string",
+      "format": "date",
+      "description": "Date by which this decision should be revisited (YYYY-MM-DD). `dkk adr audit` reports ADRs past it."
+    }
+  },
+  "patternProperties": {
+    "^x-": {
+      "description": "Extension namespace — any `x-`-prefixed key passes through untouched, so a team can carry its own metadata without patching the schema"
     }
   },
   "required": ["id", "title", "status", "date"],

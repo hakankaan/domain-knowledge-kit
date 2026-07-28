@@ -24,6 +24,7 @@ import type {
   DomainIndex,
   DomainModel,
   AdrRecord,
+  AdrLoadIssue,
   DomainEvent,
   Command,
   Policy,
@@ -31,7 +32,7 @@ import type {
   ReadModel,
 } from "./types/domain.js";
 import { parseYaml } from "./yaml.js";
-import { parseAdrFile } from "./adr-parser.js";
+import { isAdrFile, parseAdrFile } from "./adr-parser.js";
 import {
   actorsFile,
   contextsDir,
@@ -101,11 +102,7 @@ function listYamlFiles(dir: string): string[] {
 function listAdrFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => {
-      const ext = extname(f).toLowerCase();
-      const name = basename(f).toLowerCase();
-      return ext === ".md" && !f.startsWith(".") && name !== "readme.md";
-    })
+    .filter(isAdrFile)
     .sort()
     .map((f) => join(dir, f));
 }
@@ -142,6 +139,7 @@ function loadPerItemContext(ctxDir: string): DomainContext | null {
   };
   if (meta.glossary?.length) ctx.glossary = meta.glossary;
   if (meta.code_refs?.length) ctx.code_refs = meta.code_refs;
+  if (meta.adr_refs?.length) ctx.adr_refs = meta.adr_refs;
   if (events.length) ctx.events = events;
   if (commands.length) ctx.commands = commands;
   if (policies.length) ctx.policies = policies;
@@ -220,13 +218,42 @@ export function loadDomainModel(options: LoaderOptions = {}): DomainModel {
   const contexts = loadAllContexts(contextsDir(root));
 
   // 4. ADRs
+  //
+  // Files are visited in sorted order and the FIRST claim on an id
+  // wins, so a collision is deterministic and the surviving record is
+  // stable across runs. Both halves of a collision are reported: the
+  // loser used to be dropped in silence, taking a whole decision out
+  // of search, docs, and every ref check with it.
   const adrs = new Map<string, AdrRecord>();
+  const adrIssues: AdrLoadIssue[] = [];
   const adrFiles = listAdrFiles(adrDir(root));
   for (const adrPath of adrFiles) {
-    const record = parseAdrFile(adrPath);
-    if (record) {
-      adrs.set(record.id, record);
+    const result = parseAdrFile(adrPath);
+
+    if (!result.ok) {
+      adrIssues.push({
+        file: adrPath,
+        message: result.message,
+        // A stray Markdown note in the ADR directory is a plausible
+        // accident; frontmatter that is present but broken is not.
+        severity: result.reason === "no-frontmatter" ? "warning" : "error",
+      });
+      continue;
     }
+
+    const record = result.record;
+    const existing = adrs.get(record.id);
+    if (existing) {
+      adrIssues.push({
+        file: adrPath,
+        message: `duplicate ADR id "${record.id}" — already declared by ${
+          existing.file ? basename(existing.file) : "another file"
+        }. This file is ignored until one of them is renumbered.`,
+        severity: "error",
+      });
+      continue;
+    }
+    adrs.set(record.id, record);
   }
 
   // 5. Service identity (federation Phase 1 — optional)
@@ -238,6 +265,7 @@ export function loadDomainModel(options: LoaderOptions = {}): DomainModel {
     contexts,
     adrs,
   };
+  if (adrIssues.length) model.adrIssues = adrIssues;
   if (service) model.service = service;
 
   // 6. Federation peers (Phase 2 — optional, one level deep).

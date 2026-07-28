@@ -29,7 +29,8 @@ import type { ItemType } from "../../shared/item-visitor.js";
 import { didYouMean } from "../../shared/similarity.js";
 import { parseRef } from "../../shared/refs.js";
 import { parseYaml } from "../../shared/yaml.js";
-import { parseAdrFrontmatter } from "../../shared/adr-parser.js";
+import { adrFrontmatter, isAdrFile, parseAdrDocument } from "../../shared/adr-parser.js";
+import { findLinkGaps } from "../adr/reciprocity.js";
 import { repoRoot, repoRelative } from "../../shared/paths.js";
 
 // ajv & ajv-formats are CJS packages; use createRequire for clean interop
@@ -178,11 +179,88 @@ function validateSchemas(
     check("context.schema.json", ctx, `context:${name}`);
   }
 
-  // ADR frontmatter (strip runtime-only `body` field before validation)
+  // ADR frontmatter (strip runtime-only fields before validation)
   for (const [id, adr] of model.adrs) {
-    const { body: _, ...frontmatter } = adr;
-    check("adr-frontmatter.schema.json", frontmatter, `adr:${id}`);
+    check("adr-frontmatter.schema.json", adrFrontmatter(adr), `adr:${id}`);
   }
+}
+
+// ── Phase 1b: ADR file identity ───────────────────────────────────────
+
+/**
+ * Check the ADR files themselves: ones that failed to load, and ones
+ * whose declared `id` disagrees with their filename.
+ *
+ * The loader keys `model.adrs` by the frontmatter `id`, but every
+ * path-computing consumer — `dkk locate`, `rm`, `rename`, the docs
+ * renderer — derives `<id>.md`. When the two disagree the model looks
+ * healthy and those commands simply cannot find the file, so this is
+ * an error rather than a warning.
+ */
+function validateAdrFiles(model: DomainModel, issues: ValidationIssue[]): void {
+  for (const issue of model.adrIssues ?? []) {
+    const rel = adrPathLabel(issue.file);
+    issues.push({ severity: issue.severity, message: `${rel}: ${issue.message}`, path: rel });
+  }
+
+  for (const [id, adr] of model.adrs) {
+    if (!adr.file) continue;
+    const stem = basename(adr.file).replace(/\.md$/i, "");
+    if (stem !== id) {
+      err(
+        issues,
+        `ADR file "${stem}.md" declares id "${id}" — filename and id must match, or every command that resolves an ADR to its path (locate, rm, rename, render) will look for "${id}.md" and fail. Rename the file or fix the id.`,
+        `adr:${id}`,
+      );
+    }
+  }
+}
+
+// ── Phase 1c: ADR link reciprocity ────────────────────────────────────
+
+/**
+ * Warn about ADR links recorded on only one side.
+ *
+ * The ADR guide has always advertised bidirectional linking as
+ * enforced; in fact each side was only checked for *resolving*. A
+ * `domain_refs` entry with no matching `adr_refs` resolves fine and is
+ * still invisible to the rendered docs, `dkk story`, and every
+ * item-side lookup — which is where people go looking for the decision
+ * that governs an item.
+ *
+ * Warning, not error: the model is coherent, and mid-authoring
+ * one-sidedness is normal. `dkk adr link` writes both halves.
+ */
+function validateAdrReciprocity(model: DomainModel, issues: ValidationIssue[]): void {
+  const gaps = findLinkGaps(model);
+  if (gaps.length === 0) return;
+
+  // Group by (adr, direction) so a decision touching twelve items is
+  // one line, not twelve.
+  const grouped = new Map<string, string[]>();
+  for (const gap of gaps) {
+    const key = `${gap.adr} ${gap.direction}`;
+    const list = grouped.get(key) ?? [];
+    list.push(gap.target);
+    grouped.set(key, list);
+  }
+
+  for (const [key, targets] of grouped) {
+    const [adr, direction] = key.split(" ");
+    const list = targets.join(", ");
+    const message =
+      direction === "adr-only"
+        ? `ADR "${adr}" lists domain_refs [${list}] but none of them list it back in adr_refs — the link will not show on the item side or in the rendered docs. Fix with: dkk adr link ${adr} ${targets.join(" ")}`
+        : `[${list}] reference "${adr}" in adr_refs but ${adr} does not list them in domain_refs. Fix with: dkk adr link ${adr} ${targets.join(" ")}`;
+    warn(issues, message, `adr:${adr}`);
+  }
+}
+
+/** Short, stable label for an ADR path in validator output. */
+function adrPathLabel(file: string): string {
+  const p = file.replace(/\\/g, "/");
+  const at = p.lastIndexOf(".dkk/adr/");
+  return at === -1 ? basename(p) : p.slice(at);
 }
 
 // ── Phase 2: Cross-reference validation ───────────────────────────────
@@ -605,12 +683,28 @@ function validateCrossRefs(
   }
 
   // ─ 4. ADR domain_refs resolution ───────────────────────────────────
+  //
+  // A decision does not only constrain individual items: plenty govern
+  // a whole context, a flow, or an actor's contract. All four id
+  // families are accepted here, and each has a reciprocal `adr_refs`
+  // field to link back from.
+  const adrRefTargets = new Set<string>([
+    ...domainItemIds,
+    ...[...contextNames].map((c) => `context.${c}`),
+    ...[...actorNames].map((a) => `actor.${a}`),
+    ...(model.index.flows ?? []).map((f) => `flow.${f.name}`),
+  ]);
+
   for (const [id, adr] of model.adrs) {
     for (const ref of adr.domain_refs ?? []) {
       const verdict = resolveForeignRef(ref, "item", `adr:${id}`);
       if (verdict.kind !== "local") continue;
-      if (!domainItemIds.has(verdict.key)) {
-        err(issues, `ADR domain_ref "${ref}" does not resolve to any domain item.${didYouMean(verdict.key, domainItemIds)}`, `adr:${id}`);
+      if (!adrRefTargets.has(verdict.key)) {
+        err(
+          issues,
+          `ADR domain_ref "${ref}" does not resolve to any domain item, context, actor, or flow.${didYouMean(verdict.key, adrRefTargets)}`,
+          `adr:${id}`,
+        );
       }
     }
     // superseded_by must resolve
@@ -899,6 +993,8 @@ export function validateDomainModel(
   const issues: ValidationIssue[] = [];
 
   validateSchemas(model, ajv, issues);
+  validateAdrFiles(model, issues);
+  validateAdrReciprocity(model, issues);
   validateCrossRefs(model, options, issues);
   validateCodeRefs(model, options, issues);
 
@@ -922,7 +1018,11 @@ function schemaIdForFile(filePath: string): string | null {
   const p = filePath.replace(/\\/g, "/");
   const name = basename(p);
 
-  if (/\.dkk\/adr\/[^/]+\.md$/.test(p)) return "adr-frontmatter.schema.json";
+  // `.dkk/adr/README.md` documents the directory; it is not a decision
+  // and the loader skips it. Both rules live in `isAdrFile`.
+  if (/\.dkk\/adr\/[^/]+\.md$/.test(p)) {
+    return isAdrFile(name) ? "adr-frontmatter.schema.json" : null;
+  }
   if (/\.dkk\/domain\/index\.ya?ml$/.test(p)) return "index.schema.json";
   if (/\.dkk\/domain\/actors\.ya?ml$/.test(p)) return "actors.schema.json";
   if (/\.dkk\/service\.ya?ml$/.test(p)) return "service.schema.json";
@@ -991,17 +1091,20 @@ export function validateSingleFile(
   try {
     const text = readFileSync(filePath, "utf-8");
     if (schemaId === "adr-frontmatter.schema.json") {
-      const record = parseAdrFrontmatter(text);
-      if (!record) {
-        err(
-          issues,
-          `ADR file has no valid YAML frontmatter (--- block with id, title, status, date): ${rel}`,
-          rel,
-        );
+      const parsed = parseAdrDocument(text);
+      if (!parsed.ok) {
+        err(issues, `${rel}: ${parsed.message}`, rel);
         return done();
       }
-      const { body: _, ...frontmatter } = record;
-      data = frontmatter;
+      const stem = basename(filePath).replace(/\.md$/i, "");
+      if (stem !== parsed.record.id) {
+        err(
+          issues,
+          `${rel} declares id "${parsed.record.id}" — filename and id must match, or commands that resolve an ADR to its path will look for "${parsed.record.id}.md" and fail.`,
+          rel,
+        );
+      }
+      data = adrFrontmatter(parsed.record);
     } else {
       data = parseYaml(text);
     }

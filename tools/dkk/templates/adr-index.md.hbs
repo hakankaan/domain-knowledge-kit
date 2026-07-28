@@ -1,0 +1,18 @@
+# Decision Log
+
+> Auto-generated — do not edit manually. Run `dkk render` to regenerate.
+> The ADRs themselves live in `.dkk/adr/` and are the source of truth.
+
+{{#if adrs}}
+{{#if summary}}
+{{summary}}
+{{/if}}
+
+| ADR | Title | Status | Date | Constrains | Supersession |
+|-----|-------|--------|------|------------|--------------|
+{{#each adrs}}
+| [{{id}}]({{href}}) | {{title}} | {{status}} | {{date}} | {{#if constrains}}{{join constrains ", "}}{{else}}—{{/if}} | {{#if supersession}}{{supersession}}{{else}}—{{/if}} |
+{{/each}}
+{{else}}
+_No ADRs recorded. Create one with `dkk new adr "<title>"`._
+{{/if}}

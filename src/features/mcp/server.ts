@@ -33,7 +33,11 @@ import {
   guideSection,
   GUIDE_TOPICS,
 } from "../agent/commands/prime.js";
-import type { Flow } from "../../shared/types/domain.js";
+import type { AdrRecord, Flow } from "../../shared/types/domain.js";
+import { adrFrontmatter } from "../../shared/adr-parser.js";
+import { adrView, renderAdrText } from "../adr/present.js";
+import { auditAdrs } from "../adr/audit.js";
+import { collectDecisions } from "../adr/decisions.js";
 import { loadFederation, resolvePeerRoot, peerEnvKey } from "../federation/loader.js";
 import { findConsumers } from "../federation/commands/consumers.js";
 import { analyzeDrift, mapFileToContext } from "../audit/commands/drift.js";
@@ -72,6 +76,12 @@ export function buildServer(rootOpt?: string): McpServer {
           .optional()
           .describe("Filter by item type (event, command, policy, aggregate, read_model, glossary, actor, adr, flow, context)."),
         tag: z.string().optional().describe("Filter by tag/keyword."),
+        status: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by lifecycle status. ADRs only: proposed | accepted | rejected | deprecated | superseded. Use this to ask 'what is currently binding?' (accepted) or 'what is still open?' (proposed).",
+          ),
         service: z
           .string()
           .optional()
@@ -83,9 +93,9 @@ export function buildServer(rootOpt?: string): McpServer {
         root: z.string().optional().describe("Override repository root."),
       },
     },
-    async ({ query, context, type, tag, service, limit, expand, root }) => {
+    async ({ query, context, type, tag, status, service, limit, expand, root }) => {
       const r = root ?? defaultRoot;
-      const filters = { context, type, tag, service };
+      const filters = { context, type, tag, status, service };
       const opts = { root: r, limit: limit ?? 20 } as { root?: string; limit: number; graph?: DomainGraph };
 
       if (expand) {
@@ -119,11 +129,17 @@ export function buildServer(rootOpt?: string): McpServer {
         "Show the full definition of a domain item by its ID. Accepts ids like 'ordering.OrderPlaced', 'actor.Customer', 'adr-0001', 'flow.OrderFulfillment', 'context.ordering'. Federation-aware: prefix any id with '<service>:' to look it up in a loaded peer service (e.g. 'ordering:ordering.OrderPlaced' from a billing repo that has ordering as a peer). The shorthand '<service>:<ItemName>' is also accepted when the service exports a single context.",
       inputSchema: {
         id: z.string().describe("Composite item id, optionally `<service>:` prefixed for federated lookups."),
+        section: z
+          .string()
+          .optional()
+          .describe(
+            "ADRs only: return just one section of the body by its heading (e.g. 'decision', 'consequences', 'alternatives'). Prefix matching, so 'alt' finds 'Alternatives Considered'. Use this when you want what was decided without paying for the whole document.",
+          ),
         format: z.enum(["json", "yaml"]).optional().describe("Output format (default json)."),
         root: z.string().optional(),
       },
     },
-    async ({ id, format, root }) => {
+    async ({ id, section, format, root }) => {
       const model = loadDomainModel({ root: root ?? defaultRoot });
       const result = resolveItem(model, id);
       if (!result.found || !result.data) {
@@ -132,6 +148,43 @@ export function buildServer(rootOpt?: string): McpServer {
           content: [{ type: "text", text: asText({ error: `Item "${id}" not found.` }) }],
         };
       }
+
+      // An ADR's body is Markdown, and it carries the decision. Folding
+      // it into a YAML scalar loses every heading, so Context, Decision
+      // and Consequences become indistinguishable to the reader.
+      if (result.kind === "adr") {
+        const adr = result.data as AdrRecord;
+        const view = adrView(adr, section);
+        if (!view.ok) {
+          return { isError: true, content: [{ type: "text", text: asText({ error: view.message }) }] };
+        }
+        if (format === "yaml") {
+          return { content: [{ type: "text", text: renderAdrText(adr, view.view) }] };
+        }
+        return {
+          content: [
+            {
+              type: "text",
+              text: asText({
+                id,
+                label: result.label,
+                data: section
+                  ? { ...adrFrontmatter(adr), section: view.view.section, body: view.view.body }
+                  : adr,
+                sections: view.view.availableSections,
+              }),
+            },
+          ],
+        };
+      }
+
+      if (section) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: asText({ error: `\`section\` applies to ADRs only; "${id}" is not an ADR.` }) }],
+        };
+      }
+
       const text =
         format === "yaml"
           ? `# ${result.label ?? id}\n\n${stringifyYaml(result.data)}`
@@ -228,14 +281,20 @@ export function buildServer(rootOpt?: string): McpServer {
   server.registerTool(
     "dkk_list",
     {
-      description: "List domain items with optional filters by bounded context and/or item type. Lists local items only; for peers use `dkk_search` with a `service` filter or `dkk_peers` for an overview.",
+      description: "List domain items with optional filters by bounded context, item type, and/or lifecycle status. Lists local items only; for peers use `dkk_search` with a `service` filter or `dkk_peers` for an overview.",
       inputSchema: {
         context: z.string().optional(),
         type: z.string().optional(),
+        status: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by lifecycle status. ADRs only: proposed | accepted | rejected | deprecated | superseded. Combine with type='adr' to list open proposals or the currently binding set.",
+          ),
         root: z.string().optional(),
       },
     },
-    async ({ context, type, root }) => {
+    async ({ context, type, status, root }) => {
       let rows = collectRows(root ?? defaultRoot);
       if (context) {
         const c = context.toLowerCase();
@@ -245,6 +304,10 @@ export function buildServer(rootOpt?: string): McpServer {
         let t = type.toLowerCase();
         if (t === "read-model") t = "read_model";
         rows = rows.filter((r) => r.type.toLowerCase() === t);
+      }
+      if (status) {
+        const st = status.toLowerCase();
+        rows = rows.filter((r) => (r.status ?? "").toLowerCase() === st);
       }
       return { content: [{ type: "text", text: asText({ count: rows.length, items: rows }) }] };
     },
@@ -368,11 +431,25 @@ export function buildServer(rootOpt?: string): McpServer {
         }
       }
 
+      // ADR health is not a graph property — an ADR's edges are links,
+      // not structure, so the orphan walk above deliberately skips
+      // them. Decision rot needs its own pass.
+      const adrHealth = auditAdrs(model);
+
       return {
         content: [
           {
             type: "text",
-            text: asText({ counts, health: { orphanedCount: orphaned.length, orphaned } }),
+            text: asText({
+              counts,
+              health: {
+                orphanedCount: orphaned.length,
+                orphaned,
+                unlinkedAdrs: adrHealth.unlinked.map((a) => a.id),
+                stalledProposals: adrHealth.stalledProposals.map((a) => a.id),
+                oneWayAdrLinks: adrHealth.linkGaps.length,
+              },
+            }),
           },
         ],
       };
@@ -509,6 +586,55 @@ export function buildServer(rootOpt?: string): McpServer {
         ? mapFileToContext(file, { root: r })
         : analyzeDrift({ root: r, threshold });
       return { content: [{ type: "text", text: asText(payload) }] };
+    },
+  );
+
+  // ── decisions ───────────────────────────────────────────────────────
+  server.registerTool(
+    "dkk_decisions",
+    {
+      description:
+        "Which architectural decisions govern this? Pass `item` (a domain id like 'ordering.Order', 'actor.Customer', 'flow.Checkout', 'context.ordering') or `file` (a source path). Returns every linked ADR with its provenance — whether the item names it, it names the item, it governs the whole context, or its code_refs bind the file — plus `binding`: the ids actually in effect after following supersession chains. Prefer this over composing search + related + show when the question is 'what has already been decided about X?'. Read the full text of anything it returns with dkk_show (use `section` to get just the decision).",
+      inputSchema: {
+        item: z
+          .string()
+          .optional()
+          .describe("Domain id to ask about (ordering.Order, actor.Customer, flow.X, context.ordering)."),
+        file: z
+          .string()
+          .optional()
+          .describe("Source file path to ask about. Resolved via code_refs on ADRs and on contexts."),
+        includeContext: z
+          .boolean()
+          .optional()
+          .describe("Include decisions governing the whole owning context (default true)."),
+        root: z.string().optional().describe("Override repository root."),
+      },
+    },
+    async ({ item, file, includeContext, root }) => {
+      const r = root ?? defaultRoot;
+      if (!item && !file) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: asText({ error: "Pass either `item` or `file`." }) }],
+        };
+      }
+
+      const model = loadDomainModel({ root: r });
+
+      if (file) {
+        // Path → context/ADR resolution is the drift slice's job; this
+        // tool only turns the result into a decision answer.
+        const mapping = mapFileToContext(file, { root: r });
+        const report = collectDecisions(model, mapping.file, {
+          fileBinding: { context: mapping.context, adrs: mapping.adrsBoundDirectly ?? [] },
+          includeContext,
+        });
+        return { content: [{ type: "text", text: asText({ ...report, mappedContext: mapping.context }) }] };
+      }
+
+      const report = collectDecisions(model, item!, { includeContext });
+      return { content: [{ type: "text", text: asText(report) }] };
     },
   );
 
