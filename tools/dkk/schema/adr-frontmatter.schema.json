@@ -34,8 +34,8 @@
       "type": "array",
       "items": {
         "type": "string",
-        "pattern": "^([a-z][a-z0-9-]*:)?[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*$",
-        "description": "What this decision constrains: a domain item (ordering.OrderPlaced), an actor (actor.Customer), a flow (flow.OrderFulfillment), or a context (context.ordering). Prefix with service: for federated refs."
+        "pattern": "^([a-z][a-z0-9-]*:)?(context\\.[a-z][a-z0-9-]*|[a-z][a-z0-9-]*\\.[A-Za-z][A-Za-z0-9]*)$",
+        "description": "What this decision constrains: a domain item (ordering.OrderPlaced), an actor (actor.Customer), a flow (flow.OrderFulfillment), or a context by its kebab-case name (context.ordering, context.order-fulfillment). Prefix with service: for federated refs."
       },
       "uniqueItems": true,
       "description": "Domain items, actors, flows, or contexts related to this decision"
